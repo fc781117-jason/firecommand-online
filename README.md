@@ -1,32 +1,30 @@
-# FireCommand v10 Online Release
+# FireCommand v13｜精簡排版＋戰術部署摺疊＋AI 進度報告版
 
-本版以 v8 為基礎，整合：
+本版接續 v12，依使用者最新測試回饋調整：
 
-- 外勤大隊編制修正（依 115 年 4 月電話簿外勤單位區塊整理）
-- 第三大隊移除錯誤的五股中隊；第三大隊單位為：大隊部、三重中隊、蘆洲中隊、淡水中隊、三重、重陽、二重、鷺江、蘆洲、龍源、八里、淡水、竹圍、三芝、滬尾
-- 最高管理員固定：fc781117@gmail.com
-- 新帳號預設 pending，需最高管理員啟用；最高管理員不可被停權
-- 水線可標示「進攻水線 / 供水線 / 防護水線 / 搜救掩護水線 / 中繼水線」並連接人員編組 / 分隊
-- 建物內部作戰圖：左側縱向剖面圖、右側水平俯視圖
-- OpenAI 戰術建議模組：15 分鐘節流；需在 Vercel 設定 OPENAI_API_KEY
-- 報告與浮水印功能沿用 v8
+- 到建火人支初：點選卡片反黑，正下方立即展開「必須確認 / 應執行事項」，再次點選收合。
+- 到場確認事項維持橫向滑動卡片，每張卡片展開後自動帶入已知資料或提供補充欄位。
+- 戰術地圖標示區改為兩個摺疊：
+  1. 車輛 / 人員 / 危害標示 / 水線部署圖
+  2. 建物內部作戰圖
+- 地圖與部署工具只有展開後才顯示，降低手機縱向長度。
+- 戰情回報移到到場回報下方，方便一進案件就直接回報。
+- 移除補充資料 / 備註區與時間軸 / 操作紀錄區，這些資料改由進度報告統一彙整。
+- 人車掌控卡片可點選跳轉並展開對應區域。
+- 規則提示合併到注意事項建議 / OpenAI 戰術建議。
+- 最高管理員帳號審核區不再出現在案件內容中，只由頂部「帳號管理」開啟。
+- 進度報告產出改為正式長官回報用報告，不使用無線電台詞格式；支援 OpenAI 撰寫、手動編輯、確認編輯與匯出 PDF。
+- 報告編輯與產出紀錄會寫入操作紀錄，並保留 PDF 浮水印。
 
-## OpenAI 啟用方式
+發布時覆蓋 GitHub 專案：
 
-請勿將 OpenAI API Key 寫入前端或 GitHub。請在 Vercel Project → Settings → Environment Variables 新增：
+```text
+index.html
+assets/
+api/
+firebase/
+vercel.json
+README.md
+```
 
-- `OPENAI_API_KEY`：你的 OpenAI API key
-- `OPENAI_MODEL`：可選。系統會優先使用你在 Vercel 設定的模型；若輸入 `5.4 mini`，後端會轉成 `gpt-5.4-mini` 後送出。若 OpenAI 回傳 model not found，請改成官方 API model id。
-
-完成後重新 Deploy。
-
-## Firebase Rules
-
-請同步將 `firebase/firestore.rules` 貼到 Firebase Console 後發布。本版已移除 Firebase Storage 與照片上傳功能，不需要設定 Storage Rules。
-
-
-## v10 重點
-- 移除首次登入個人照片與案件現場照片功能。
-- 不需要 Firebase Storage / Storage Rules。
-- 報告區改為火場進度報告，可列印或另存 PDF，並保留浮水印。
-- OpenAI 後端會讀取 Vercel 的 OPENAI_MODEL，支援口語模型名稱基本轉換。
+Firebase 仍只需要 Authentication + Firestore Database；本版不使用 Firebase Storage。

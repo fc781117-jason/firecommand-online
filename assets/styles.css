@@ -28,3 +28,34 @@ body[data-watermark]::after{content:attr(data-watermark);pointer-events:none;pos
 /* v9 additions */
 .compact-card{max-width:760px;margin:auto}.approval-screen .brand-card{min-height:auto}.compact-actions{gap:8px;justify-content:flex-end}.user-admin-list{display:grid;gap:10px}.user-admin-card{display:flex;justify-content:space-between;gap:12px;align-items:center;border:1px solid var(--line);border-radius:18px;background:var(--card);padding:12px}.user-admin-card.pending{border-color:#d8a645}.user-admin-card.suspended{border-color:#a33a30;background:#fff7f5}.building-layout{display:grid;grid-template-columns:1fr 1fr;gap:14px}.building-panel{border:1px solid var(--line);border-radius:18px;background:#fffdf8;padding:12px;min-width:0}.panel-title{font-weight:900;margin-bottom:10px}.vertical-section{display:flex;flex-direction:column;gap:8px}.floor-row{display:grid;grid-template-columns:56px 1fr 1.2fr;gap:8px;align-items:center;border:1px solid var(--line);border-radius:14px;padding:8px;background:#f7f1e8}.floor-row.fire-floor{border-color:#a43a30;background:#fff0ed}.floor-label{font-weight:900;font-size:1.1rem}.floor-row select,.floor-row input{min-height:40px;border-radius:12px}.floor-plan-canvas{position:relative;min-height:360px;border:2px solid var(--line);border-radius:18px;background:#f7f1e8;overflow:hidden;touch-action:manipulation}.floor-plan-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(0,0,0,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.06) 1px,transparent 1px);background-size:32px 32px}.floor-marker{position:absolute;transform:translate(-50%,-50%);border:2px solid white;box-shadow:0 6px 18px rgba(0,0,0,.18);border-radius:999px;background:#1f2937;color:white;font-weight:900;padding:8px 10px;display:flex;gap:4px;align-items:center}.floor-marker.fire{background:#a43a30}.floor-marker.rescue{background:#148a4a}.floor-marker.fatal{background:#111827}.floor-marker.entry{background:#7c5b20}.floor-marker.hose{background:#245fc6}.floor-marker.wall{background:#6b7280}.floor-marker.hazard{background:#7a1f8a}.ai-section textarea,#aiAdviceText{width:100%}.map-label.hose-label{background:#245fc6;color:white}.screen[hidden], section[hidden], main[hidden], div[hidden]{display:none!important}
 @media(max-width:760px){.building-layout{grid-template-columns:1fr}.floor-row{grid-template-columns:46px 1fr}.floor-row .floor-note{grid-column:1/-1}.user-admin-card{display:block}.compact-actions{margin-top:10px}.floor-plan-canvas{min-height:300px}}
+
+
+.sitrep-tool-cards{grid-template-columns:minmax(280px,1fr)}
+.sitrep-list{display:grid;gap:10px;margin-top:10px}.sitrep-card{background:var(--panel2);border:1px solid var(--line);border-radius:16px;padding:12px}.sitrep-meta{font-size:11px;color:var(--muted);font-weight:900;margin-bottom:4px}.sitrep-title{font-weight:950;font-size:15px}.sitrep-detail{font-size:13px;color:#514a42;margin-top:4px;white-space:pre-wrap}.assessment-highlight{background:var(--amber2);border:1px solid #f2d392;border-radius:16px;padding:12px}
+@media(max-width:760px){.sitrep-tool-cards{display:block}.sitrep-tool-cards .tool-card{min-width:100%;max-width:100%}}
+
+/* ===== v12 到建火人支初 / 到場回報手機優先優化 ===== */
+.sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.command-advice.collapsed{display:none}
+.field-inline-title{margin:.35rem 0 .2rem;font-weight:900;color:#a13c31;letter-spacing:.08em;font-size:.86rem}
+.arrival-status-cards{padding:.25rem 0 .65rem;gap:.65rem}.arrival-status-card{min-width:128px;border:1px solid var(--border,#d7cfc3);background:#fffdf8;border-radius:20px;padding:13px 12px;text-align:left;box-shadow:0 2px 8px rgba(42,35,26,.06);color:#1d1a17;position:relative}.arrival-status-card:before{content:'□';position:absolute;right:12px;top:10px;font-size:1.25rem;color:#8b8176}.arrival-status-card.selected:before{content:'☑';color:#2f80ed}.arrival-status-card b{display:block;font-size:1.1rem;font-weight:900;line-height:1.15}.arrival-status-card span{display:block;margin-top:.28rem;font-size:.78rem;color:#6f6860;font-weight:800}.arrival-status-card em{display:block;margin-top:.45rem;font-style:normal;font-size:.75rem;color:#8f473d;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.arrival-status-card.selected{background:#f8f3ea;border-color:#bda985}.arrival-status-card.expanded{background:#1d1a17;color:#fff;border-color:#1d1a17}.arrival-status-card.expanded span,.arrival-status-card.expanded em{color:#f1e5d1}.arrival-status-card.expanded:before{color:#fff}.arrival-detail-panels{margin-bottom:.85rem}.arrival-detail-panel{border:1px solid #d9d0c4;background:#fffdf8;border-radius:20px;padding:14px;margin:.35rem 0 .85rem;box-shadow:0 4px 12px rgba(42,35,26,.05)}.arrival-detail-panel[hidden]{display:none}.readonly-card{border:1px solid #e0d8ce;background:#f7f1e8;border-radius:16px;padding:12px;font-weight:900;color:#1d1a17}.compact-form{gap:.55rem}.check.slim{min-height:auto;padding:10px 12px;margin:.45rem 0;border-radius:14px}.compact-note summary{font-size:.95rem}.compact-note .field{margin-top:.65rem}.advice-box h4{color:#a13c31}.stage-card{transition:.15s ease}.arrival-status-card{transition:.15s ease}
+@media (min-width:720px){.arrival-status-card{min-width:150px}.arrival-detail-panel{padding:16px}.advice-grid{grid-template-columns:1fr 1fr}}
+
+/* v12 map deployment refinements */
+.map-label.person{background:#b5281d;color:#fff}
+.map-label.person.rest,.map-label.person.standby{background:#148a4a;color:#fff}
+.map-label.person.rit{background:#d8a645;color:#1d1a17}
+.map-label.face{background:#fffdf8;color:#1d1a17;border-color:#7d7062}
+.map-label.face.active{background:#1d1a17;color:#fff;border-color:#fff}
+.map-label.building-center{background:#1d1a17;color:#fff;border-color:#f1e5d1}
+.map-label.building-handle{background:#a43a30;color:#fff;border-color:#fff}
+.tool-card.building-box-card .notice.compact{font-size:12px;padding:8px;margin:0 0 10px}
+.compact-actions .btn{flex:1 1 80px}
+@media(max-width:760px){.tool-card.building-box-card{min-width:285px}.compact-actions .btn{padding:8px 8px}}
+
+/* v13 refinement */
+.stat-action{display:block;text-align:left;border:1px solid var(--line);cursor:pointer}
+.stat-action:active{transform:scale(.99)}
+#tacticalMapSection .tool-accordion[open] #map{margin-top:12px}
+#reportDraft[readonly]{background:#f8f3ea;color:#2d2924}
+#reportDraft:not([readonly]){background:#fff;border-color:#9f2f23;box-shadow:0 0 0 3px rgba(159,47,35,.08)}
