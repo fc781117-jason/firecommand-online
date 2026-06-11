@@ -1,7 +1,7 @@
 'use strict';
 
 const $ = (id) => document.getElementById(id);
-const LOCAL_KEY = 'firecommand_v6_local_state';
+const LOCAL_KEY = 'firecommand_v10_local_state';
 const DEFAULT_CENTER = { lat: 25.085, lng: 121.48 };
 const SUPER_ADMIN_EMAIL = 'fc781117@gmail.com';
 const AI_COOLDOWN_MS = 15 * 60 * 1000;
@@ -196,13 +196,12 @@ const DISTRICT_FALLBACK = {
 let firebaseEnabled = false;
 let auth = null;
 let db = null;
-let storage = null;
 let fbUser = null;
 let profile = null;
 let cases = [];
 let currentCaseId = null;
 let currentCase = null;
-let live = { vehicles: [], crews: [], hoses: [], hazards: [], logs: [], photos: [] };
+let live = { vehicles: [], crews: [], hoses: [], hazards: [], logs: [] };
 let unsubscribers = [];
 let map = null;
 let mapLayers = null;
@@ -259,7 +258,6 @@ function bindEvents(){
   $('copyCommandSpeechBtn').addEventListener('click', copyCommandSpeech);
   $('copyReportBtn').addEventListener('click', copyReportDraft);
   $('printReportBtn').addEventListener('click', printReport);
-  $('closePhotoModal').addEventListener('click', () => $('photoModal').hidden = true);
   document.querySelectorAll('[data-stage]').forEach(btn => btn.addEventListener('click', () => selectCommandStage(btn.dataset.stage)));
   document.querySelectorAll('.support-grid input').forEach(ch => ch.addEventListener('change', () => { renderCommandGuide(); saveCaseInfo(false); }));
   $('fitMapBtn').addEventListener('click', fitMapToIncident);
@@ -270,7 +268,6 @@ function bindEvents(){
   document.querySelectorAll('.hazard-btn').forEach(btn => btn.addEventListener('click', () => startHazardTool(btn.dataset.hazard)));
   $('generateReportBtn').addEventListener('click', () => generateReport(true));
   $('saveExtraBtn').addEventListener('click', saveExtraNotes);
-  $('uploadPhotosBtn').addEventListener('click', uploadPhotos);
   $('syncFloorsBtn')?.addEventListener('click', syncBuildingFloors);
   $('saveBuildingOpsBtn')?.addEventListener('click', saveBuildingOps);
   $('floorPlanLevel')?.addEventListener('change', renderFloorPlan);
@@ -389,7 +386,7 @@ function initFirebase(){
     return;
   }
   firebase.initializeApp(window.FIRECOMMAND_FIREBASE_CONFIG);
-  auth = firebase.auth(); db = firebase.firestore(); storage = firebase.storage();
+  auth = firebase.auth(); db = firebase.firestore();
   auth.onAuthStateChanged(async (user) => {
     fbUser = user;
     if(!user){ show('authScreen'); return; }
@@ -426,14 +423,6 @@ async function logout(){
 }
 async function saveProfile(e){
   e.preventDefault();
-  let photoURL = profile?.photoURL || '';
-  const file = $('profilePhoto').files[0];
-  if(file && firebaseEnabled){
-    const ref = storage.ref(`user-photos/${fbUser.uid}/${Date.now()}_${file.name}`);
-    await ref.put(file); photoURL = await ref.getDownloadURL();
-  } else if(file){
-    photoURL = await readFileAsDataURL(file);
-  }
   const isAdminEmail = (fbUser.email || '').toLowerCase() === SUPER_ADMIN_EMAIL;
   profile = {
     id: fbUser.uid,
@@ -448,7 +437,6 @@ async function saveProfile(e){
     approvedBy: isAdminEmail ? SUPER_ADMIN_EMAIL : '',
     approvedAt: isAdminEmail ? Date.now() : null,
     isSuperAdmin: isAdminEmail,
-    photoURL,
     updatedAt: Date.now(),
     createdAt: profile?.createdAt || Date.now()
   };
@@ -532,7 +520,7 @@ async function createCase(e){
     const ref = await db.collection('cases').add(newCase); id = ref.id;
     await addLogRemote(id, 'case', `建立案件：${newCase.address}`);
   } else {
-    id = uid('case'); localState.cases.unshift({ id, ...newCase, vehicles:[], crews:[], hoses:[], hazards:[], logs:[{id:uid('log'),type:'case',message:`建立案件：${newCase.address}`,createdAt:Date.now(),operator:profile.callName}], photos:[] }); saveLocalState(); cases = localState.cases.filter(c=>c.brigade===profile.brigade);
+    id = uid('case'); localState.cases.unshift({ id, ...newCase, vehicles:[], crews:[], hoses:[], hazards:[], logs:[{id:uid('log'),type:'case',message:`建立案件：${newCase.address}`,createdAt:Date.now(),operator:profile.callName}] }); saveLocalState(); cases = localState.cases.filter(c=>c.brigade===profile.brigade);
   }
   $('caseForm').reset(); $('caseTrappedCountMode').value='0'; $('victimRows').innerHTML=''; $('victimDetails').open=false; $('createCaseDetails').open=false;
   openCase(id);
@@ -598,7 +586,7 @@ function openCase(id){
 function subscribeCaseRemote(id){
   const caseUnsub = db.collection('cases').doc(id).onSnapshot(doc => { currentCase = { id:doc.id, ...doc.data() }; renderDetail(); });
   unsubscribers.push(caseUnsub);
-  ['vehicles','crews','hoses','hazards','logs','photos'].forEach(coll => {
+  ['vehicles','crews','hoses','hazards','logs'].forEach(coll => {
     const unsub = db.collection('cases').doc(id).collection(coll).onSnapshot(snap => {
       live[coll] = snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
       renderLiveParts();
@@ -613,12 +601,11 @@ function loadCaseLocal(id){
   live.hoses = currentCase.hoses || [];
   live.hazards = currentCase.hazards || [];
   live.logs = currentCase.logs || [];
-  live.photos = currentCase.photos || [];
   renderDetail(); renderLiveParts();
 }
 function saveLocalCase(){
   if(!currentCase) return;
-  currentCase.vehicles = live.vehicles; currentCase.crews = live.crews; currentCase.hoses = live.hoses; currentCase.hazards = live.hazards; currentCase.logs = live.logs; currentCase.photos = live.photos;
+  currentCase.vehicles = live.vehicles; currentCase.crews = live.crews; currentCase.hoses = live.hoses; currentCase.hazards = live.hazards; currentCase.logs = live.logs;
   const idx = localState.cases.findIndex(c=>c.id===currentCase.id); if(idx>=0) localState.cases[idx] = currentCase;
   saveLocalState();
 }
@@ -662,7 +649,7 @@ function renderSummaryCards(){
 }
 function renderLiveParts(){
   if(!currentCase) return;
-  renderSummaryCards(); renderToolOptions(); renderMap(); renderDashboard(); renderRules(); renderLogs(); renderPhotos(); renderCommandGuide(); renderBuildingOps(); renderLocalTacticalAdvice(false); generateReport(false);
+  renderSummaryCards(); renderToolOptions(); renderMap(); renderDashboard(); renderRules(); renderLogs(); renderCommandGuide(); renderBuildingOps(); renderLocalTacticalAdvice(false); generateReport(false);
 }
 function renderToolOptions(){
   const canHose = live.vehicles.filter(v => v.canHose);
@@ -882,27 +869,13 @@ function renderRules(){
 function renderLogs(){ $('logList').innerHTML = live.logs.length ? live.logs.slice().reverse().map(l=>`<div class="log"><div class="log-time">${fmtTime(l.createdAt)}｜${escapeHtml(l.type)}｜${escapeHtml(l.operator||'')}</div><div>${escapeHtml(l.message)}</div></div>`).join('') : '<div class="empty">尚無時間軸紀錄。</div>'; }
 async function addLog(type, message){ if(firebaseEnabled) await addLogRemote(currentCaseId,type,message); else { live.logs.push({id:uid('log'),type,message,createdAt:Date.now(),operator:profile.callName}); saveLocalCase(); renderLogs(); } }
 async function addLogRemote(caseId,type,message){ await db.collection('cases').doc(caseId).collection('logs').add({type,message,createdAt:Date.now(),operator:profile.callName,operatorId:profile.id}); }
-async function uploadPhotos(){
-  const files = Array.from($('casePhotoInput').files || []); if(!files.length){ toast('請先選擇照片'); return; }
-  for(const file of files){
-    let url='';
-    if(firebaseEnabled){ const ref=storage.ref(`case-photos/${currentCaseId}/${Date.now()}_${file.name}`); await ref.put(file); url=await ref.getDownloadURL(); }
-    else url = await readFileAsDataURL(file);
-    await addItem('photos', { url, name:file.name, uploadedBy:profile.callName });
-  }
-  $('casePhotoInput').value=''; await addLog('photo', `上傳照片 ${files.length} 張`); toast('照片已加入');
-}
-function renderPhotos(){
-  $('photoGrid').innerHTML = live.photos.length ? live.photos.map((p,i)=>`<div class="photo"><img data-photo-index="${i}" src="${escapeHtml(p.url)}" alt="${escapeHtml(p.name||'photo')}"></div>`).join('') : '<div class="empty">尚無照片。</div>';
-  document.querySelectorAll('[data-photo-index]').forEach(img => img.addEventListener('click', () => openPhotoModal(live.photos[Number(img.dataset.photoIndex)])));
-}
-function openPhotoModal(photo){ if(!photo) return; $('photoModalImg').src = photo.url; $('photoWatermark').textContent = watermarkText(); $('photoModal').hidden = false; addLog('photo_view', `查看案件照片：${photo.name||'未命名'}`); }
+function renderPhotos(){}
 function generateReport(scroll=false){
   if(!currentCase) return '';
   const speech = buildFullSpeech();
   const crews = sum(live.crews,'count');
   const summary = [
-    `【FireCommand 現場回報摘要】`,
+    `【FireCommand 火場進度報告】`,
     `案件：${currentCase.caseNo || ''}`,
     `地址：${currentCase.address || ''}`,
     `產出者：${profile?.callName || ''}｜${profile?.brigade || ''}/${profile?.unit || ''}`,
@@ -918,8 +891,8 @@ function generateReport(scroll=false){
     `【AI / 規則建議】`,
     (currentCase.aiLastAdvice || localTacticalAdviceText()),
     ``,
-    `【最近紀錄】`,
-    ...live.logs.slice(-8).map(l => `- ${fmtTime(l.createdAt)} ${l.operator||''}：${l.message}`)
+    `【操作進度與最近紀錄】`,
+    ...live.logs.slice(-10).map(l => `- ${fmtTime(l.createdAt)} ${l.operator||''}：${l.message}`)
   ].join('\n');
   $('reportDraft').value = summary;
   $('commandSpeech').value = speech;
@@ -945,18 +918,18 @@ function renderReportPreview(text){
   const el=$('reportPreview'); if(!el) return;
   el.innerHTML = `<div class="report-paper" data-watermark="${escapeHtml(watermarkText())}"><pre>${escapeHtml(text)}</pre></div>`;
 }
-function copyReportDraft(){ const text = generateReport(false); navigator.clipboard?.writeText(text); toast('已複製報告摘要'); addLog('export','複製報告摘要'); }
+function copyReportDraft(){ const text = generateReport(false); navigator.clipboard?.writeText(text); toast('已複製進度報告'); addLog('export','複製火場進度報告'); }
 function copyCommandSpeech(){ const text = buildFullSpeech(); navigator.clipboard?.writeText(text); $('commandSpeech').value=text; toast('已複製回報稿'); addLog('export','複製到建火人支初回報稿'); }
 function printReport(){
   const text = generateReport(false);
   const wm = watermarkText();
   const win = window.open('', '_blank');
   if(!win){ toast('瀏覽器阻擋彈出視窗，請允許彈出後再試'); return; }
-  win.document.write(`<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>${escapeHtml(currentCase.caseNo||'FireCommand報告')}</title><style>
+  win.document.write(`<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>${escapeHtml(currentCase.caseNo||'FireCommand進度報告')}</title><style>
     body{font-family:-apple-system,BlinkMacSystemFont,'Noto Sans TC',sans-serif;margin:32px;color:#1d1a17;line-height:1.7}.page{position:relative;min-height:100vh}.page:before{content:attr(data-watermark);position:fixed;inset:0;display:block;white-space:pre-wrap;font-size:28px;font-weight:800;color:rgba(150,40,30,.10);transform:rotate(-22deg);line-height:3;z-index:-1}h1{margin:0 0 12px}.meta{color:#6f6860;border-bottom:1px solid #ddd;padding-bottom:10px;margin-bottom:18px}pre{white-space:pre-wrap;font-size:16px}.footer{position:fixed;bottom:18px;left:32px;right:32px;color:#8a8176;font-size:12px;border-top:1px solid #ddd;padding-top:8px}@media print{button{display:none}}
-  </style></head><body><div class="page" data-watermark="${escapeHtml(wm)}"><h1>FireCommand 火場指揮報告</h1><div class="meta">案件：${escapeHtml(currentCase.caseNo||'')}｜地址：${escapeHtml(currentCase.address||'')}｜產出：${escapeHtml(wm)}</div><pre>${escapeHtml(text)}</pre><div class="footer">${escapeHtml(wm)}｜僅供勤務使用，禁止外流</div></div><script>setTimeout(()=>window.print(),400)<\/script></body></html>`);
+  </style></head><body><div class="page" data-watermark="${escapeHtml(wm)}"><h1>FireCommand 火場進度報告</h1><div class="meta">案件：${escapeHtml(currentCase.caseNo||'')}｜地址：${escapeHtml(currentCase.address||'')}｜產出：${escapeHtml(wm)}</div><pre>${escapeHtml(text)}</pre><div class="footer">${escapeHtml(wm)}｜僅供勤務使用，禁止外流</div></div><script>setTimeout(()=>window.print(),400)<\/script></body></html>`);
   win.document.close();
-  addLog('export','開啟報告列印 / PDF');
+  addLog('export','開啟進度報告列印 / PDF');
 }
 function watermarkText(){ return `${profile?.realName || profile?.callName || '未具名'}｜${profile?.brigade || ''}/${profile?.unit || ''}｜${currentCase?.caseNo || 'FireCommand'}｜${new Date().toLocaleString('zh-TW',{hour12:false})}｜僅供勤務使用`; }
 function setWatermark(){ document.body.dataset.watermark = watermarkText(); }
@@ -1007,7 +980,6 @@ function commandBlocks(stage,c){
 function countBy(arr,key){ return arr.reduce((m,x)=>{ const k=x[key]||'未分類'; m[k]=(m[k]||0)+1; return m; },{}); }
 function sum(arr,key){ return arr.reduce((s,x)=>s+(Number(x[key])||0),0); }
 function entriesText(obj){ return Object.entries(obj).map(([k,v])=>`${k}${v}`).join('、'); }
-function readFileAsDataURL(file){ return new Promise((resolve,reject)=>{ const r=new FileReader(); r.onload=()=>resolve(r.result); r.onerror=reject; r.readAsDataURL(file); }); }
 
 
 // ===== v9: account approval, building interior operations, and AI advice =====
@@ -1175,7 +1147,7 @@ async function requestAiAdvice(){
     const data = await res.json();
     if(!res.ok) throw new Error(data.error || 'AI 呼叫失敗');
     $('aiAdviceText').value = data.advice || '';
-    $('aiAdviceStatus').textContent = `AI 建議已更新：${fmtTime(Date.now())}`;
+    $('aiAdviceStatus').textContent = `AI 建議已更新：${fmtTime(Date.now())}${data.modelUsed ? '｜模型：' + data.modelUsed : ''}`;
     const patch = { aiLastAt: Date.now(), aiLastAdvice: data.advice || '', updatedAt:Date.now() };
     Object.assign(currentCase, patch);
     if(firebaseEnabled) await db.collection('cases').doc(currentCaseId).set(patch,{merge:true}); else saveLocalCase();

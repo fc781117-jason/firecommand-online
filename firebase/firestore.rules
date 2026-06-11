@@ -10,11 +10,14 @@ service cloud.firestore {
     function myRole() { return superAdmin() ? 'admin' : userDoc().data.role; }
     function sameBrigade(brigade) { return isActive() && myBrigade() == brigade; }
     function canWrite(brigade) { return superAdmin() || (sameBrigade(brigade) && myRole() in ['battalion','commander','sector','safety','recorder','unit']); }
+    function protectedUserFieldsChanged() {
+      return request.resource.data.diff(resource.data).changedKeys().hasAny(['status','role','isSuperAdmin','approvedBy','approvedAt']);
+    }
 
     match /users/{userId} {
-      allow create: if signedIn() && request.auth.uid == userId;
+      allow create: if superAdmin() || (signedIn() && request.auth.uid == userId && request.resource.data.email == request.auth.token.email && request.resource.data.status == 'pending');
       allow read: if superAdmin() || (signedIn() && request.auth.uid == userId) || (isActive() && sameBrigade(resource.data.brigade));
-      allow update: if superAdmin() || (signedIn() && request.auth.uid == userId && !('status' in request.resource.data.diff(resource.data).changedKeys()));
+      allow update: if superAdmin() || (signedIn() && request.auth.uid == userId && !protectedUserFieldsChanged() && resource.data.email != 'fc781117@gmail.com');
       allow delete: if superAdmin() && resource.data.email != 'fc781117@gmail.com';
     }
 

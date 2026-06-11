@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#15120e" />
-  <title>FireCommand 火場指揮系統 v9</title>
+  <title>FireCommand 火場指揮系統 v10</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="./assets/styles.css" />
 </head>
@@ -15,11 +15,11 @@
     <div class="brand-card">
       <div class="brand-kicker">FireCommand</div>
       <h1>火場指揮系統</h1>
-      <p>Google 登入、開案、火場資訊登錄、地圖部署、人車水線掌控、危害標示與紀錄回報。</p>
+      <p>Google 登入、開案、火場資訊登錄、地圖部署、人車水線掌控、AI 戰術建議、進度報告與紀錄回報。</p>
       <button id="googleLoginBtn" class="btn primary full">使用 Google 登入</button>
       <button id="demoLoginBtn" class="btn ghost full">未設定 Firebase，使用本機 Demo</button>
       <div class="notice">
-        Demo 可先測操作；正式上線請設定 Firebase Auth、Firestore 與 Storage。
+        正式上線請設定 Firebase Auth、Firestore 與 Vercel OPENAI_API_KEY；本版已移除照片與 Storage 功能。
       </div>
     </div>
   </section>
@@ -53,7 +53,6 @@
             <option value="viewer">檢視者</option>
           </select></div>
         </div>
-        <div class="field"><label>照片（可略）</label><input id="profilePhoto" type="file" accept="image/*" /></div>
         <button class="btn primary full" type="submit">儲存並進入系統</button>
       </form>
     </div>
@@ -132,7 +131,7 @@
       </div>
 
       <nav class="quick-nav">
-        <a href="#caseInfo">概要</a><a href="#arrivalSection">到場</a><a href="#tacticalMapSection">部署</a><a href="#buildingSection">建物</a><a href="#dashboardSection">人車</a><a href="#aiSection">AI</a><a href="#mediaSection">照片</a><a href="#logSection">紀錄</a><a href="#reportSection">報告</a>
+        <a href="#caseInfo">概要</a><a href="#arrivalSection">到場</a><a href="#tacticalMapSection">部署</a><a href="#buildingSection">建物</a><a href="#dashboardSection">人車</a><a href="#aiSection">AI</a><a href="#mediaSection">補充</a><a href="#logSection">紀錄</a><a href="#reportSection">報告</a>
       </nav>
 
       <section id="caseInfo" class="stack">
@@ -312,12 +311,10 @@
       </section>
 
       <section id="mediaSection" class="stack">
-        <details class="accordion"><summary><span>案件照片 / 補充資料</span><span class="chevron">›</span></summary>
+        <details class="accordion"><summary><span>補充資料 / 備註</span><span class="chevron">›</span></summary>
           <div class="accordion-body">
-            <div class="field"><label>上傳照片（Firebase Storage 啟用後可同步）</label><input id="casePhotoInput" type="file" accept="image/*" multiple /></div>
-            <button id="uploadPhotosBtn" class="btn small primary">上傳照片</button>
-            <div id="photoGrid" class="photo-grid"></div>
-            <div class="field"><label>其他補充</label><textarea id="extraNotes" rows="2"></textarea></div>
+            <div class="notice">本版已移除首次登入照片與現場照片上傳功能，避免 Firebase Storage 付費與權限設定問題。後續如改用正式儲存服務，再另行加入。</div>
+            <div class="field"><label>其他補充</label><textarea id="extraNotes" rows="3" placeholder="可記錄關係人補充、現場環境、特殊風險或後續待確認事項"></textarea></div>
             <button id="saveExtraBtn" class="btn small primary">儲存補充</button>
           </div>
         </details>
@@ -332,33 +329,25 @@
       </section>
 
       <section id="reportSection" class="stack">
-        <details class="accordion" open><summary><span>報告產出 / 浮水印防外洩</span><span class="chevron">›</span></summary>
+        <details class="accordion" open><summary><span>進度報告 / PDF 產出 / 浮水印防外洩</span><span class="chevron">›</span></summary>
           <div class="accordion-body">
-            <div class="notice">報告與列印頁會帶入姓名、單位、案件編號與產出時間浮水印。請勿輸入正式機敏案件資料進行測試。</div>
+            <div class="notice">可產出類似搜救 APP 的火場進度報告；列印或另存 PDF 時會帶入姓名、單位、案件編號與產出時間浮水印。</div>
             <div class="button-row">
-              <button id="generateReportBtn" class="btn small ghost">更新報告內容</button>
-              <button id="copyReportBtn" class="btn small ghost">複製摘要</button>
-              <button id="printReportBtn" class="btn small primary">開啟列印 / 存 PDF</button>
+              <button id="generateReportBtn" class="btn small ghost">產生進度報告</button>
+              <button id="copyReportBtn" class="btn small ghost">複製進度報告</button>
+              <button id="printReportBtn" class="btn small primary">開啟 PDF 列印 / 存檔</button>
             </div>
-            <textarea id="reportDraft" rows="8" placeholder="報告摘要會在這裡產生"></textarea>
+            <textarea id="reportDraft" rows="10" placeholder="火場進度報告會在這裡產生"></textarea>
             <div id="reportPreview" class="report-preview"></div>
           </div>
         </details>
       </section>
-    </main>
-
-    <div id="photoModal" class="photo-modal" hidden>
-      <button id="closePhotoModal" class="photo-close">關閉</button>
-      <div class="photo-watermark" id="photoWatermark"></div>
-      <img id="photoModalImg" alt="案件照片" />
-    </div>
     </main>
   </section>
 
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-storage-compat.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="./firebase/firebase-config.js"></script>
   <script src="./assets/app.js"></script>

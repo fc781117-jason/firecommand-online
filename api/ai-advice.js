@@ -1,7 +1,16 @@
+function normalizeModelName(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return 'gpt-4.1-mini';
+  if (/^gpt-|^o\d|^chat-latest$/i.test(raw)) return raw;
+  // 允許在 Vercel 輸入「5.4 mini」這類口語寫法，轉成常見 API model id 格式。
+  return `gpt-${raw.toLowerCase().replace(/\s+/g, '-').replace(/_/g, '-')}`;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const key = process.env.OPENAI_API_KEY;
   if (!key) return res.status(501).json({ error: 'OPENAI_API_KEY 尚未在 Vercel Environment Variables 設定。' });
+  const model = normalizeModelName(process.env.OPENAI_MODEL);
   try {
     const body = req.body || {};
     const caseData = body.caseData || {};
@@ -9,13 +18,13 @@ export default async function handler(req, res) {
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-      body: JSON.stringify({ model: process.env.OPENAI_MODEL || 'gpt-4.1-mini', input: prompt, max_output_tokens: 900 })
+      body: JSON.stringify({ model, input: prompt, max_output_tokens: 900 })
     });
     const data = await response.json();
-    if (!response.ok) return res.status(response.status).json({ error: data.error?.message || 'OpenAI API error' });
+    if (!response.ok) return res.status(response.status).json({ error: data.error?.message || 'OpenAI API error', modelUsed: model });
     const advice = data.output_text || (data.output || []).flatMap(o => o.content || []).map(c => c.text || '').join('\n') || 'AI 未回傳文字。';
-    return res.status(200).json({ advice });
+    return res.status(200).json({ advice, modelUsed: model });
   } catch (err) {
-    return res.status(500).json({ error: err.message || 'Server error' });
+    return res.status(500).json({ error: err.message || 'Server error', modelUsed: model });
   }
 }

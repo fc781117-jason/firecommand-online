@@ -1,4 +1,4 @@
-# FireCommand v9 Online Release
+# FireCommand v10 Online Release
 
 本版以 v8 為基礎，整合：
 
@@ -16,10 +16,17 @@
 請勿將 OpenAI API Key 寫入前端或 GitHub。請在 Vercel Project → Settings → Environment Variables 新增：
 
 - `OPENAI_API_KEY`：你的 OpenAI API key
-- `OPENAI_MODEL`：可選，例如 `gpt-4.1-mini`
+- `OPENAI_MODEL`：可選。系統會優先使用你在 Vercel 設定的模型；若輸入 `5.4 mini`，後端會轉成 `gpt-5.4-mini` 後送出。若 OpenAI 回傳 model not found，請改成官方 API model id。
 
 完成後重新 Deploy。
 
 ## Firebase Rules
 
-請同步將 `firebase/firestore.rules` 與 `firebase/storage.rules` 貼到 Firebase Console 後發布。
+請同步將 `firebase/firestore.rules` 貼到 Firebase Console 後發布。本版已移除 Firebase Storage 與照片上傳功能，不需要設定 Storage Rules。
+
+
+## v10 重點
+- 移除首次登入個人照片與案件現場照片功能。
+- 不需要 Firebase Storage / Storage Rules。
+- 報告區改為火場進度報告，可列印或另存 PDF，並保留浮水印。
+- OpenAI 後端會讀取 Vercel 的 OPENAI_MODEL，支援口語模型名稱基本轉換。
