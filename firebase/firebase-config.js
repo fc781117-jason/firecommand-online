@@ -9,6 +9,7 @@ window.FIRECOMMAND_FIREBASE_CONFIG = {
   apiKey: "AIzaSyBbhrtHh5JCeukTlx1_6_nuF0hcgpJwUsw",
   authDomain: "firecommand-online.firebaseapp.com",
   projectId: "firecommand-online",
+  storageBucket: "firecommand-online.firebasestorage.app",
     messagingSenderId: "575184567138",
   appId: "1:575184567138:web:4173df8ba7be8a4a7bca3b",
   measurementId: ""

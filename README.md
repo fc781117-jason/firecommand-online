@@ -1,4 +1,4 @@
-# FireCommand v14｜最高管理員自動啟用修正版
+# FireCommand v15｜最高管理員自動啟用修正版
 
 本版修正最高管理員 `fc781117@gmail.com` 首次登入流程：
 
@@ -10,7 +10,7 @@
 
 部署時請覆蓋 GitHub 後，至 Firebase Console 更新 `firebase/firestore.rules`。
 
-# FireCommand v14｜精簡排版＋戰術部署摺疊＋AI 進度報告版
+# FireCommand v15｜精簡排版＋戰術部署摺疊＋AI 進度報告版
 
 本版接續 v12，依使用者最新測試回饋調整：
 

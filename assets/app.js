@@ -1,7 +1,7 @@
 'use strict';
 
 const $ = (id) => document.getElementById(id);
-const LOCAL_KEY = 'firecommand_v14_local_state';
+const LOCAL_KEY = 'firecommand_v15_local_state';
 const DEFAULT_CENTER = { lat: 25.085, lng: 121.48 };
 const SUPER_ADMIN_EMAIL = 'fc781117@gmail.com';
 const AI_COOLDOWN_MS = 15 * 60 * 1000;
@@ -241,7 +241,7 @@ function init(){
 
 function bindEvents(){
   $('googleLoginBtn').addEventListener('click', loginGoogle);
-  $('demoLoginBtn').addEventListener('click', loginDemo);
+  $('demoLoginBtn')?.addEventListener('click', loginDemo);
   $('logoutBtn').addEventListener('click', logout);
   $('approvalLogoutBtn')?.addEventListener('click', logout);
   $('adminManageBtn')?.addEventListener('click', () => { if($('adminSection')) { $('adminSection').hidden = false; $('adminSection').scrollIntoView({behavior:'smooth'}); } loadUsersForAdmin(); });
@@ -277,7 +277,7 @@ function bindEvents(){
   $('hoseTargetType').addEventListener('change', renderToolOptions);
   document.querySelectorAll('.hazard-btn').forEach(btn => btn.addEventListener('click', () => startHazardTool(btn.dataset.hazard)));
   $('generateReportBtn')?.addEventListener('click', () => generateAIReport(true));
-  $('saveExtraBtn').addEventListener('click', saveExtraNotes);
+  $('saveExtraBtn')?.addEventListener('click', saveExtraNotes);
   $('addSitrepBtn')?.addEventListener('click', addSitrep);
   $('sitrepNowBtn')?.addEventListener('click', setSitrepNow);
   $('generateAssessmentBtn')?.addEventListener('click', generateAssessmentReport);
@@ -394,14 +394,39 @@ function getTrappedCount(){
 }
 
 function initFirebase(){
-  firebaseEnabled = Boolean(window.FIRECOMMAND_FIREBASE_ENABLED && window.FIRECOMMAND_FIREBASE_CONFIG && !String(window.FIRECOMMAND_FIREBASE_CONFIG.apiKey||'').includes('PASTE_'));
-  $('demoLoginBtn').style.display = firebaseEnabled ? 'none' : 'block';
+  firebaseEnabled = Boolean(
+    typeof firebase !== 'undefined' &&
+    window.FIRECOMMAND_FIREBASE_ENABLED === true &&
+    window.FIRECOMMAND_FIREBASE_CONFIG &&
+    window.FIRECOMMAND_FIREBASE_CONFIG.apiKey &&
+    !String(window.FIRECOMMAND_FIREBASE_CONFIG.apiKey || '').includes('PASTE_')
+  );
+  const demoBtn = $('demoLoginBtn');
+  if(demoBtn) demoBtn.hidden = true;
   if(!firebaseEnabled){
+    const loginBtn = $('googleLoginBtn');
+    if(loginBtn){
+      loginBtn.disabled = true;
+      loginBtn.textContent = '系統連線尚未完成，請聯絡管理員';
+    }
     show('authScreen');
     return;
   }
-  firebase.initializeApp(window.FIRECOMMAND_FIREBASE_CONFIG);
-  auth = firebase.auth(); db = firebase.firestore();
+  try {
+    if(!firebase.apps.length) firebase.initializeApp(window.FIRECOMMAND_FIREBASE_CONFIG);
+    auth = firebase.auth();
+    db = firebase.firestore();
+  } catch (err) {
+    console.error('Firebase 初始化失敗', err);
+    firebaseEnabled = false;
+    const loginBtn = $('googleLoginBtn');
+    if(loginBtn){
+      loginBtn.disabled = true;
+      loginBtn.textContent = '系統連線尚未完成，請聯絡管理員';
+    }
+    show('authScreen');
+    return;
+  }
   auth.onAuthStateChanged(async (user) => {
     fbUser = user;
     if(!user){ show('authScreen'); return; }
@@ -425,7 +450,7 @@ function initFirebase(){
 }
 
 async function loginGoogle(){
-  if(!firebaseEnabled){ loginDemo(); return; }
+  if(!firebaseEnabled){ toast('系統連線尚未完成，請確認 Firebase 設定檔已上傳。', 4000); return; }
   const provider = new firebase.auth.GoogleAuthProvider();
   await auth.signInWithPopup(provider);
 }
@@ -671,7 +696,7 @@ function renderDetail(){
   $('detailPurpose').value = currentCase.purpose || '住宅';
   $('detailFireStatus').value = currentCase.fireStatus || '未知';
   $('detailNotes').value = currentCase.notes || '';
-  $('extraNotes').value = currentCase.extraNotes || '';
+  if($('extraNotes')) $('extraNotes').value = currentCase.extraNotes || '';
   $('summaryFloors').value = currentCase.floors || '';
   $('summaryFireFloor').value = currentCase.fireFloor || '';
   $('summaryTrapped').value = currentCase.trapped || '未知';
@@ -764,7 +789,9 @@ async function saveSummaryInfo(){
 function readSupports(){ return Array.from(document.querySelectorAll('.support-grid input:checked')).map(x=>x.value); }
 function applySupportValues(values=[]){ document.querySelectorAll('.support-grid input').forEach(x=>{ x.checked = values.includes(x.value); }); }
 async function saveExtraNotes(){
-  const patch = { extraNotes:$('extraNotes').value, updatedAt:Date.now() };
+  const el = $('extraNotes');
+  if(!el || !currentCase) return;
+  const patch = { extraNotes:el.value, updatedAt:Date.now() };
   Object.assign(currentCase, patch);
   if(firebaseEnabled) await db.collection('cases').doc(currentCaseId).set(patch,{merge:true}); else saveLocalCase();
   await addLog('case','更新案件補充資料'); toast('已儲存補充資料');
