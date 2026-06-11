@@ -1,0 +1,30 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function userDoc() { return get(/databases/$(database)/documents/users/$(request.auth.uid)); }
+    function myBrigade() { return userDoc().data.brigade; }
+    function myRole() { return userDoc().data.role; }
+    function sameBrigade(brigade) { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && myBrigade() == brigade; }
+    function canWrite(brigade) { return sameBrigade(brigade) && myRole() in ['battalion','commander','sector','safety','recorder','unit']; }
+
+    match /users/{userId} {
+      allow create: if signedIn() && request.auth.uid == userId;
+      allow read: if signedIn() && (request.auth.uid == userId || sameBrigade(resource.data.brigade));
+      allow update: if signedIn() && request.auth.uid == userId;
+      allow delete: if false;
+    }
+
+    match /cases/{caseId} {
+      allow create: if signedIn() && request.resource.data.brigade == myBrigade();
+      allow read: if sameBrigade(resource.data.brigade);
+      allow update: if canWrite(resource.data.brigade);
+      allow delete: if sameBrigade(resource.data.brigade) && myRole() in ['battalion','commander'];
+
+      match /{sub=**}/{docId} {
+        allow read: if sameBrigade(get(/databases/$(database)/documents/cases/$(caseId)).data.brigade);
+        allow create, update, delete: if canWrite(get(/databases/$(database)/documents/cases/$(caseId)).data.brigade);
+      }
+    }
+  }
+}
