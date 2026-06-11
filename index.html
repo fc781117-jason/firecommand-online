@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#15120e" />
-  <title>FireCommand 火場指揮系統</title>
+  <title>FireCommand 火場指揮系統 v9</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="./assets/styles.css" />
 </head>
@@ -37,7 +37,7 @@
         <div class="field"><label>希望被稱呼的名字</label><input id="profileCallName" required placeholder="例：大明 / 516" /></div>
         <div class="two-col">
           <div class="field"><label>大隊</label><select id="profileBrigade" required></select></div>
-          <div class="field"><label>單位</label><select id="profileUnit" required></select></div>
+          <div class="field"><label>單位</label><select id="profileUnit" required></select><div class="hint">單位清單會依大隊自動帶出「大隊部、中隊、分隊」。</div></div>
         </div>
         <div class="two-col">
           <div class="field"><label>職稱</label><select id="profileTitle" required>
@@ -59,13 +59,26 @@
     </div>
   </section>
 
+
+
+  <section id="approvalScreen" class="screen approval-screen" hidden>
+    <div class="page narrow">
+      <div class="brand-card compact-card">
+        <div class="brand-kicker">帳號審核</div>
+        <h1>等待管理員審核</h1>
+        <p id="approvalMessage">你的帳號已建立，請等待最高管理員審核啟用。</p>
+        <button id="approvalLogoutBtn" class="btn ghost full">登出</button>
+      </div>
+    </div>
+  </section>
+
   <section id="appScreen" class="screen app-screen" hidden>
     <header class="topbar">
       <div>
         <div class="brand-mini">FireCommand</div>
         <div id="userLine" class="user-line">—</div>
       </div>
-      <button id="logoutBtn" class="btn small ghost">登出</button>
+      <button id="adminManageBtn" class="btn small ghost" hidden>帳號管理</button><button id="logoutBtn" class="btn small ghost">登出</button>
     </header>
 
     <main id="homePage" class="page">
@@ -93,9 +106,14 @@
             <div class="field"><label>是否有人受困</label><select id="caseTrapped"><option>未知</option><option>無</option><option>有</option></select></div>
           </div>
           <div class="two-col">
-            <div class="field"><label>受困人數</label><input id="caseTrappedCount" type="number" min="0" value="0" /></div>
+            <div class="field"><label>受困人數</label><select id="caseTrappedCountMode"></select></div>
             <div class="field"><label>火煙狀況</label><select id="caseFireStatus"><option>未知</option><option>白煙</option><option>灰煙</option><option>黑煙</option><option>大量明火</option><option>延燒中</option></select></div>
           </div>
+          <details id="victimDetails" class="sub-accordion">
+            <summary>受困人員細節（可新增性別、年齡、備註）</summary>
+            <div id="victimRows" class="victim-rows"></div>
+            <button id="addVictimBtn" type="button" class="btn small ghost">＋ 新增受困人員</button>
+          </details>
           <div class="field"><label>案件概要</label><textarea id="caseSummary" rows="2" placeholder="例：6樓建築，2樓冒黑煙，疑似有人受困"></textarea></div>
           <button class="btn primary full" type="submit">定位並建立案件</button>
         </form>
@@ -114,33 +132,74 @@
       </div>
 
       <nav class="quick-nav">
-        <a href="#caseInfo">概要</a><a href="#tacticalMapSection">部署</a><a href="#dashboardSection">人車</a><a href="#mediaSection">照片</a><a href="#reportSection">紀錄</a>
+        <a href="#caseInfo">概要</a><a href="#arrivalSection">到場</a><a href="#tacticalMapSection">部署</a><a href="#buildingSection">建物</a><a href="#dashboardSection">人車</a><a href="#aiSection">AI</a><a href="#mediaSection">照片</a><a href="#logSection">紀錄</a><a href="#reportSection">報告</a>
       </nav>
 
       <section id="caseInfo" class="stack">
-        <details class="accordion" open>
-          <summary><span>案件概要 / 到場回報</span><span class="chevron">›</span></summary>
+        <details class="accordion">
+          <summary><span>案件概要（開案資料）</span><span class="chevron">›</span></summary>
           <div class="accordion-body">
             <div id="summaryCards" class="h-scroll"></div>
             <div class="two-col">
+              <div class="field"><label>建物樓層</label><input id="summaryFloors" type="number" min="0" placeholder="例：6" /></div>
+              <div class="field"><label>起火樓層</label><input id="summaryFireFloor" placeholder="例：3樓" /></div>
+            </div>
+            <div class="two-col">
+              <div class="field"><label>是否有人受困</label><select id="summaryTrapped"><option>未知</option><option>無</option><option>有</option></select></div>
+              <div class="field"><label>受困人數</label><select id="summaryTrappedCountMode"></select></div>
+            </div>
+            <details id="summaryVictimDetails" class="sub-accordion">
+              <summary>受困人員細節（性別、年齡、備註）</summary>
+              <div id="summaryVictimRows" class="victim-rows"></div>
+              <button id="summaryAddVictimBtn" type="button" class="btn small ghost">＋ 新增受困人員</button>
+            </details>
+            <div class="field"><label>案件概要</label><textarea id="summaryText" rows="2" placeholder="例：6樓建築，3樓冒黑煙，疑似有人受困"></textarea></div>
+            <button id="saveSummaryInfoBtn" class="btn primary full">儲存案件概要修改</button>
+          </div>
+        </details>
+      </section>
+
+      <section id="arrivalSection" class="stack">
+        <details class="accordion" open>
+          <summary><span>到場回報｜到建火人支初</span><span class="chevron">›</span></summary>
+          <div class="accordion-body">
+            <div class="h-scroll command-stage-cards" id="commandStageCards">
+              <button type="button" class="stage-card active" data-stage="到"><b>到</b><span>到達 / 指揮權</span></button>
+              <button type="button" class="stage-card" data-stage="建"><b>建</b><span>建物 / 場所</span></button>
+              <button type="button" class="stage-card" data-stage="火"><b>火</b><span>火煙 / 360</span></button>
+              <button type="button" class="stage-card" data-stage="人"><b>人</b><span>受困 / 搜救</span></button>
+              <button type="button" class="stage-card" data-stage="支"><b>支</b><span>支援 / 外單位</span></button>
+              <button type="button" class="stage-card" data-stage="初"><b>初</b><span>初期部署</span></button>
+            </div>
+            <div class="two-col compact-checks">
               <label class="check"><input id="arrivedCheck" type="checkbox" /> 已到達</label>
               <label class="check"><input id="commandCheck" type="checkbox" /> 指揮權轉移</label>
               <label class="check"><input id="ritCheck" type="checkbox" /> 已律定 RIT</label>
               <label class="check"><input id="hazardCheck" type="checkbox" /> 已詢問危險物</label>
+              <label class="check"><input id="firstSideCheck" type="checkbox" /> 已設定第一面</label>
+              <label class="check"><input id="parCheck" type="checkbox" /> 已要求 PAR</label>
             </div>
             <div class="two-col">
               <div class="field"><label>建物用途</label><select id="detailPurpose"><option>住宅</option><option>工廠</option><option>倉庫</option><option>商業</option><option>複合用途</option><option>其他</option></select></div>
               <div class="field"><label>火煙狀況</label><select id="detailFireStatus"><option>未知</option><option>白煙</option><option>灰煙</option><option>黑煙</option><option>大量明火</option><option>延燒中</option></select></div>
             </div>
+            <div class="field"><label>需要支援</label><div class="chip-grid support-grid">
+              <label><input type="checkbox" value="水車" /> 水車</label><label><input type="checkbox" value="水庫車" /> 水庫車</label><label><input type="checkbox" value="雲梯車" /> 雲梯車</label><label><input type="checkbox" value="救護車" /> 救護車</label><label><input type="checkbox" value="台電" /> 台電</label><label><input type="checkbox" value="瓦斯" /> 瓦斯</label><label><input type="checkbox" value="警察" /> 警察</label><label><input type="checkbox" value="毒災應變隊" /> 毒災應變隊</label>
+            </div></div>
             <div class="field"><label>補充說明</label><textarea id="detailNotes" rows="2"></textarea></div>
-            <button id="saveCaseInfoBtn" class="btn primary full">儲存案件概要</button>
+            <div id="commandAdvice" class="command-advice"></div>
+            <div class="field"><label>到建火人支初｜可照念回報稿</label><textarea id="commandSpeech" rows="8" readonly></textarea></div>
+            <div class="button-row">
+              <button id="saveCaseInfoBtn" class="btn primary full">儲存到場回報</button>
+              <button id="copyCommandSpeechBtn" type="button" class="btn ghost full">複製回報稿</button>
+            </div>
           </div>
         </details>
       </section>
 
       <section id="tacticalMapSection" class="map-section">
         <div class="section-head compact">
-          <div><div class="eyebrow">戰術部署圖</div><h3>地圖、車輛、人員、水線、危害標示</h3></div>
+          <div><div class="eyebrow">戰術地圖標示</div><h3>車輛 / 人員 / 危害標示 / 水線部署</h3></div>
           <button id="fitMapBtn" class="btn small ghost">回到200m</button>
         </div>
 
@@ -150,22 +209,25 @@
             <div class="tool-cards">
               <div class="tool-card">
                 <h4>新增車輛</h4>
-                <div class="two-col"><div class="field"><label>大隊</label><select id="vehicleBrigade"></select></div><div class="field"><label>單位</label><select id="vehicleUnit"></select></div></div>
+                <div class="two-col compact-grid"><div class="field"><label>大隊</label><select id="vehicleBrigade"></select></div><div class="field"><label>單位</label><select id="vehicleUnit"></select></div></div>
                 <div class="two-col"><div class="field"><label>車號</label><input id="vehicleName" placeholder="例：蘆洲11" /></div><div class="field"><label>任務</label><input id="vehicleTask" placeholder="例：第一線攻擊" /></div></div>
                 <button id="addVehicleBtn" class="btn small primary full">加入車輛</button>
               </div>
               <div class="tool-card">
                 <h4>新增人員</h4>
-                <div class="two-col"><div class="field"><label>單位</label><select id="crewUnit"></select></div><div class="field"><label>帶隊官號</label><select id="crewLeader"><option>6</option><option>7</option><option>8</option><option>9</option></select></div></div>
+                <div class="two-col compact-grid"><div class="field"><label>大隊</label><select id="crewBrigade"></select></div><div class="field"><label>單位</label><select id="crewUnit"></select></div></div>
+                <div class="field"><label>帶隊官號</label><select id="crewLeader"><option>6</option><option>7</option><option>8</option><option>9</option></select></div>
                 <div class="two-col"><div class="field"><label>人數</label><input id="crewCount" type="number" min="1" value="4" /></div><div class="field"><label>狀態</label><select id="crewStatus"><option>作業中</option><option>待命</option><option>休息</option><option>RIT</option><option>撤出</option></select></div></div>
                 <div class="field"><label>任務</label><input id="crewTask" placeholder="例：人命搜救 / RIT待命" /></div>
                 <button id="addCrewBtn" class="btn small primary full">加入人員</button>
               </div>
               <div class="tool-card">
-                <h4>水線</h4>
+                <h4>水線 / 供水連結</h4>
                 <div class="field"><label>來源車輛</label><select id="hoseVehicle"></select></div>
-                <div class="two-col"><div class="field"><label>接口</label><select id="hosePort"><option>1線</option><option>2線</option><option>3線</option><option>4線</option></select></div><div class="field"><label>任務</label><input id="hoseTask" placeholder="例：室內攻擊" /></div></div>
-                <button id="startHoseBtn" class="btn small danger full">點地圖建立水線</button>
+                <div class="two-col"><div class="field"><label>接口</label><select id="hosePort"><option>1線</option><option>2線</option><option>3線</option><option>4線</option></select></div><div class="field"><label>水線歸屬</label><select id="hoseOwner"></select></div></div><div class="field"><label>水線性質</label><select id="hoseKind"><option>進攻水線</option><option>供水線</option><option>防護水線</option><option>搜救掩護水線</option><option>中繼水線</option></select></div>
+                <div class="two-col"><div class="field"><label>目的地類型</label><select id="hoseTargetType"><option value="map">地圖點 / 建築物</option><option value="vehicle">連結車輛</option><option value="crew">連結人員編組 / 分隊</option></select></div><div class="field"><label>目的地</label><select id="hoseTarget"></select></div></div>
+                <div class="field"><label>任務</label><input id="hoseTask" placeholder="例：室內攻擊 / 佔據消防栓" /></div>
+                <button id="startHoseBtn" class="btn small danger full">建立 / 點地圖建立水線</button>
               </div>
               <div class="tool-card">
                 <h4>危害 / 區域標示</h4>
@@ -183,6 +245,62 @@
         </details>
 
         <div id="map" class="map"></div>
+      </section>
+
+
+
+      <section id="buildingSection" class="stack">
+        <details class="accordion">
+          <summary><span>建物內部作戰圖｜縱向剖面 / 水平俯視</span><span class="chevron">›</span></summary>
+          <div class="accordion-body">
+            <div class="notice">點選「同步樓層」後，左側會依建物樓層產生縱向剖面圖；右側可切換火災樓層並標示起火點、受困者、死亡者、入口、隔間與水線。此資料會併入報告與操作紀錄。</div>
+            <div class="button-row">
+              <button id="syncFloorsBtn" class="btn small ghost" type="button">同步樓層</button>
+              <button id="saveBuildingOpsBtn" class="btn small primary" type="button">儲存建物作戰圖</button>
+            </div>
+            <div class="building-layout">
+              <div class="building-panel">
+                <div class="panel-title">左：縱向剖面圖</div>
+                <div id="verticalSection" class="vertical-section"></div>
+              </div>
+              <div class="building-panel">
+                <div class="panel-title">右：水平俯視圖</div>
+                <div class="two-col compact-grid">
+                  <div class="field"><label>樓層</label><select id="floorPlanLevel"></select></div>
+                  <div class="field"><label>標示類型</label><select id="floorPlanTool"><option>起火點</option><option>待救者</option><option>死亡者</option><option>入口</option><option>水線</option><option>隔間</option><option>危害物</option></select></div>
+                </div>
+                <div id="floorPlanCanvas" class="floor-plan-canvas" aria-label="水平俯視圖"></div>
+                <div class="hint">在右側俯視圖空白處點一下即可新增標示；點標示可修改備註。</div>
+              </div>
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <section id="aiSection" class="stack">
+        <details class="accordion">
+          <summary><span>OpenAI 戰術建議｜15 分鐘節流</span><span class="chevron">›</span></summary>
+          <div class="accordion-body">
+            <div class="notice">AI 建議僅供參考，不取代現場指揮官判斷。正式啟用前請在 Vercel 設定 OPENAI_API_KEY；前端不會存放 API Key。</div>
+            <div class="button-row">
+              <button id="aiAdviceBtn" type="button" class="btn small primary">產生 / 更新 AI 建議</button>
+              <button id="localRuleAdviceBtn" type="button" class="btn small ghost">產生本機規則建議</button>
+            </div>
+            <div id="aiAdviceStatus" class="hint">尚未呼叫。</div>
+            <textarea id="aiAdviceText" rows="8" placeholder="AI / 規則建議會顯示在這裡"></textarea>
+          </div>
+        </details>
+      </section>
+
+      <section id="adminSection" class="stack" hidden>
+        <details class="accordion">
+          <summary><span>最高管理員｜帳號審核與停權</span><span class="chevron">›</span></summary>
+          <div class="accordion-body">
+            <div class="notice">最高管理員信箱固定為 fc781117@gmail.com。可審核、啟用、停權使用者；此設定寫死於程式與 Firestore Rules。</div>
+            <button id="refreshUsersBtn" type="button" class="btn small ghost">重新整理帳號</button>
+            <div id="userAdminList" class="user-admin-list"></div>
+          </div>
+        </details>
       </section>
 
       <section id="dashboardSection" class="stack">
@@ -205,15 +323,35 @@
         </details>
       </section>
 
-      <section id="reportSection" class="stack">
-        <details class="accordion"><summary><span>時間軸 / 回報草稿</span><span class="chevron">›</span></summary>
+      <section id="logSection" class="stack">
+        <details class="accordion"><summary><span>時間軸 / 操作紀錄</span><span class="chevron">›</span></summary>
           <div class="accordion-body">
-            <button id="generateReportBtn" class="btn small ghost">產生北海回報草稿</button>
-            <textarea id="reportDraft" rows="8"></textarea>
             <div id="logList" class="log-list"></div>
           </div>
         </details>
       </section>
+
+      <section id="reportSection" class="stack">
+        <details class="accordion" open><summary><span>報告產出 / 浮水印防外洩</span><span class="chevron">›</span></summary>
+          <div class="accordion-body">
+            <div class="notice">報告與列印頁會帶入姓名、單位、案件編號與產出時間浮水印。請勿輸入正式機敏案件資料進行測試。</div>
+            <div class="button-row">
+              <button id="generateReportBtn" class="btn small ghost">更新報告內容</button>
+              <button id="copyReportBtn" class="btn small ghost">複製摘要</button>
+              <button id="printReportBtn" class="btn small primary">開啟列印 / 存 PDF</button>
+            </div>
+            <textarea id="reportDraft" rows="8" placeholder="報告摘要會在這裡產生"></textarea>
+            <div id="reportPreview" class="report-preview"></div>
+          </div>
+        </details>
+      </section>
+    </main>
+
+    <div id="photoModal" class="photo-modal" hidden>
+      <button id="closePhotoModal" class="photo-close">關閉</button>
+      <div class="photo-watermark" id="photoWatermark"></div>
+      <img id="photoModalImg" alt="案件照片" />
+    </div>
     </main>
   </section>
 

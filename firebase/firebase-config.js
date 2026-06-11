@@ -1,8 +1,7 @@
 // FireCommand Firebase 設定檔
-// 1. 此檔案提供給 FireCommand Web App 讀取 Firebase 設定。
-// 2. 已啟用 Firebase，正式上線時會使用 Firebase Auth / Firestore / Storage。
-// 3. 不要把 Google 帳號密碼或 Service Account private key 放在這裡。
-// 4. Firebase 沒有提供 measurementId 沒關係，這不是必要欄位。
+// 已依目前 Firebase Web App 設定完成。
+// 注意：這不是 Google 帳號密碼，也不是 Service Account private key。
+// Firebase Web config 可放在前端；真正安全性請依靠 Auth、Firestore Rules、Storage Rules 與 Vercel / Firebase 授權網域。
 
 window.FIRECOMMAND_FIREBASE_ENABLED = true;
 

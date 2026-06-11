@@ -2,27 +2,30 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
+    function superAdmin() { return signedIn() && request.auth.token.email == 'fc781117@gmail.com'; }
+    function userExists() { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)); }
     function userDoc() { return get(/databases/$(database)/documents/users/$(request.auth.uid)); }
+    function isActive() { return superAdmin() || (userExists() && userDoc().data.status == 'active'); }
     function myBrigade() { return userDoc().data.brigade; }
-    function myRole() { return userDoc().data.role; }
-    function sameBrigade(brigade) { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && myBrigade() == brigade; }
-    function canWrite(brigade) { return sameBrigade(brigade) && myRole() in ['battalion','commander','sector','safety','recorder','unit']; }
+    function myRole() { return superAdmin() ? 'admin' : userDoc().data.role; }
+    function sameBrigade(brigade) { return isActive() && myBrigade() == brigade; }
+    function canWrite(brigade) { return superAdmin() || (sameBrigade(brigade) && myRole() in ['battalion','commander','sector','safety','recorder','unit']); }
 
     match /users/{userId} {
       allow create: if signedIn() && request.auth.uid == userId;
-      allow read: if signedIn() && (request.auth.uid == userId || sameBrigade(resource.data.brigade));
-      allow update: if signedIn() && request.auth.uid == userId;
-      allow delete: if false;
+      allow read: if superAdmin() || (signedIn() && request.auth.uid == userId) || (isActive() && sameBrigade(resource.data.brigade));
+      allow update: if superAdmin() || (signedIn() && request.auth.uid == userId && !('status' in request.resource.data.diff(resource.data).changedKeys()));
+      allow delete: if superAdmin() && resource.data.email != 'fc781117@gmail.com';
     }
 
     match /cases/{caseId} {
-      allow create: if signedIn() && request.resource.data.brigade == myBrigade();
-      allow read: if sameBrigade(resource.data.brigade);
+      allow create: if isActive() && (superAdmin() || request.resource.data.brigade == myBrigade());
+      allow read: if superAdmin() || sameBrigade(resource.data.brigade);
       allow update: if canWrite(resource.data.brigade);
-      allow delete: if sameBrigade(resource.data.brigade) && myRole() in ['battalion','commander'];
+      allow delete: if superAdmin() || (sameBrigade(resource.data.brigade) && myRole() in ['battalion','commander']);
 
-      match /{sub=**}/{docId} {
-        allow read: if sameBrigade(get(/databases/$(database)/documents/cases/$(caseId)).data.brigade);
+      match /{subCollection}/{docId} {
+        allow read: if superAdmin() || sameBrigade(get(/databases/$(database)/documents/cases/$(caseId)).data.brigade);
         allow create, update, delete: if canWrite(get(/databases/$(database)/documents/cases/$(caseId)).data.brigade);
       }
     }

@@ -1,55 +1,25 @@
-# FireCommand 火場指揮系統 v6 Online
+# FireCommand v9 Online Release
 
-這是一版可直接放到 GitHub + Vercel，並串接 Firebase 的 FireCommand 線上版。
+本版以 v8 為基礎，整合：
 
-## 功能
+- 外勤大隊編制修正（依 115 年 4 月電話簿外勤單位區塊整理）
+- 第三大隊移除錯誤的五股中隊；第三大隊單位為：大隊部、三重中隊、蘆洲中隊、淡水中隊、三重、重陽、二重、鷺江、蘆洲、龍源、八里、淡水、竹圍、三芝、滬尾
+- 最高管理員固定：fc781117@gmail.com
+- 新帳號預設 pending，需最高管理員啟用；最高管理員不可被停權
+- 水線可標示「進攻水線 / 供水線 / 防護水線 / 搜救掩護水線 / 中繼水線」並連接人員編組 / 分隊
+- 建物內部作戰圖：左側縱向剖面圖、右側水平俯視圖
+- OpenAI 戰術建議模組：15 分鐘節流；需在 Vercel 設定 OPENAI_API_KEY
+- 報告與浮水印功能沿用 v8
 
-- Google 登入
-- 首次登入填寫真實姓名、稱呼、大隊、單位、職稱、APP 角色
-- 下次登入免重填個人資料
-- 開案首頁與案件列表
-- 案件編號自動產生
-- 新增案件 / 派遣令預設收合
-- 地址定位與 200m 作業圈
-- 車輛部署、拖曳移動
-- 人員部署、拖曳移動
-- 水線建立
-- 危害標示建立與拖曳移動
-- 人車掌控儀表板
-- 規則式提示
-- 時間軸紀錄
-- 照片上傳
-- 北海回報草稿
+## OpenAI 啟用方式
 
-## 檔案結構
+請勿將 OpenAI API Key 寫入前端或 GitHub。請在 Vercel Project → Settings → Environment Variables 新增：
 
-```text
-index.html
-assets/styles.css
-assets/app.js
-firebase/firebase-config.js
-firebase/firestore.rules
-firebase/storage.rules
-vercel.json
-```
+- `OPENAI_API_KEY`：你的 OpenAI API key
+- `OPENAI_MODEL`：可選，例如 `gpt-4.1-mini`
 
-## 上線前必做
+完成後重新 Deploy。
 
-1. 建立 Firebase Project。
-2. 新增 Web App，取得 firebaseConfig。
-3. 修改 `firebase/firebase-config.js`。
-4. Firebase Authentication 啟用 Google 登入。
-5. 建立 Firestore Database。
-6. 建立 Storage。
-7. 將 `firebase/firestore.rules` 貼到 Firestore Rules。
-8. 將 `firebase/storage.rules` 貼到 Storage Rules。
-9. 上傳到 GitHub。
-10. Vercel 匯入 GitHub Repo 並部署。
+## Firebase Rules
 
-## Demo 模式
-
-若 `FIRECOMMAND_FIREBASE_ENABLED = false`，系統會使用瀏覽器 localStorage 作為本機 Demo，不會多人同步。
-
-## 正式提醒
-
-此版本仍屬 MVP，尚未經機關資安審查，不應輸入正式案件機敏資料或個資。
+請同步將 `firebase/firestore.rules` 與 `firebase/storage.rules` 貼到 Firebase Console 後發布。
