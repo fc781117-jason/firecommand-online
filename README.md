@@ -1,4 +1,16 @@
-# FireCommand v13｜精簡排版＋戰術部署摺疊＋AI 進度報告版
+# FireCommand v14｜最高管理員自動啟用修正版
+
+本版修正最高管理員 `fc781117@gmail.com` 首次登入流程：
+
+- 最高管理員第一次 Google 登入時，系統自動建立 / 修正 `users/{uid}`。
+- 最高管理員狀態固定為 `active`、角色固定為 `admin`、`isSuperAdmin=true`。
+- 最高管理員不會進入等待審核畫面，也不需要自己審核自己。
+- 帳號管理清單不顯示最高管理員，也不能停權最高管理員。
+- 已同步更新 Firestore Rules，允許最高管理員全域管理使用者與案件。
+
+部署時請覆蓋 GitHub 後，至 Firebase Console 更新 `firebase/firestore.rules`。
+
+# FireCommand v14｜精簡排版＋戰術部署摺疊＋AI 進度報告版
 
 本版接續 v12，依使用者最新測試回饋調整：
 

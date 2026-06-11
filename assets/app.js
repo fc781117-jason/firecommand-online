@@ -1,7 +1,7 @@
 'use strict';
 
 const $ = (id) => document.getElementById(id);
-const LOCAL_KEY = 'firecommand_v13_local_state';
+const LOCAL_KEY = 'firecommand_v14_local_state';
 const DEFAULT_CENTER = { lat: 25.085, lng: 121.48 };
 const SUPER_ADMIN_EMAIL = 'fc781117@gmail.com';
 const AI_COOLDOWN_MS = 15 * 60 * 1000;
@@ -405,10 +405,20 @@ function initFirebase(){
   auth.onAuthStateChanged(async (user) => {
     fbUser = user;
     if(!user){ show('authScreen'); return; }
-    const snap = await db.collection('users').doc(user.uid).get();
+    const adminEmail = isSuperAdminEmail(user.email);
+    const ref = db.collection('users').doc(user.uid);
+    const snap = await ref.get();
+
+    // 最高管理員第一次登入時，不進入審核流程，直接自動建立 / 修正為 active admin。
+    if(adminEmail){
+      profile = snap.exists ? { id:user.uid, ...snap.data() } : makeSuperAdminProfile(user);
+      await normalizeAdminProfile(true);
+      enterApp();
+      return;
+    }
+
     if(!snap.exists){ prefillProfile(user); show('profileScreen'); return; }
     profile = { id:user.uid, ...snap.data() };
-    await normalizeAdminProfile();
     if(!canEnterSystem()) { showApprovalScreen(); return; }
     enterApp();
   });
@@ -438,7 +448,7 @@ async function logout(){
 }
 async function saveProfile(e){
   e.preventDefault();
-  const isAdminEmail = (fbUser.email || '').toLowerCase() === SUPER_ADMIN_EMAIL;
+  const isAdminEmail = isSuperAdminEmail(fbUser.email);
   profile = {
     id: fbUser.uid,
     email: fbUser.email || '',
@@ -1435,13 +1445,44 @@ function sum(arr,key){ return arr.reduce((s,x)=>s+(Number(x[key])||0),0); }
 function entriesText(obj){ return Object.entries(obj).map(([k,v])=>`${k}${v}`).join('、'); }
 
 
-// ===== v9: account approval, building interior operations, and AI advice =====
-function isSuperAdmin(){ return (profile?.email || fbUser?.email || '').toLowerCase() === SUPER_ADMIN_EMAIL; }
+// ===== v9/v14: account approval, building interior operations, and AI advice =====
+function isSuperAdminEmail(email){ return String(email || '').trim().toLowerCase() === SUPER_ADMIN_EMAIL; }
+function isSuperAdmin(){ return isSuperAdminEmail(profile?.email || fbUser?.email); }
+function makeSuperAdminProfile(user){
+  const displayName = user.displayName || '最高管理員';
+  return {
+    id: user.uid,
+    email: user.email || SUPER_ADMIN_EMAIL,
+    realName: displayName,
+    callName: displayName,
+    brigade: '第三大隊',
+    unit: '大隊部',
+    title: '最高管理員',
+    role: 'admin',
+    status: 'active',
+    isSuperAdmin: true,
+    approvedBy: SUPER_ADMIN_EMAIL,
+    approvedAt: Date.now(),
+    updatedAt: Date.now(),
+    createdAt: Date.now()
+  };
+}
 function isApproved(){ return isSuperAdmin() || profile?.status === 'active'; }
-function canEnterSystem(){ return isApproved() && profile?.status !== 'suspended'; }
-async function normalizeAdminProfile(){
-  if(!profile || !isSuperAdmin() || profile.status === 'active') return;
-  profile.status = 'active'; profile.role = 'admin'; profile.isSuperAdmin = true; profile.approvedBy = SUPER_ADMIN_EMAIL; profile.approvedAt = Date.now();
+function canEnterSystem(){ return isSuperAdmin() || (isApproved() && profile?.status !== 'suspended'); }
+async function normalizeAdminProfile(force=false){
+  if(!fbUser || !isSuperAdminEmail(fbUser.email)) return;
+  const now = Date.now();
+  profile = {
+    ...makeSuperAdminProfile(fbUser),
+    ...(profile || {}),
+    email: fbUser.email || SUPER_ADMIN_EMAIL,
+    role: 'admin',
+    status: 'active',
+    isSuperAdmin: true,
+    approvedBy: SUPER_ADMIN_EMAIL,
+    approvedAt: profile?.approvedAt || now,
+    updatedAt: now
+  };
   if(firebaseEnabled) await db.collection('users').doc(fbUser.uid).set(profile,{merge:true});
 }
 function showApprovalScreen(){
@@ -1454,7 +1495,7 @@ function showApprovalScreen(){
 async function loadUsersForAdmin(){
   if(!firebaseEnabled || !isSuperAdmin()){ toast('只有最高管理員可以管理帳號'); return; }
   const snap = await db.collection('users').get();
-  const users = snap.docs.map(d=>({id:d.id, ...d.data()})).sort((a,b)=>String(a.status||'').localeCompare(String(b.status||'')) || String(a.brigade||'').localeCompare(String(b.brigade||'')));
+  const users = snap.docs.map(d=>({id:d.id, ...d.data()})).filter(u => !isSuperAdminEmail(u.email)).sort((a,b)=>String(a.status||'').localeCompare(String(b.status||'')) || String(a.brigade||'').localeCompare(String(b.brigade||'')));
   const wrap = $('userAdminList'); if(!wrap) return;
   wrap.innerHTML = users.map(u => `<div class="user-admin-card ${u.status||'pending'}">
     <div><b>${escapeHtml(u.realName||u.callName||u.email||'未具名')}</b><div class="hint">${escapeHtml(u.email||'')}｜${escapeHtml(u.brigade||'')}/${escapeHtml(u.unit||'')}｜${roleLabel(u.role)}｜狀態：${escapeHtml(u.status||'pending')}</div></div>
@@ -1468,7 +1509,14 @@ async function loadUsersForAdmin(){
 }
 async function updateUserStatus(userId, status){
   if(!firebaseEnabled || !isSuperAdmin()) return;
-  await db.collection('users').doc(userId).set({status, approvedBy:profile.email, approvedAt:Date.now(), updatedAt:Date.now()},{merge:true});
+  const ref = db.collection('users').doc(userId);
+  const snap = await ref.get();
+  const userData = snap.exists ? snap.data() : {};
+  if(isSuperAdminEmail(userData.email)){
+    toast('最高管理員帳號為系統固定帳號，不能停權、待審或刪除。');
+    return;
+  }
+  await ref.set({status, approvedBy:profile.email, approvedAt:Date.now(), updatedAt:Date.now()},{merge:true});
   await addLog('admin', `帳號狀態更新：${userId} → ${status}`);
   toast(`已更新帳號狀態：${status}`); loadUsersForAdmin();
 }
