@@ -1,7 +1,7 @@
 'use strict';
 
 const $ = (id) => document.getElementById(id);
-const LOCAL_KEY = 'firecommand_v15_local_state';
+const LOCAL_KEY = 'firecommand_v16_local_state';
 const DEFAULT_CENTER = { lat: 25.085, lng: 121.48 };
 const SUPER_ADMIN_EMAIL = 'fc781117@gmail.com';
 const AI_COOLDOWN_MS = 15 * 60 * 1000;
@@ -279,16 +279,23 @@ function bindEvents(){
   $('generateReportBtn')?.addEventListener('click', () => generateAIReport(true));
   $('saveExtraBtn')?.addEventListener('click', saveExtraNotes);
   $('addSitrepBtn')?.addEventListener('click', addSitrep);
+  $('addPatientSitrepBtn')?.addEventListener('click', addPatientSitrep);
   $('sitrepNowBtn')?.addEventListener('click', setSitrepNow);
   $('generateAssessmentBtn')?.addEventListener('click', generateAssessmentReport);
   $('aiAssessmentBtn')?.addEventListener('click', requestAiAssessment);
+  $('closeCaseBtn')?.addEventListener('click', closeCase);
+  $('reopenCaseBtn')?.addEventListener('click', reopenCase);
   $('syncFloorsBtn')?.addEventListener('click', syncBuildingFloors);
   $('saveBuildingOpsBtn')?.addEventListener('click', saveBuildingOps);
   $('floorPlanLevel')?.addEventListener('change', renderFloorPlan);
   $('floorPlanCanvas')?.addEventListener('click', addFloorMarkerFromClick);
+  $('floorPlanCanvas')?.addEventListener('dragover', ev => ev.preventDefault());
+  $('floorPlanCanvas')?.addEventListener('drop', addFloorMarkerFromDrop);
+  document.querySelectorAll('[data-floor-tool]').forEach(btn => btn.addEventListener('dragstart', ev => ev.dataTransfer.setData('text/plain', btn.dataset.floorTool)));
   $('aiAdviceBtn')?.addEventListener('click', requestAiAdvice);
   $('localRuleAdviceBtn')?.addEventListener('click', () => renderLocalTacticalAdvice(true));
-  ['arrivedCheck','commandCheck','ritCheck','hazardCheck','firstSideCheck','parCheck','supportCheck'].forEach(id => $(id)?.addEventListener('change', () => { renderArrivalStatusCards(); renderCommandGuide(); saveCaseInfo(false); }));
+  ['arrivedCheck','commandCheck','contactCheck','ritCheck','hazardCheck','firstSideCheck','parCheck','supportCheck','breakDoorCheck','cordonCheck','contactFoundCheck','breakDoorCommanderReport','breakDoorCenterReport','cordonAssignedCheck'].forEach(id => $(id)?.addEventListener('change', () => { renderArrivalStatusCards(); renderCommandGuide(); saveCaseInfo(false); }));
+  $('addContactBtn')?.addEventListener('click', () => { addContactRow(); renderArrivalStatusCards(); });
   document.querySelectorAll('.arrival-detail-input').forEach(el => el.addEventListener('change', () => { renderArrivalStatusCards(); renderCommandGuide(); saveCaseInfo(false); }));
   ['detailPurpose','detailFireStatus','detailNotes'].forEach(id => $(id)?.addEventListener('change', renderCommandGuide));
 }
@@ -680,6 +687,9 @@ function renderDetail(){
   $('supportCheck').checked = !!currentCase.supportNeeded || (currentCase.supports||[]).length>0;
   $('addressConfirmCheck') && ($('addressConfirmCheck').checked = !!currentCase.addressConfirmed);
   $('arrivalAddressNote') && ($('arrivalAddressNote').value = currentCase.arrivalAddressNote || '');
+  $('contactCheck') && ($('contactCheck').checked = !!currentCase.contactFound);
+  $('contactFoundCheck') && ($('contactFoundCheck').checked = !!currentCase.contactFound);
+  renderContactRows(currentCase.contacts || []);
   $('commandSituation') && ($('commandSituation').value = currentCase.commandSituation || '');
   $('ritUnit') && ($('ritUnit').value = currentCase.ritUnit || '');
   $('ritNote') && ($('ritNote').value = currentCase.ritNote || '');
@@ -707,7 +717,18 @@ function renderDetail(){
   (currentCase.victims || []).forEach(v => addVictimRow(v, 'summaryVictimRows'));
   syncSummaryVictimDetails();
   applySupportValues(currentCase.supports || []);
-  renderSummaryCards(); renderArrivalStatusCards(); renderCommandGuide(); renderBuildingOps(); renderLocalTacticalAdvice(false); renderLiveParts();
+  $('breakDoorCheck') && ($('breakDoorCheck').checked = !!currentCase.breakDoor);
+  $('breakDoorCommanderReport') && ($('breakDoorCommanderReport').checked = !!currentCase.breakDoorCommanderReport);
+  $('breakDoorCenterReport') && ($('breakDoorCenterReport').checked = !!currentCase.breakDoorCenterReport);
+  $('breakDoorAt') && ($('breakDoorAt').value = currentCase.breakDoorAt ? toDatetimeLocalValue(currentCase.breakDoorAt) : '');
+  $('breakDoorUnit') && ($('breakDoorUnit').value = currentCase.breakDoorUnit || '');
+  $('breakDoorNote') && ($('breakDoorNote').value = currentCase.breakDoorNote || '');
+  $('cordonCheck') && ($('cordonCheck').checked = !!currentCase.cordonSet);
+  $('cordonAssignedCheck') && ($('cordonAssignedCheck').checked = !!currentCase.cordonAssigned);
+  $('cordonUnit') && ($('cordonUnit').value = currentCase.cordonUnit || '');
+  $('cordonArea') && ($('cordonArea').value = currentCase.cordonArea || '');
+  $('cordonNote') && ($('cordonNote').value = currentCase.cordonNote || '');
+  renderSummaryCards(); renderArrivalStatusCards(); renderCommandGuide(); renderBuildingOps(); renderLocalTacticalAdvice(false); updateAiAdviceButton(); updateAssessmentAvailability(); renderLiveParts(); maybeAutoAiAdvice();
 }
 function renderSummaryCards(){
   const c=currentCase;
@@ -719,7 +740,7 @@ function renderSummaryCards(){
 }
 function renderLiveParts(){
   if(!currentCase) return;
-  renderSummaryCards(); renderToolOptions(); renderMap(); renderDashboard(); renderRules(); renderSitreps(); renderLogs(); renderCommandGuide(); renderBuildingOps(); renderLocalTacticalAdvice(false); generateReport(false);
+  renderSummaryCards(); renderToolOptions(); renderMap(); renderDashboard(); renderRules(); renderSitreps(); renderLogs(); renderCommandGuide(); renderBuildingOps(); renderLocalTacticalAdvice(false); updateAiAdviceButton(); updateAssessmentAvailability(); renderParCrewChecklist(); generateReport(false);
 }
 function renderToolOptions(){
   const canHose = live.vehicles.filter(v => v.canHose);
@@ -745,11 +766,24 @@ async function saveCaseInfo(showToast=true){
   const patch = {
     arrived:$('arrivedCheck').checked,
     commandTransfer:$('commandCheck').checked,
+    contactFound: $('contactCheck')?.checked || $('contactFoundCheck')?.checked || false,
+    contacts: readContacts(),
     ritSet:$('ritCheck').checked,
     hazardChecked:$('hazardCheck').checked,
     firstSideSet:$('firstSideCheck').checked,
     parRequested:$('parCheck').checked,
     supportNeeded:$('supportCheck')?.checked || supports.length>0,
+    breakDoor: $('breakDoorCheck')?.checked || false,
+    breakDoorCommanderReport: $('breakDoorCommanderReport')?.checked || false,
+    breakDoorCenterReport: $('breakDoorCenterReport')?.checked || false,
+    breakDoorAt: datetimeLocalToMs($('breakDoorAt')?.value) || null,
+    breakDoorUnit: $('breakDoorUnit')?.value || '',
+    breakDoorNote: $('breakDoorNote')?.value || '',
+    cordonSet: $('cordonCheck')?.checked || false,
+    cordonAssigned: $('cordonAssignedCheck')?.checked || false,
+    cordonUnit: $('cordonUnit')?.value || '',
+    cordonArea: $('cordonArea')?.value || '',
+    cordonNote: $('cordonNote')?.value || '',
     addressConfirmed:$('addressConfirmCheck')?.checked || false,
     arrivalAddressNote:$('arrivalAddressNote')?.value || '',
     commandSituation:$('commandSituation')?.value || '',
@@ -788,6 +822,30 @@ async function saveSummaryInfo(){
 }
 function readSupports(){ return Array.from(document.querySelectorAll('.support-grid input:checked')).map(x=>x.value); }
 function applySupportValues(values=[]){ document.querySelectorAll('.support-grid input').forEach(x=>{ x.checked = values.includes(x.value); }); }
+
+function emptyContact(){ return {name:'', phone:'', appearance:'', note:''}; }
+function renderContactRows(rows=[]){
+  const wrap = $('contactRows'); if(!wrap) return;
+  const list = (rows && rows.length ? rows : [emptyContact()]);
+  wrap.innerHTML = list.map((r,i)=>`<div class="contact-row" data-contact-index="${i}">
+    <div class="two-col compact-form"><div class="field"><label>姓名</label><input class="arrival-detail-input contact-name" value="${escapeHtml(r.name||'')}" placeholder="例：屋主王先生" /></div><div class="field"><label>電話</label><input class="arrival-detail-input contact-phone" value="${escapeHtml(r.phone||'')}" inputmode="tel" placeholder="09xx-xxx-xxx" /></div></div>
+    <div class="field"><label>穿著 / 特徵</label><input class="arrival-detail-input contact-appearance" value="${escapeHtml(r.appearance||'')}" placeholder="例：紅色上衣、黑褲，位於第一面封鎖線外" /></div>
+    <div class="field"><label>補充</label><input class="arrival-detail-input contact-note" value="${escapeHtml(r.note||'')}" placeholder="關係人說明、鑰匙、樓層、住戶資訊" /></div>
+    <button type="button" class="btn small ghost" data-delete-contact="${i}">刪除此關係人</button>
+  </div>`).join('');
+  wrap.querySelectorAll('[data-delete-contact]').forEach(btn => btn.addEventListener('click', () => { const arr = readContacts(); arr.splice(Number(btn.dataset.deleteContact),1); renderContactRows(arr); saveCaseInfo(false); }));
+  wrap.querySelectorAll('input').forEach(el => el.addEventListener('change', () => { $('contactCheck') && ($('contactCheck').checked = readContacts().length>0 || $('contactFoundCheck')?.checked); renderArrivalStatusCards(); renderCommandGuide(); saveCaseInfo(false); }));
+}
+function addContactRow(){ const arr = readContacts(); arr.push(emptyContact()); renderContactRows(arr); }
+function readContacts(){
+  return Array.from(document.querySelectorAll('#contactRows .contact-row')).map(row => ({
+    name: row.querySelector('.contact-name')?.value.trim() || '',
+    phone: row.querySelector('.contact-phone')?.value.trim() || '',
+    appearance: row.querySelector('.contact-appearance')?.value.trim() || '',
+    note: row.querySelector('.contact-note')?.value.trim() || ''
+  })).filter(x => x.name || x.phone || x.appearance || x.note);
+}
+
 async function saveExtraNotes(){
   const el = $('extraNotes');
   if(!el || !currentCase) return;
@@ -1073,6 +1131,30 @@ async function addSitrep(){
   setSitrepNow();
   toast('戰情回報已新增');
 }
+
+async function addPatientSitrep(){
+  if(!currentCase) return;
+  const name = $('patientName')?.value.trim() || '姓名未明';
+  const gender = $('patientGender')?.value || '未知';
+  const foundAt = $('patientFoundAt')?.value.trim() || '地點未明';
+  const status = $('patientStatus')?.value || '待救援';
+  const note = $('patientNote')?.value.trim() || '';
+  const eventAt = datetimeLocalToMs($('sitrepEventAt')?.value) || Date.now();
+  const data = {
+    brigade: $('sitrepBrigade')?.value || profile?.brigade || '', unit: $('sitrepUnit')?.value || profile?.unit || '',
+    category:'傷/患者狀況回報', title:`${status}｜${name}｜${foundAt}`,
+    detail:`姓名：${name}；性別：${gender}；尋獲地點：${foundAt}；狀況：${status}${note?`；處置/補充：${note}`:''}`,
+    patient:{name,gender,foundAt,status,note}, eventAt, submittedAt:Date.now(), isBackfill:Math.abs(Date.now()-eventAt)>60000,
+    operator:profile?.callName||profile?.realName||'', operatorId:profile?.id||''
+  };
+  await addItem('sitreps', data);
+  await addLog('sitrep', `新增傷/患者回報：${data.unit}｜${data.title}`);
+  ['patientName','patientFoundAt','patientNote'].forEach(id=>$(id)&&($(id).value=''));
+  if($('patientGender')) $('patientGender').value='未知';
+  if($('patientStatus')) $('patientStatus').value='待救援';
+  setSitrepNow(); toast('已送出傷/患者回報');
+}
+
 function renderSitreps(){
   const wrap = $('sitrepList');
   if(!wrap) return;
@@ -1084,6 +1166,17 @@ function renderSitreps(){
     ${r.isBackfill?'<span class="tag amber">補述</span>':''}
   </div>`).join('') : '<div class="empty">尚無戰情回報。各單位可在此回報火勢、人車移動、部署、搜救、支援等進度。</div>';
 }
+
+function caseIsClosed(){ return currentCase?.status === 'closed' || currentCase?.closedAt; }
+function updateAssessmentAvailability(){
+  const btn=$('aiAssessmentBtn'); const draft=$('assessmentDraft');
+  if(!btn) return;
+  const closed=caseIsClosed(); btn.disabled = !closed;
+  btn.textContent = closed ? '產生 AI 檢討評估' : '結案後才能產生 AI 檢討評估';
+  if(draft && !closed) draft.placeholder = '本功能為結案後才能使用，避免火場進行中誤觸消耗 token。';
+}
+async function closeCase(){ if(!currentCase) return; if(!confirm('確認將本案標記為結案？結案後可產生 AI 檢討評估報告。')) return; const patch={status:'closed',closedAt:Date.now(),updatedAt:Date.now()}; Object.assign(currentCase,patch); if(firebaseEnabled) await db.collection('cases').doc(currentCaseId).set(patch,{merge:true}); else saveLocalCase(); await addLog('case','案件標記結案'); updateAssessmentAvailability(); toast('已標記結案'); }
+async function reopenCase(){ if(!currentCase) return; const patch={status:'active',closedAt:null,updatedAt:Date.now()}; Object.assign(currentCase,patch); if(firebaseEnabled) await db.collection('cases').doc(currentCaseId).set(patch,{merge:true}); else saveLocalCase(); await addLog('case','案件重新開啟'); updateAssessmentAvailability(); toast('已重新開啟案件'); }
 async function generateAssessmentReport(){
   const text = assessmentLocalText();
   if($('assessmentDraft')) $('assessmentDraft').value = text;
@@ -1096,6 +1189,7 @@ async function generateAssessmentReport(){
 }
 async function requestAiAssessment(){
   if(!currentCase) return;
+  if(!caseIsClosed()){ toast('本功能為結案後才能使用'); updateAssessmentAvailability(); return; }
   $('aiAdviceStatus') && ($('aiAdviceStatus').textContent = '正在呼叫 AI 產生檢討評估，請稍候…');
   try{
     const payload = { mode:'assessment', caseData: currentCase, vehicles: live.vehicles, crews: live.crews, hoses: live.hoses, hazards: live.hazards, sitreps: live.sitreps, logs: live.logs, buildingOps: getBuildingOps(), localRules: localTacticalAdviceText(), assessmentDraft: assessmentLocalText() };
@@ -1123,13 +1217,28 @@ function renderDashboard(){
     <button type="button" class="mini-card stat-action" data-jump-panel="crew"><div class="metric">${sum(live.crews,'count')}</div><div class="metric-label">人員</div><div class="subline">${entriesText(crewStatus) || '尚無'}｜點選展開</div></button>
     <button type="button" class="mini-card stat-action" data-jump-panel="hose"><div class="metric">${live.hoses.length}</div><div class="metric-label">水線</div><div class="subline">進攻 / 供水 / 防護｜點選部署圖</div></button>
     <button type="button" class="mini-card stat-action" data-jump-panel="hazard"><div class="metric">${live.hazards.length}</div><div class="metric-label">標示</div><div class="subline">火點、危害、指揮站｜點選部署圖</div></button>`;
-  $('crewCards').innerHTML = live.crews.length ? live.crews.map(p=>`<div class="mini-card wide"><span class="tag ${p.status==='RIT'?'amber':(p.status==='休息'||p.status==='待命')?'green':'red'}">${escapeHtml(p.status)}</span><h3>${escapeHtml(p.unit)}${escapeHtml(p.leader)}</h3><div class="metric">${p.count}</div><div class="metric-label">人員</div><div class="subline">任務：${escapeHtml(p.task)}<br>派遣：${p.dispatchCount||0}次｜作業：${Math.max(0,Math.round((Date.now()-(p.startAt||Date.now()))/60000))}分</div><button class="btn small ghost full" data-delete-crew="${p.id}">刪除單位</button></div>`).join('') : '<div class="empty">尚無人員資料。</div>';
+  $('crewCards').innerHTML = live.crews.length ? live.crews.map(p=>`<div class="mini-card wide"><span class="tag ${p.status==='RIT'?'amber':(p.status==='休息'||p.status==='待命')?'green':'red'}">${escapeHtml(p.status)}</span><h3>${escapeHtml(p.unit)}${escapeHtml(p.leader)}</h3><div class="metric">${p.count}</div><div class="metric-label">人員</div><div class="subline">任務：${escapeHtml(p.task)}<br>派遣：${p.dispatchCount||0}次｜作業：${Math.max(0,Math.round((Date.now()-(p.startAt||Date.now()))/60000))}分</div><div class="button-row compact-actions"><button class="btn small ghost" data-rest-crew="${p.id}" data-rest-mode="原地休息">原地休息</button><button class="btn small ghost" data-rest-crew="${p.id}" data-rest-mode="移至休息區">移至休息區</button><button class="btn small ghost" data-delete-crew="${p.id}">刪除</button></div></div>`).join('') : '<div class="empty">尚無人員資料。</div>';
   $('vehicleCards').innerHTML = live.vehicles.length ? live.vehicles.map(v=>`<div class="mini-card wide"><span class="tag blue">${escapeHtml(v.type)}</span><h3>${escapeHtml(v.name)}</h3><div class="metric-label">${escapeHtml(v.unit)}</div><div class="subline">任務：${escapeHtml(v.task)}<br>水線：${live.hoses.filter(h=>h.vehicleId===v.id).length}/${v.canHose?4:0}</div><button class="btn small ghost full" data-delete-vehicle="${v.id}">刪除車輛</button></div>`).join('') : '<div class="empty">尚無車輛資料。</div>';
   document.querySelectorAll('[data-jump-panel]').forEach(btn=>btn.onclick=()=>jumpFromStatus(btn.dataset.jumpPanel));
   document.querySelectorAll('[data-delete-crew]').forEach(btn=>btn.onclick=()=>{ const p=live.crews.find(x=>x.id===btn.dataset.deleteCrew); if(p && confirm(`確認刪除 ${p.unit}${p.leader}？`)) deleteItem('crews', p.id, `${p.unit}${p.leader}`); });
+  document.querySelectorAll('[data-rest-crew]').forEach(btn=>btn.onclick=()=>setCrewRest(btn.dataset.restCrew, btn.dataset.restMode));
   document.querySelectorAll('[data-delete-vehicle]').forEach(btn=>btn.onclick=()=>{ const v=live.vehicles.find(x=>x.id===btn.dataset.deleteVehicle); if(v && confirm(`確認刪除 ${v.name}？`)) deleteItem('vehicles', v.id, v.name); });
 }
 
+
+async function setCrewRest(crewId, mode){
+  const p = live.crews.find(x=>x.id===crewId); if(!p) return;
+  if(!confirm(`確認將 ${p.unit}${p.leader} 設定為「${mode}」？`)) return;
+  const patch = { status:'休息', task:mode, endAt:Date.now() };
+  if(mode === '移至休息區'){
+    const rest = live.hazards.find(h=>h.type==='休息區');
+    if(rest){ patch.lat = rest.lat; patch.lng = rest.lng; }
+    else toast('尚未標示休息區，先改為休息狀態並保留原位置');
+  }
+  await updateItem('crews', crewId, patch);
+  await addLog('crew', `${p.unit}${p.leader} 設定為${mode}${mode==='移至休息區'?'，水線標示保留於原部署':''}`);
+  toast('已更新人員休息狀態');
+}
 function jumpFromStatus(kind){
   if(kind==='vehicle' || kind==='crew'){
     const target = kind==='vehicle' ? $('vehicleCards') : $('crewCards');
@@ -1250,37 +1359,49 @@ function sitrepSummaryLines(){
 function reportDraftBase(){
   const c=currentCase || {};
   const crews = sum(live.crews,'count');
-  return [
+  return sanitizeReportText([
     `【FireCommand 火場進度報告】`,
     `案件編號：${c.caseNo || ''}`,
     `地址：${c.address || ''}`,
     `產出者：${profile?.realName || profile?.callName || ''}｜${profile?.brigade || ''}/${profile?.unit || ''}`,
     `產出時間：${fmtTime(Date.now())}`,
-    `保密註記：本報告含勤務資訊，僅供勤務指揮、內部彙整與檢討使用，禁止外流。`,
+    `保密註記：本報告含勤務資訊，僅供勤務指揮、內部彙整與交接使用，禁止外流。`,
     '',
-    '一、火場概要與發展',
+    '一、火場概要與目前發展',
     ...keyOperationalSummaryLines().map(x=>`- ${x}`),
     '',
     '二、目前部署與戰力概況',
     `- 車輛：${live.vehicles.length} 台；人員：${crews} 人；水線：${live.hoses.length} 條；危害/區域標示：${live.hazards.length} 處。`,
     ...deploymentStatsLines().map(x=>`- ${x}`),
     '',
-    '三、各單位戰情回報彙整',
+    '三、各單位戰情及傷患者回報彙整',
     ...sitrepSummaryLines().map(x=>`- ${x}`),
     '',
-    '四、建物內部作戰圖摘要',
+    '四、建物內部作戰圖與戰術部署摘要',
     ...buildingReportLines().map(x=>`- ${x}`),
     '',
-    '五、注意事項與戰術建議',
-    (currentCase.aiLastAdvice || localTacticalAdviceText()).split('\n').slice(0,18).join('\n'),
-    '',
-    '六、檢討及後續評估',
-    currentCase.assessmentText || assessmentLocalText()
-  ].join('\n');
+    '五、目前注意事項與建議',
+    ...String(currentCase.aiLastAdvice || localTacticalAdviceText()).split('\n').slice(0,18)
+  ].join('\n'));
+}
+function sanitizeReportText(text){
+  const lines = String(text||'').split('\n');
+  const out=[];
+  let dropping=false;
+  for(const raw of lines){
+    const line = String(raw||'');
+    if(/^六、/.test(line.trim())){ dropping=true; continue; }
+    if(dropping){
+      if(/^[一二三四五七八九十]+、/.test(line.trim())) dropping=false; else continue;
+    }
+    if(/^(四、時間序列摘要|五、後續優化方向)/.test(line.trim())) continue;
+    out.push(line);
+  }
+  return out.join('\n').replace(/\n{3,}/g,'\n\n').trim();
 }
 function generateReport(scroll=false){
   if(!currentCase) return '';
-  const summary = reportDraftBase();
+  const summary = sanitizeReportText(reportDraftBase());
   $('reportDraft').value = summary;
   $('reportDraft').readOnly = true;
   renderReportPreview(summary);
@@ -1293,17 +1414,17 @@ async function generateAIReport(scroll=false){
   $('reportDraft').value = 'OpenAI 正在彙整並潤稿進度報告，請稍候...\n\n' + local;
   renderReportPreview($('reportDraft').value);
   try{
-    const payload = { mode:'report', caseData: currentCase, vehicles: live.vehicles, crews: live.crews, hoses: live.hoses, hazards: live.hazards, sitreps: live.sitreps, logs: live.logs, buildingOps: getBuildingOps(), localRules: localTacticalAdviceText(), assessmentDraft: currentCase.assessmentText || assessmentLocalText(), baseReport: local };
+    const payload = { mode:'report', caseData: currentCase, vehicles: live.vehicles, crews: live.crews, hoses: live.hoses, hazards: live.hazards, sitreps: live.sitreps, buildingOps: getBuildingOps(), localRules: localTacticalAdviceText(), baseReport: local, reportInstruction:'請產出正式給長官檢閱的火場進度報告；僅保留一、火場概要與目前發展 二、目前部署與戰力概況 三、各單位戰情及傷患者回報彙整 四、建物內部作戰圖與戰術部署摘要 五、目前注意事項與建議。不得列出操作歷程、時間軸清單、檢討與後續評估章節，格式需正式、精簡、可直接匯出 PDF。' };
     const res = await fetch('/api/ai-advice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const data = await res.json();
     if(!res.ok) throw new Error(data.error || 'AI 報告產生失敗');
-    $('reportDraft').value = data.advice || local;
+    $('reportDraft').value = sanitizeReportText(data.advice || local);
     $('reportDraft').readOnly = true;
     renderReportPreview($('reportDraft').value);
     await saveReportDraft($('reportDraft').value, `OpenAI 產生進度報告（${data.modelUsed||'model'}）`);
     toast('AI 已完成進度報告撰寫');
   }catch(err){
-    $('reportDraft').value = local + `\n\n【AI 報告產生失敗，已改用本機彙整】\n${err.message}`;
+    $('reportDraft').value = sanitizeReportText(local + `\n\n【AI 報告產生失敗，已改用本機彙整】\n${err.message}`);
     renderReportPreview($('reportDraft').value);
     await addLog('report', `AI 進度報告失敗：${err.message}`);
     toast('AI 產生失敗，已改用本機報告');
@@ -1312,7 +1433,7 @@ async function generateAIReport(scroll=false){
   return $('reportDraft').value;
 }
 function enableReportEdit(){ if(!$('reportDraft').value) generateReport(false); $('reportDraft').readOnly=false; $('reportDraft').focus(); toast('已開啟報告編輯模式'); }
-async function confirmReportEdit(){ const text=$('reportDraft').value || generateReport(false); $('reportDraft').readOnly=true; renderReportPreview(text); await saveReportDraft(text,'確認編輯進度報告'); toast('已確認報告內容並寫入紀錄'); }
+async function confirmReportEdit(){ const text=sanitizeReportText($('reportDraft').value || generateReport(false)); $('reportDraft').value=text; $('reportDraft').readOnly=true; renderReportPreview(text); await saveReportDraft(text,'確認編輯進度報告'); toast('已確認報告內容並寫入紀錄'); }
 async function saveReportDraft(text, message){
   if(!currentCase) return;
   currentCase.reportDraft = text; currentCase.reportUpdatedAt = Date.now();
@@ -1331,6 +1452,9 @@ function buildFullSpeech(){
   const vehicles = live.vehicles.length ? live.vehicles.map(v=>`${v.name}${v.task?`執行${v.task}`:''}`).join('、') : '出勤人車持續確認中';
   const commandSituation = c.commandSituation ? `初期指揮交接內容：${c.commandSituation}` : '';
   const ritLine = c.ritSet ? `已律定RIT小組${c.ritUnit?`，由${c.ritUnit}擔任`:''}${c.ritNote?`，${c.ritNote}`:''}` : '尚未律定RIT小組，請儘速指派。';
+  const contactLine = (c.contacts||[]).length ? `關係人資料：${(c.contacts||[]).map(x=>`${x.name||'未具名'}${x.phone?` ${x.phone}`:''}${x.appearance?` ${x.appearance}`:''}`).join('；')}` : '關係人資料尚未完整登錄';
+  const breakLine = c.breakDoor ? `破門資訊：${c.breakDoorAt?fmtTime(c.breakDoorAt):'時間未登錄'}，${c.breakDoorUnit||'單位未登錄'}執行，${c.breakDoorNote||'原因與位置未補述'}，指揮官回報${c.breakDoorCommanderReport?'已完成':'未確認'}，指揮中心回報${c.breakDoorCenterReport?'已完成':'未確認'}。` : '破門狀況：未執行或未登錄。';
+  const cordonLine = c.cordonSet ? `警戒區：${c.cordonArea||'範圍未登錄'}，${c.cordonAssigned?'已指派':'尚未確認指派'}${c.cordonUnit?` ${c.cordonUnit}`:''}執行。` : '警戒區劃設尚未完成登錄。';
   const hazardLine = c.hazardChecked ? `已詢問危險物狀況${c.hazardItems?`，現場有${c.hazardItems}`:''}${c.hazardContact?`；關係人：${c.hazardContact}`:''}${c.hazardPhone?`，電話${c.hazardPhone}`:''}${c.hazardAppearance?`，特徵：${c.hazardAppearance}`:''}` : '尚未完成危險物詢問，請中隊幕僚尋找關係人確認。';
   const parLine = c.parRequested ? `已要求各單位進行PAR安全回報${c.parDetails?`：${c.parDetails}`:''}` : 'PAR尚未完成要求。';
   const supportLine = `目前支援需求：${supports}${c.supportDetails?`；${c.supportDetails}`:''}`;
@@ -1344,34 +1468,96 @@ function buildFullSpeech(){
 `+
     `四、人：人員受困狀況為${c.trapped||'未知'}，受困人數${c.trappedCount||0}人；${ritLine}
 `+
-    `五、支：${supportLine}。${hazardLine}
+    `五、支：${supportLine}。${hazardLine}。${contactLine}
 `+
-    `六、初：${commandSituation}${commandSituation?'；':''}初期人員部署為${deployed}；車輛部署為${vehicles}。後續持續回報水源、雲梯、RIT與各面火煙狀況。`;
+    `六、初：${commandSituation}${commandSituation?'；':''}初期人員部署為${deployed}；車輛部署為${vehicles}。後續持續回報水源、雲梯、RIT與各面火煙狀況。
+破：${breakLine}
+警：${cordonLine}`;
+}
+function parseReportText(text){
+  const meta = {};
+  const sections = [];
+  let current = null;
+  for(const raw of String(text||'').split('\n')){
+    const line = raw.trim();
+    if(!line || /^【.*】$/.test(line)) continue;
+    if(/^(案件編號|地址|產出者|產出時間|保密註記)：/.test(line)){
+      const idx = line.indexOf('：');
+      meta[line.slice(0,idx)] = line.slice(idx+1);
+      continue;
+    }
+    if(/^[一二三四五六七八九十]+、/.test(line)){
+      current = { title: line, items: [] };
+      sections.push(current);
+      continue;
+    }
+    if(!current){
+      current = { title: '補充內容', items: [] };
+      sections.push(current);
+    }
+    current.items.push(line.replace(/^-\s?/, ''));
+  }
+  return { meta, sections };
+}
+function structuredSectionHtml(section){
+  const items = section.items || [];
+  const body = items.map(item=>`<div class="report-list-item">${escapeHtml(item)}</div>`).join('');
+  return `<section class="report-section"><h2>${escapeHtml(section.title)}</h2><div class="report-list">${body || '<div class="report-list-item">尚無資料</div>'}</div></section>`;
+}
+function buildReportSummaryTable(){
+  const c = currentCase || {};
+  return `<table class="report-plain-table"><tbody>
+    <tr><th>案件類型</th><td>${escapeHtml(c.type||'未登錄')}</td><th>建物用途</th><td>${escapeHtml(c.purpose||'未登錄')}</td></tr>
+    <tr><th>建物樓層</th><td>${escapeHtml(String(c.floors||'未登錄'))}</td><th>起火樓層</th><td>${escapeHtml(c.fireFloor||'未登錄')}</td></tr>
+    <tr><th>受困狀況</th><td>${escapeHtml(`${c.trapped||'未知'} / ${c.trappedCount||0}人`)}</td><th>火煙狀況</th><td>${escapeHtml(c.fireStatus||'未登錄')}</td></tr>
+    <tr><th>到場回報</th><td>${escapeHtml(c.arrived?'已到達':'未確認')}</td><th>指揮權</th><td>${escapeHtml(c.commandTransfer?'已轉移':'未確認')}</td></tr>
+  </tbody></table>`;
+}
+function reportHtmlFromText(text){
+  const cleaned = sanitizeReportText(text);
+  const {meta, sections} = parseReportText(cleaned);
+  const chips = [`車輛 ${live.vehicles.length} 台`,`人員 ${sum(live.crews,'count')} 人`,`水線 ${live.hoses.length} 條`,`戰情 ${live.sitreps.length} 筆`].map(x=>`<span class="report-chip">${escapeHtml(x)}</span>`).join('');
+  const metaTable = `<table class="report-meta-table"><tbody>
+    <tr><th>案件編號</th><td>${escapeHtml(meta['案件編號']||currentCase?.caseNo||'')}</td><th>地址</th><td>${escapeHtml(meta['地址']||currentCase?.address||'')}</td></tr>
+    <tr><th>產出者</th><td>${escapeHtml(meta['產出者']||`${profile?.realName||profile?.callName||''}｜${profile?.brigade||''}/${profile?.unit||''}`)}</td><th>產出時間</th><td>${escapeHtml(meta['產出時間']||fmtTime(Date.now()))}</td></tr>
+  </tbody></table>`;
+  return `<div class="report-cover">
+      <div class="report-kicker">FireCommand｜火場指揮系統</div>
+      <h1 class="report-case-title">火場進度報告</h1>
+      <div class="report-subtitle">${escapeHtml(currentCase?.address||meta['地址']||'') || '案件資料彙整'}</div>
+      <div class="report-chip-row">${chips}</div>
+      ${metaTable}
+      ${buildReportSummaryTable()}
+      <div class="report-note">${escapeHtml(meta['保密註記']||'本報告僅供勤務指揮、內部彙整與交接使用，禁止外流。')}</div>
+    </div>` + sections.map(structuredSectionHtml).join('') + `<div class="report-watermark-foot">${escapeHtml(watermarkText())}｜僅供勤務使用，禁止外流</div>`;
 }
 function renderReportPreview(text){
   const el=$('reportPreview'); if(!el) return;
-  el.innerHTML = `<div class="report-paper" data-watermark="${escapeHtml(watermarkText())}"><pre>${escapeHtml(text)}</pre></div>`;
+  const cleaned = sanitizeReportText(text);
+  el.innerHTML = `<div class="report-paper formal" data-watermark="${escapeHtml(watermarkRepeated())}">${reportHtmlFromText(cleaned)}</div>`;
 }
 function copyReportDraft(){ const text = ($('reportDraft')?.value || generateReport(false)); navigator.clipboard?.writeText(text); toast('已複製進度報告'); addLog('export','複製火場進度報告'); }
 function copyCommandSpeech(){ const text = buildFullSpeech(); navigator.clipboard?.writeText(text); $('commandSpeech').value=text; toast('已複製回報稿'); addLog('export','複製到建火人支初回報稿'); }
 function printReport(){
-  const text = ($('reportDraft')?.value || generateReport(false));
+  const text = sanitizeReportText(($('reportDraft')?.value || generateReport(false)));
   const wm = watermarkText();
+  const wmLong = watermarkRepeated();
   const win = window.open('', '_blank');
   if(!win){ toast('瀏覽器阻擋彈出視窗，請允許彈出後再試'); return; }
   win.document.write(`<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>${escapeHtml(currentCase.caseNo||'FireCommand進度報告')}</title><style>
-    body{font-family:-apple-system,BlinkMacSystemFont,'Noto Sans TC',sans-serif;margin:32px;color:#1d1a17;line-height:1.7}.page{position:relative;min-height:100vh}.page:before{content:attr(data-watermark);position:fixed;inset:0;display:block;white-space:pre-wrap;font-size:28px;font-weight:800;color:rgba(150,40,30,.10);transform:rotate(-22deg);line-height:3;z-index:-1}h1{margin:0 0 12px}.meta{color:#6f6860;border-bottom:1px solid #ddd;padding-bottom:10px;margin-bottom:18px}pre{white-space:pre-wrap;font-size:16px}.footer{position:fixed;bottom:18px;left:32px;right:32px;color:#8a8176;font-size:12px;border-top:1px solid #ddd;padding-top:8px}@media print{button{display:none}}
-  </style></head><body><div class="page" data-watermark="${escapeHtml(wm)}"><h1>FireCommand 火場進度報告</h1><div class="meta">案件：${escapeHtml(currentCase.caseNo||'')}｜地址：${escapeHtml(currentCase.address||'')}｜產出：${escapeHtml(wm)}</div><pre>${escapeHtml(text)}</pre><div class="footer">${escapeHtml(wm)}｜僅供勤務使用，禁止外流</div></div><script>setTimeout(()=>window.print(),400)<\/script></body></html>`);
+    body{font-family:-apple-system,BlinkMacSystemFont,'Noto Sans TC',sans-serif;margin:24px;color:#10231f;line-height:1.75;background:#fff}.page{position:relative;min-height:100vh;border-top:8px solid #0f7f73;padding-top:18px}.page:before{content:attr(data-watermark);position:fixed;inset:-12%;white-space:pre-wrap;font-size:20px;font-weight:900;color:rgba(15,127,115,.075);transform:rotate(-24deg);line-height:3.4;z-index:9999;pointer-events:none}.report-cover{display:flex;flex-direction:column;gap:10px;margin-bottom:18px;padding:16px 18px;border:1px solid #cde4df;border-radius:16px;background:linear-gradient(180deg,#f7fbfa,#eef7f5)}.report-kicker{font-size:14px;font-weight:1000;color:#0f7f73;letter-spacing:.04em}.report-case-title{font-size:30px;font-weight:1000;letter-spacing:-.03em;color:#10231f;margin:0}.report-subtitle{font-size:16px;color:#49625d;font-weight:800}.report-chip-row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 6px}.report-chip{display:inline-flex;align-items:center;padding:6px 10px;border-radius:999px;border:1px solid #c9dcd8;background:#fff;font-size:12px;font-weight:900;color:#0f514b}.report-meta-table,.report-plain-table{width:100%;border-collapse:collapse;margin:12px 0 18px;background:#fff}.report-meta-table th,.report-plain-table th{background:#eef7f5;text-align:left;font-weight:1000}.report-meta-table th,.report-meta-table td,.report-plain-table th,.report-plain-table td{border:1px solid #c9dcd8;padding:10px 12px;vertical-align:top}.report-section h2{font-size:22px;border-left:6px solid #0f7f73;padding-left:10px;margin:24px 0 10px}.report-list{display:grid;gap:8px}.report-list-item{background:#f7fbfa;border:1px solid #dcebea;border-radius:10px;padding:9px 12px;margin:0}.report-note{font-size:14px;color:#49625d}.report-watermark-foot,.footer{color:#60726f;font-size:12px;border-top:1px solid #c9dcd8;padding-top:8px}.footer{position:fixed;bottom:12px;left:24px;right:24px;background:rgba(255,255,255,.85)}@media print{button{display:none} body{margin:14mm}.page:before{color:rgba(15,127,115,.09)} .footer{position:fixed}}
+  </style></head><body><div class="page" data-watermark="${escapeHtml(wmLong)}">${reportHtmlFromText(text)}<div class="footer">${escapeHtml(wm)}｜僅供勤務使用，禁止外流</div></div><script>setTimeout(()=>window.print(),400)<\/script></body></html>`);
   win.document.close();
   addLog('export','開啟進度報告列印 / PDF');
 }
 function watermarkText(){ return `${profile?.realName || profile?.callName || '未具名'}｜${profile?.brigade || ''}/${profile?.unit || ''}｜${currentCase?.caseNo || 'FireCommand'}｜${new Date().toLocaleString('zh-TW',{hour12:false})}｜僅供勤務使用`; }
-function setWatermark(){ document.body.dataset.watermark = watermarkText(); }
+function watermarkRepeated(){ const t = watermarkText(); return Array.from({length:80},()=>t).join('     '); }
+function setWatermark(){ document.body.dataset.watermark = watermarkRepeated(); }
 
 let activeStage=null;
 let activeArrivalCard=null;
 const ARRIVAL_CARD_MAP = {
-  arrived:'arrivedCheck', command:'commandCheck', rit:'ritCheck', hazard:'hazardCheck', firstSide:'firstSideCheck', par:'parCheck', support:'supportCheck'
+  arrived:'arrivedCheck', command:'commandCheck', contact:'contactCheck', rit:'ritCheck', hazard:'hazardCheck', firstSide:'firstSideCheck', par:'parCheck', support:'supportCheck', breakDoor:'breakDoorCheck', cordon:'cordonCheck'
 };
 function selectCommandStage(stage){
   activeStage = (activeStage === stage) ? null : stage;
@@ -1389,26 +1575,44 @@ function toggleArrivalCard(key){
   renderCommandGuide();
   saveCaseInfo(false);
 }
+
+function renderParCrewChecklist(){
+  const wrap = $('parCrewChecklist'); if(!wrap) return;
+  const checked = currentCase?.parCrewChecked || {};
+  wrap.innerHTML = live.crews.length ? live.crews.map(p=>`<label class="check slim par-row"><input type="checkbox" data-par-crew="${p.id}" ${checked[p.id]?'checked':''} /> ${escapeHtml(p.unit)}${escapeHtml(p.leader||'')}｜${p.count||0}人｜${escapeHtml(p.task||p.status||'')}</label>`).join('') : '<div class="empty">尚無登錄分隊。請先在人員部署新增各分隊。</div>';
+  wrap.querySelectorAll('[data-par-crew]').forEach(ch => ch.addEventListener('change', async () => {
+    currentCase.parCrewChecked = currentCase.parCrewChecked || {}; currentCase.parCrewChecked[ch.dataset.parCrew] = ch.checked;
+    $('parCheck') && ($('parCheck').checked = Object.values(currentCase.parCrewChecked).some(Boolean));
+    const names = live.crews.filter(p=>currentCase.parCrewChecked[p.id]).map(p=>`${p.unit}${p.leader||''}`).join('、');
+    $('parDetails') && ($('parDetails').value = names ? `已完成 PAR：${names}` : '');
+    if(firebaseEnabled) await db.collection('cases').doc(currentCaseId).set({parCrewChecked:currentCase.parCrewChecked, parDetails:$('parDetails')?.value||'', parRequested:$('parCheck')?.checked||false, updatedAt:Date.now()},{merge:true}); else saveLocalCase();
+    renderArrivalStatusCards(); renderCommandGuide();
+  }));
+}
 function renderArrivalStatusCards(){
-  const labels = {
-    arrived: $('arrivedCheck')?.checked ? '已到達' : '未到達',
-    command: $('commandCheck')?.checked ? '已轉移' : '未轉移',
-    rit: $('ritCheck')?.checked ? ($('ritUnit')?.value || '已律定') : '未律定',
-    hazard: $('hazardCheck')?.checked ? (($('hazardItems')?.value || '已詢問').slice(0,12)) : '未詢問',
-    firstSide: $('firstSideCheck')?.checked ? ($('firstSideName')?.value || '已設定') : '未設定',
-    par: $('parCheck')?.checked ? '已要求' : '未要求',
-    support: ($('supportCheck')?.checked || readSupports().length) ? (readSupports().join('、') || '已勾選') : '評估中'
+  const mapping = {
+    arrived: [$('arrivedCheck'), currentCase?.addressConfirmed ? '地址已確認' : '待確認地址'],
+    command: [$('commandCheck'), currentCase?.commandTransfer ? '已接掌' : '未轉移'],
+    contact: [$('contactCheck'), readContacts().length ? `${readContacts().length}名` : (currentCase?.contactFound?'已找到':'未登錄')],
+    rit: [$('ritCheck'), currentCase?.ritSet ? (currentCase.ritUnit || '已律定') : '未律定'],
+    hazard: [$('hazardCheck'), currentCase?.hazardChecked ? '已詢問' : '未詢問'],
+    firstSide: [$('firstSideCheck'), currentCase?.firstSideSet ? (currentCase.firstSideName || '已設定') : '未設定'],
+    par: [$('parCheck'), currentCase?.parRequested ? '已要求/回報' : '未要求'],
+    support: [$('supportCheck'), readSupports().length ? readSupports().join('、') : '評估中'],
+    breakDoor: [$('breakDoorCheck'), currentCase?.breakDoor ? (currentCase.breakDoorAt?fmtTime(currentCase.breakDoorAt):'已登錄') : '未執行'],
+    cordon: [$('cordonCheck'), currentCase?.cordonSet ? (currentCase.cordonArea || '已劃設') : '未劃設']
   };
-  Object.entries(labels).forEach(([key, text]) => {
+  Object.entries(mapping).forEach(([key,[input,text]])=>{
     const card = document.querySelector(`[data-arrival-card="${key}"]`);
-    const input = $(ARRIVAL_CARD_MAP[key]);
     const status = $(`${key}StatusText`);
-    if(card){ card.classList.toggle('selected', !!input?.checked || (key==='support' && readSupports().length>0)); card.classList.toggle('expanded', activeArrivalCard===key); }
+    const selected = !!input?.checked || (key==='support' && readSupports().length>0) || (key==='contact' && readContacts().length>0);
+    if(card){ card.classList.toggle('selected', selected); card.classList.toggle('expanded', activeArrivalCard===key); }
     if(status) status.textContent = text;
   });
   document.querySelectorAll('[data-arrival-panel]').forEach(panel => { panel.hidden = panel.dataset.arrivalPanel !== activeArrivalCard; });
   $('arrivalAddressDisplay') && ($('arrivalAddressDisplay').textContent = currentCase?.address || '尚未登錄地址');
   updateCommandAutoHint();
+  renderParCrewChecklist();
 }
 function updateSupportStatus(){ if(readSupports().length) $('supportCheck') && ($('supportCheck').checked = true); renderArrivalStatusCards(); }
 function updateCommandAutoHint(){
@@ -1433,36 +1637,47 @@ function renderCommandGuide(){
   $('commandSpeech').value = blocks.speech + '\n\n' + buildFullSpeech();
 }
 function commandBlocks(stage,c){
+  const contactLine = (c.contacts||[]).map(x=>`${x.name||'未具名'}${x.phone?`（${x.phone}）`:''}`).join('、') || '尚未登錄關係人';
   const common = {
     '到': {
-      confirm:['是否已抵達現場','是否完成指揮權轉移','第一面、指揮站、人員裝備集結區位置','後續到達單位報到位置','是否要求PAR安全回報'],
-      action:['抵達後通報指揮中心','完成指揮權轉移','宣布第一面並建立指揮站','要求各單位帶隊官PAR回報'],
-      speech:`北海北海，${profile?.callName||'現場指揮'}抵達現場，開始進行指揮權轉移，稍後再向北海續報。${c.firstSideSet?'現場已律定第一面並成立指揮站及人員裝備集結區，請後續到達單位向第一面報到。':'請確認地址、第一面、指揮站及報到位置。'}現場指揮權轉移後，請各單位帶隊官進行PAR人數清點安全回報。`
+      confirm:['是否已抵達正確地址與入口','是否完成現場安全觀察','是否宣告到達並建立初步指揮位置'],
+      action:['確認地址、入口與第一面','向指揮中心回報已到達','請後續單位至指定位置報到'],
+      speech:`北海北海，${profile?.callName||'現場指揮'}抵達現場，開始進行指揮權轉移，稍後再向北海續報。`
     },
     '建': {
-      confirm:['建物用途與場所特性','樓高與地下樓層','起火樓層','是否鐵皮、工廠、倉庫或特殊場所','是否需要詢問關係人'],
-      action:['確認建物用途、樓高與起火樓層','提醒同仁注意場所特殊事項','必要時請幕僚尋找關係人'],
+      confirm:['建物用途、樓高、起火樓層','樓梯、出入口、鐵窗、陽台、消防設備',`關係人：${contactLine}`],
+      action:['詢問關係人或管理員','必要時調閱搶救圖或平面圖','將建物資訊納入部署與回報'],
       speech:`現場為${c.purpose||'未登錄'}用途建物，樓高${c.floors||'未登錄'}樓，起火樓層為${c.fireFloor||'未登錄'}，場所特性與危險物狀況持續確認。`
     },
     '火': {
-      confirm:['火勢樓層、位置與面向','煙色與火勢大小','有無延燒之虞','燃燒面積估計','第一至第四面360查看狀況'],
-      action:['回報目前火煙狀況','完成360查看後續報各面狀況','若雲梯受煙熱影響需提醒降梯移位'],
-      speech:`目前${c.fireFloor||'起火樓層未明'}火煙狀況為${c.fireStatus||'未登錄'}，有無延燒與燃燒面積持續確認，後續進行第一、二、三、四面360查看後再向北海回報。`
+      confirm:['火煙位置、顏色與強度','是否延燒或有飛火風險','四面 360 查看狀況'],
+      action:['回報火煙與延燒風險','標示起火點與延燒方向','必要時調整水線與通風排煙'],
+      speech:`目前${c.fireFloor||'起火樓層未明'}火煙狀況為${c.fireStatus||'未登錄'}，後續完成第一、二、三、四面 360 查看後續報。`
     },
     '人': {
-      confirm:['是否有人受困','受困人數、位置、性別與年齡','是否已派遣搜救任務','是否已律定RIT','是否建立救護區並啟動PAR'],
-      action:['優先確認受困位置','派遣搜救任務','律定RIT待命','必要時要求PAR與加派救護支援'],
-      speech:`目前人員受困狀況為${c.trapped||'未知'}，受困人數${c.trappedCount||0}人，${c.ritSet?'已律定RIT':'尚未律定RIT，請儘速指派'}，搜救與救護需求持續確認。`
+      confirm:['是否有人受困、受困人數與位置','搜救小組是否已派遣','RIT 與 PAR 是否已落實'],
+      action:['優先人命搜救並以水線掩護','更新傷患者狀況回報','持續追蹤搜救進度與救護交接'],
+      speech:`目前人員受困狀況為${c.trapped||'未知'}，受困人數${c.trappedCount||0}人，${c.ritSet?'已律定RIT':'尚未律定RIT，請儘速指派'}。`
     },
     '支': {
-      confirm:['是否需要水車、水庫車、雲梯、救護支援','是否通知台電斷電','是否通知瓦斯關閉','是否需要警察交通管制','是否需要毒災應變隊或台水'],
-      action:['依需求向指揮中心請求加派','危險物或化學品應請環保局毒災應變隊','同步確認台電、瓦斯、警察支援進度'],
-      speech:`現場目前支援需求為${(c.supports||readSupports()||[]).join('、')||'持續評估中'}。${c.supportDetails||'必要時請台電、瓦斯、台水、警察及環保局毒災應變隊到場支援。'}`
+      confirm:['現有人車水線是否足夠','是否需要台電、瓦斯、警察、台水、毒災等外單位','是否需要雲梯、水庫、排煙、照明或大隊支援'],
+      action:['依不足項目請求支援','明確指定支援報到位置','更新支援清單與戰情回報'],
+      speech:`現場目前支援需求為${(c.supports||readSupports()||[]).join('、')||'持續評估中'}。${c.supportDetails||''}`
     },
     '初': {
-      confirm:['初期指揮官掌握的火煙、場所、人員受困、出勤人車','是否已有雲梯車與RIT','出勤部署與目前任務','是否已佔據水源','目前各分隊執行任務狀況'],
-      action:['向初期指揮官確認五項資訊','確認水源與出勤部署','請中隊幕僚安全管制','整合初期人車任務並續報'],
-      speech:`請問初期指揮官：火煙狀況、場所特性、受困人員、出勤人車、是否有雲梯車及是否指派RIT。初期部署與水源佔據狀況確認後續報。`
+      confirm:['初期指揮官交接資訊','各分隊在第幾面執行任務','水源、雲梯、內攻、搜救、RIT 等部署'],
+      action:['整理初期人車部署','確認指揮權轉移後任務是否延續或調整','將部署摘要納入進度報告'],
+      speech:`請問初期指揮官：火煙狀況、場所特性、受困人員、出勤人車、是否有雲梯車及是否指派RIT。`
+    },
+    '破': {
+      confirm:['是否確需破門進入','破門前是否回報現場指揮官','是否同步回報指揮中心並記錄破門時間'],
+      action:['確認破門位置、目的與安全風險','記錄破門時間、單位與原因','破門後回報火煙、人員與搜救進展'],
+      speech:`破門資訊：${c.breakDoorAt?fmtTime(c.breakDoorAt):'時間未登錄'}，${c.breakDoorUnit||'執行單位未登錄'}，${c.breakDoorNote||'位置與原因待補述'}。`
+    },
+    '警': {
+      confirm:['是否已劃設火場警戒區','是否指派人員或警察協助管制','封鎖線是否涵蓋水線、作業區與危險區'],
+      action:['指定警戒範圍與管制點','協調警察疏導交通與疏散民眾','將警戒區位置標示於戰術地圖'],
+      speech:`警戒區：${c.cordonArea||'範圍未登錄'}，${c.cordonAssigned?'已指派':'尚未確認指派'}${c.cordonUnit?` ${c.cordonUnit}`:''}。`
     }
   };
   return common[stage] || common['到'];
@@ -1550,12 +1765,14 @@ async function updateUserStatus(userId, status){
 
 function defaultBuildingOps(){ return { floorActions: [], planMarkers: [] }; }
 function getBuildingOps(){ return currentCase?.buildingOps || defaultBuildingOps(); }
+function setActionChoice(ids, activeId){ ids.forEach(id=>$(id)?.classList.toggle('active-choice', id===activeId)); }
 function floorsArray(){
   const floors = Math.max(Number(currentCase?.floors)||1, 1);
   return Array.from({length:floors}, (_,i)=>floors-i);
 }
 function syncBuildingFloors(){
   if(!currentCase) return;
+  setActionChoice(['syncFloorsBtn','saveBuildingOpsBtn'], 'syncFloorsBtn');
   currentCase.buildingOps = getBuildingOps();
   renderBuildingOps();
   toast('已同步樓層');
@@ -1606,14 +1823,25 @@ function addFloorMarkerFromClick(ev){
   const rect = ev.currentTarget.getBoundingClientRect();
   const x = Math.max(0, Math.min(100, ((ev.clientX - rect.left) / rect.width) * 100));
   const y = Math.max(0, Math.min(100, ((ev.clientY - rect.top) / rect.height) * 100));
-  const type = $('floorPlanTool')?.value || '起火點';
+  // v16 以拖拉工具為主；空白點擊不再新增，避免誤觸。
+  return;
+}
+
+function addFloorMarkerFromDrop(ev){
+  ev.preventDefault();
+  const type = ev.dataTransfer?.getData('text/plain') || '起火點';
+  addFloorMarkerAtEvent(ev, type);
+}
+function addFloorMarkerAtEvent(ev, type){
+  if(!currentCase) return;
+  const rect = $('floorPlanCanvas').getBoundingClientRect();
+  const x = Math.max(0, Math.min(100, ((ev.clientX - rect.left) / rect.width) * 100));
+  const y = Math.max(0, Math.min(100, ((ev.clientY - rect.top) / rect.height) * 100));
   const floor = Number($('floorPlanLevel')?.value || 1);
   const note = prompt(`新增 ${floor}樓 ${type} 標示，請輸入備註`, '') || '';
-  const ops = getBuildingOps();
-  ops.planMarkers = ops.planMarkers || [];
+  const ops = getBuildingOps(); ops.planMarkers = ops.planMarkers || [];
   ops.planMarkers.push({ id:uid('marker'), floor, type, x:Math.round(x*10)/10, y:Math.round(y*10)/10, label:type, note });
-  currentCase.buildingOps = ops;
-  renderFloorPlan();
+  currentCase.buildingOps = ops; renderFloorPlan();
 }
 function editFloorMarker(markerId){
   const ops = getBuildingOps();
@@ -1626,6 +1854,7 @@ function editFloorMarker(markerId){
 }
 async function saveBuildingOps(){
   if(!currentCase) return;
+  setActionChoice(['syncFloorsBtn','saveBuildingOpsBtn'], 'saveBuildingOpsBtn');
   collectBuildingOpsFromUI();
   const patch = { buildingOps: getBuildingOps(), updatedAt:Date.now() };
   Object.assign(currentCase, patch);
@@ -1657,16 +1886,16 @@ function localTacticalAdviceText(){
 function renderLocalTacticalAdvice(showToast=false){
   const text = localTacticalAdviceText();
   $('aiAdviceText') && ($('aiAdviceText').value = text);
-  $('aiAdviceStatus') && ($('aiAdviceStatus').textContent = '已產生本機規則建議，未消耗 OpenAI token。');
+  $('aiAdviceStatus') && ($('aiAdviceStatus').textContent = '已依目前資料產生注意事項建議。');
   if(showToast) toast('已產生本機規則建議');
   return text;
 }
-async function requestAiAdvice(){
+async function requestAiAdvice(options={}){
   if(!currentCase) return;
   const last = Number(currentCase.aiLastAt || 0);
-  if(Date.now() - last < AI_COOLDOWN_MS){
+  if(!isSuperAdmin() && Date.now() - last < AI_COOLDOWN_MS){
     const min = Math.ceil((AI_COOLDOWN_MS - (Date.now()-last))/60000);
-    toast(`AI 建議每 15 分鐘最多一次，請 ${min} 分鐘後再試`); return;
+    updateAiAdviceButton(); if(!options.silent) toast(`AI 建議每 15 分鐘最多一次，請 ${min} 分鐘後再試`); return;
   }
   $('aiAdviceStatus') && ($('aiAdviceStatus').textContent = '正在呼叫 AI，請稍候…');
   try{
@@ -1675,16 +1904,34 @@ async function requestAiAdvice(){
     const data = await res.json();
     if(!res.ok) throw new Error(data.error || 'AI 呼叫失敗');
     $('aiAdviceText').value = data.advice || '';
-    $('aiAdviceStatus').textContent = `AI 建議已更新：${fmtTime(Date.now())}${data.modelUsed ? '｜模型：' + data.modelUsed : ''}`;
+    $('aiAdviceStatus').textContent = `AI 建議已更新：${fmtTime(Date.now())}`; updateAiAdviceButton();
     const patch = { aiLastAt: Date.now(), aiLastAdvice: data.advice || '', updatedAt:Date.now() };
     Object.assign(currentCase, patch);
     if(firebaseEnabled) await db.collection('cases').doc(currentCaseId).set(patch,{merge:true}); else saveLocalCase();
     await addLog('ai','產生 OpenAI 戰術建議');
   }catch(err){
-    $('aiAdviceStatus').textContent = `AI 尚未啟用或呼叫失敗：${err.message}`;
+    $('aiAdviceStatus').textContent = `已依目前資料產生注意事項建議；AI 暫時無法更新。`;
     renderLocalTacticalAdvice(false);
-    toast('AI 尚未啟用，已改用本機規則建議', 3500);
+    updateAiAdviceButton();
+    if(!options.silent) toast('已先顯示注意事項建議');
   }
 }
 
+
+function updateAiAdviceButton(){
+  const btn = $('aiAdviceBtn'); if(!btn) return;
+  if(isSuperAdmin()){ btn.textContent = '產生 / 更新 AI 建議（最高管理員不限次數）'; btn.disabled = false; return; }
+  const last = Number(currentCase?.aiLastAt || 0);
+  const remain = Math.max(0, AI_COOLDOWN_MS - (Date.now()-last));
+  if(remain>0){ const min=Math.ceil(remain/60000); btn.textContent = `產生 / 更新 AI 建議（${min}分後可更新）`; btn.disabled = true; }
+  else { btn.textContent = '產生 / 更新 AI 建議'; btn.disabled = false; }
+}
+function maybeAutoAiAdvice(){
+  if(!currentCase || currentCase._autoAiChecked) return;
+  currentCase._autoAiChecked = true;
+  if(currentCase.aiLastAdvice){ $('aiAdviceText') && ($('aiAdviceText').value = currentCase.aiLastAdvice); updateAiAdviceButton(); return; }
+  renderLocalTacticalAdvice(false);
+  requestAiAdvice({silent:true});
+}
+setInterval(updateAiAdviceButton, 30000);
 init();
