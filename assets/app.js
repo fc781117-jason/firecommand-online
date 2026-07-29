@@ -248,6 +248,7 @@ function show(id){
   requestAnimationFrame(() => window.scrollTo({top:0,left:0,behavior:'instant'}));
 }
 function roleLabel(role){ return ({battalion:'大隊指揮/管理',commander:'現場指揮官',sector:'分區指揮/中隊幕僚',safety:'安全官',recorder:'紀錄官',unit:'單位帶隊官',viewer:'檢視者',admin:'最高管理員'})[role] || role || '未設定'; }
+function radioCallSign(){ return String(profile?.fireCallSign || profile?.callName || '現場指揮').trim(); }
 
 function init(){
   fillUnitFlat('profileBrigade','profileUnit','第三大隊');
@@ -268,6 +269,7 @@ function bindEvents(){
   $('logoutBtn').addEventListener('click', logout);
   $('approvalLogoutBtn')?.addEventListener('click', logout);
   $('adminManageBtn')?.addEventListener('click', () => { if($('adminSection')) { $('adminSection').hidden = false; $('adminSection').scrollIntoView({behavior:'smooth'}); } loadUsersForAdmin(); });
+  $('profileQuickEditBtn')?.addEventListener('click', openProfileQuickEdit);
   $('refreshUsersBtn')?.addEventListener('click', loadUsersForAdmin);
   $('profileForm').addEventListener('submit', saveProfile);
   $('caseForm').addEventListener('submit', createCase);
@@ -282,6 +284,7 @@ function bindEvents(){
   $('summaryTrapped').addEventListener('change', syncSummaryVictimDetails);
   $('summaryTrappedCountMode').addEventListener('change', syncSummaryVictimDetails);
   $('copyCommandSpeechBtn').addEventListener('click', copyCommandSpeech);
+  $('copyInitialArrivalSpeechBtn')?.addEventListener('click', copyInitialArrivalSpeech);
   $('copyReportBtn')?.addEventListener('click', copyReportDraft);
   $('editReportBtn')?.addEventListener('click', enableReportEdit);
   $('confirmReportEditBtn')?.addEventListener('click', confirmReportEdit);
@@ -303,8 +306,8 @@ function bindEvents(){
   $('dismissOrientationHintBtn')?.addEventListener('click', dismissOrientationHint);
   document.querySelectorAll('[data-close-action-sheet]').forEach(el => el.addEventListener('click', closeActionSheet));
   window.addEventListener('popstate', handlePopState);
-  window.addEventListener('orientationchange', updateOrientationHint);
-  window.addEventListener('resize', updateOrientationHint);
+  window.addEventListener('orientationchange', handleResponsiveBuildingLayout);
+  window.addEventListener('resize', handleResponsiveBuildingLayout);
   window.addEventListener('afterprint', ensureReportOverlayUsable);
   window.addEventListener('pageshow', ensureReportOverlayUsable);
   $('googleAddressSearchBtn')?.addEventListener('click', searchGoogleAddress);
@@ -315,6 +318,7 @@ function bindEvents(){
   document.querySelectorAll('[data-stage]').forEach(btn => btn.addEventListener('click', () => selectCommandStage(btn.dataset.stage)));
   document.querySelectorAll('[data-arrival-card]').forEach(btn => btn.addEventListener('click', () => toggleArrivalCard(btn.dataset.arrivalCard)));
   document.querySelectorAll('[data-case-page]').forEach(btn => btn.addEventListener('click', () => switchCasePage(btn.dataset.casePage)));
+  document.querySelectorAll('[data-case-page-jump]').forEach(btn => btn.addEventListener('click', () => switchCasePage(btn.dataset.casePageJump)));
   document.addEventListener('click', handleGlobalActionClick);
   document.querySelectorAll('.support-grid input').forEach(ch => ch.addEventListener('change', () => { updateSupportStatus(); renderCommandGuide(); saveCaseInfo(false,false); }));
   $('fitMapBtn').addEventListener('click', fitMapToIncident);
@@ -338,6 +342,10 @@ function bindEvents(){
   $('reopenCaseBtn')?.addEventListener('click', reopenCase);
   $('syncFloorsBtn')?.addEventListener('click', syncBuildingFloors);
   $('saveBuildingOpsBtn')?.addEventListener('click', saveBuildingOps);
+  $('buildingVerticalTabBtn')?.addEventListener('click', () => setBuildingOpsView('vertical', true));
+  $('buildingPlanTabBtn')?.addEventListener('click', () => setBuildingOpsView('plan', true));
+  $('buildingSplitTabBtn')?.addEventListener('click', () => setBuildingOpsView('split', true));
+  $('toggleBuildingFullscreenBtn')?.addEventListener('click', toggleBuildingFullscreen);
   $('addUpperFloorBtn')?.addEventListener('click', addUpperFloor);
   $('addBasementFloorBtn')?.addEventListener('click', addBasementFloor);
   $('floorPlanLevel')?.addEventListener('change', renderFloorPlan);
@@ -353,7 +361,7 @@ function bindEvents(){
   $('localRuleAdviceBtn')?.addEventListener('click', () => renderLocalTacticalAdvice(true));
   $('addContactBtn')?.addEventListener('click', () => { addContactRow(); renderArrivalStatusCards(); });
   document.querySelectorAll('.arrival-detail-input').forEach(el => el.addEventListener('change', () => { renderArrivalStatusCards(); renderCommandGuide(); saveCaseInfo(false,false); }));
-  ['detailPurpose','detailFireStatus','detailNotes'].forEach(id => $(id)?.addEventListener('change', renderCommandGuide));
+  ['detailPurpose','detailFireStatus','detailNotes','buildingStructure','detailFloors','detailFireFloor','fireObservedFloor','fireSmokeColor','fireSmokeVolume','fireFlameState','fireObservation','trappedCountArrival','arrivalAddressInput','firstSideCustom'].forEach(id => $(id)?.addEventListener('change', () => { syncSopDerivedFields(); renderCommandGuide(); saveCaseInfo(false,false); }));
   bindExclusiveDetails(['deploymentMapDetails','buildingOpsDetails']);
   bindExclusiveDetails(['crewStatusDetails','vehicleStatusDetails']);
 }
@@ -364,7 +372,7 @@ function bindExclusiveDetails(ids=[]){
     if(!node.open) return;
     nodes.forEach(other => { if(other!==node) other.open=false; });
     if(node.id==='deploymentMapDetails') setTimeout(refreshMapSize,220);
-    if(node.id==='buildingOpsDetails') setTimeout(updateOrientationHint,80);
+    if(node.id==='buildingOpsDetails') setTimeout(handleResponsiveBuildingLayout,80);
   }));
 }
 
@@ -560,6 +568,7 @@ function loginDemo(){
 function prefillProfile(user){
   $('profileRealName').value = user.displayName || '';
   $('profileCallName').value = user.displayName || '';
+  $('profileFireCallSign') && ($('profileFireCallSign').value = '');
   $('profileBrigade').value = '第三大隊';
   $('profileBrigade').dispatchEvent(new Event('change'));
   $('profileUnit').value = '淡水';
@@ -577,6 +586,7 @@ async function saveProfile(e){
     email: fbUser.email || '',
     realName: $('profileRealName').value.trim(),
     callName: $('profileCallName').value.trim(),
+    fireCallSign: $('profileFireCallSign')?.value.trim() || $('profileCallName').value.trim(),
     brigade: $('profileBrigade').value,
     unit: $('profileUnit').value,
     title: $('profileTitle').value,
@@ -595,7 +605,8 @@ async function saveProfile(e){
 }
 function enterApp(){
   show('appScreen'); $('homePage').hidden=false; $('detailPage').hidden=true;
-  $('userLine').textContent = `${profile.callName}｜${profile.brigade} / ${profile.unit}｜${roleLabel(profile.role)}`;
+  $('userLine').textContent = `${radioCallSign()}｜${profile.callName}｜${profile.brigade} / ${profile.unit}`;
+  $('userLine').title = '點此修改火場／無線電代號與顯示稱呼';
   setWatermark();
   const admin = isSuperAdmin();
   $('adminManageBtn') && ($('adminManageBtn').hidden = !admin);
@@ -609,8 +620,28 @@ function enterApp(){
   setSitrepNow();
   $('createCaseDetails').open = false;
   subscribeCases();
+  if(!profile.fireCallSign) setTimeout(()=>{toast('請先設定火場／無線電代號，回報稿將固定沿用。',4200);openProfileQuickEdit();},350);
 }
 
+function openProfileQuickEdit(){
+  if(!profile) return;
+  openActionSheet('個人資訊與火場代號', `<div class="notice compact">火場／無線電代號會用於到場回報稿、戰情與勤務紀錄。勤務代號變更時，請在這裡更新。</div>
+    <div class="field"><label>火場／無線電代號</label><input id="quickFireCallSign" value="${escapeHtml(profile.fireCallSign||'')}" placeholder="例：淡水316" /></div>
+    <div class="field"><label>顯示稱呼</label><input id="quickCallName" value="${escapeHtml(profile.callName||'')}" placeholder="例：Jason" /></div>
+    <div class="readonly-card">${escapeHtml(profile.realName||'')}｜${escapeHtml(profile.brigade||'')}/${escapeHtml(profile.unit||'')}｜${escapeHtml(profile.title||'')}</div>
+    <div class="button-row"><button id="saveQuickProfileBtn" type="button" class="btn primary full">儲存個人資訊</button></div>`);
+  $('saveQuickProfileBtn')?.addEventListener('click', saveQuickProfile);
+}
+async function saveQuickProfile(){
+  const fireCallSign=$('quickFireCallSign')?.value.trim()||'';
+  const callName=$('quickCallName')?.value.trim()||'';
+  if(!fireCallSign){ toast('請輸入火場／無線電代號'); return; }
+  profile={...profile,fireCallSign,callName:callName||profile.callName||fireCallSign,updatedAt:Date.now()};
+  if(firebaseEnabled) await db.collection('users').doc(profile.id).set({fireCallSign:profile.fireCallSign,callName:profile.callName,updatedAt:profile.updatedAt},{merge:true});
+  else { localState.profile=profile;saveLocalState(); }
+  $('userLine').textContent=`${radioCallSign()}｜${profile.callName}｜${profile.brigade} / ${profile.unit}`;
+  closeActionSheet();renderCommandGuide();toast('已更新火場代號');
+}
 function cleanupSubscriptions(){ unsubscribers.forEach(fn => { try{fn()}catch{} }); unsubscribers=[]; }
 function subscribeCases(){
   cleanupSubscriptions();
@@ -722,7 +753,7 @@ async function loadGoogleMapsClient(force=false){
     googleMapsLibs = null;
     mapLoadError = '';
     document.querySelector('script[data-google-maps-client]')?.remove();
-    if(window.google?.maps) try{ delete window.google.maps; }catch{}
+    try{ delete window.__firecommandGoogleMapsReady; }catch{}
   }
   if(window.google?.maps?.Map && window.google?.maps?.Geocoder){
     googleMapsLibs = window.google.maps;
@@ -732,28 +763,58 @@ async function loadGoogleMapsClient(force=false){
   googleMapsPromise = (async()=>{
     const cfg = await fetchGoogleMapsConfig();
     if(!cfg?.key) throw new Error('GOOGLE_MAPS_BROWSER_KEY 尚未在 Vercel Production 設定');
-    window.gm_authFailure = () => {
-      mapLoadError = 'Google Maps API 驗證失敗：請檢查 Billing、HTTP Referrer 網域限制與 API restrictions。';
-      showMapUnavailable(mapLoadError);
-    };
+
     await new Promise((resolve,reject)=>{
       const previous = document.querySelector('script[data-google-maps-client]');
-      if(previous){
-        if(window.google?.maps?.Map) return resolve();
-        previous.addEventListener('load', resolve, {once:true});
-        previous.addEventListener('error', ()=>reject(new Error('Google Maps JavaScript 載入失敗')), {once:true});
-        return;
-      }
+      if(previous) previous.remove();
+
+      const callbackName='__firecommandGoogleMapsReady';
+      let settled=false;
+      const finish=(fn,value)=>{
+        if(settled) return;
+        settled=true;
+        clearTimeout(timeout);
+        fn(value);
+      };
+
+      window.gm_authFailure = () => {
+        const message='Google Maps API 驗證失敗：請檢查 Billing、HTTP Referrer 網域限制與 API restrictions。';
+        mapLoadError = message;
+        showMapUnavailable(message);
+        finish(reject,new Error(message));
+      };
+
+      window[callbackName]=()=>{
+        // loading=async 時，Google 官方要求以 callback 判定 API 已可使用，
+        // 不可用 script.onload 立即檢查核心類別。
+        if(window.google?.maps?.Map && window.google?.maps?.Geocoder){
+          finish(resolve);
+        }else{
+          finish(reject,new Error('Google Maps callback 已執行，但地圖核心仍未完成初始化'));
+        }
+      };
+
       const s=document.createElement('script');
       s.dataset.googleMapsClient='true';
-      s.async=true; s.defer=true;
+      s.async=true;
+      s.defer=true;
       s.referrerPolicy='origin';
-      s.src=`https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(cfg.key)}&v=weekly&language=zh-TW&region=TW&libraries=places,geometry&loading=async`;
-      const timeout=setTimeout(()=>reject(new Error('Google Maps 載入逾時，請檢查網路、API Key 與網域限制')),15000);
-      s.onload=()=>{ clearTimeout(timeout); resolve(); };
-      s.onerror=()=>{ clearTimeout(timeout); reject(new Error('Google Maps 載入失敗，請確認 Maps JavaScript API、Billing 與 HTTP Referrer')); };
+      const params=new URLSearchParams({
+        key:String(cfg.key).trim(),
+        v:'weekly',
+        language:'zh-TW',
+        region:'TW',
+        libraries:'places,geometry',
+        loading:'async',
+        callback:callbackName,
+        auth_referrer_policy:'origin'
+      });
+      s.src=`https://maps.googleapis.com/maps/api/js?${params.toString()}`;
+      const timeout=setTimeout(()=>finish(reject,new Error('Google Maps 載入逾時：未收到 Google callback，請檢查 API Key、網域限制或網路連線')),20000);
+      s.onerror=()=>finish(reject,new Error('Google Maps JavaScript 載入失敗，請確認 Maps JavaScript API、Billing 與 HTTP Referrer'));
       document.head.appendChild(s);
     });
+
     if(!window.google?.maps?.Map || !window.google?.maps?.Geocoder) throw new Error('Google Maps 核心元件未載入');
     googleMapsLibs = window.google.maps;
     return window.google.maps;
@@ -1006,9 +1067,22 @@ function renderDetail(){
   $('supportDetails') && ($('supportDetails').value = currentCase.supportDetails || '');
   syncBuildingBoxForm();
   $('arrivalAddressDisplay') && ($('arrivalAddressDisplay').textContent = currentCase.address || '尚未登錄地址');
-  $('detailPurpose').value = currentCase.purpose || '住宅';
-  $('detailFireStatus').value = currentCase.fireStatus || '未知';
+  $('arrivalAddressInput') && ($('arrivalAddressInput').value = currentCase.address || '');
+  $('detailPurpose').value = currentCase.purpose || '';
+  $('buildingStructure') && ($('buildingStructure').value = currentCase.buildingStructure || '');
+  $('detailFloors') && ($('detailFloors').value = currentCase.floors || '');
+  $('detailFireFloor') && ($('detailFireFloor').value = currentCase.fireFloor || '');
+  $('fireObservedFloor') && ($('fireObservedFloor').value = currentCase.fireObservedFloor || currentCase.fireFloor || '');
+  $('fireSmokeColor') && ($('fireSmokeColor').value = currentCase.fireSmokeColor || '');
+  $('fireSmokeVolume') && ($('fireSmokeVolume').value = currentCase.fireSmokeVolume || '');
+  $('fireFlameState') && ($('fireFlameState').value = currentCase.fireFlameState || '');
+  $('fireObservation') && ($('fireObservation').value = currentCase.fireObservation || currentCase.fireStatus || '');
+  $('detailFireStatus').value = currentCase.fireStatus || '';
   $('detailNotes').value = currentCase.notes || '';
+  setRadioValue('trappedState', currentCase.trapped==='有'?'has':currentCase.trapped==='無'?'none':'unknown');
+  $('trappedCountArrival') && ($('trappedCountArrival').value = currentCase.trappedCount || '');
+  setRadioValue('firstSideMode', currentCase.firstSideMode || (currentCase.firstSideSet?'front':''));
+  $('firstSideCustom') && ($('firstSideCustom').value = currentCase.firstSideCustom || '');
   if($('extraNotes')) $('extraNotes').value = currentCase.extraNotes || '';
   $('summaryFloors').value = currentCase.floors || '';
   $('summaryFireFloor').value = currentCase.fireFloor || '';
@@ -1038,12 +1112,15 @@ function renderDetail(){
   renderSummaryCards(); renderArrivalStatusCards(); renderCommandGuide(); renderBuildingOps(); renderLocalTacticalAdvice(false); updateAiAdviceButton(); updateAssessmentAvailability(); renderLiveParts(); maybeAutoAiAdvice();
 }
 function renderSummaryCards(){
-  const c=currentCase;
-  $('summaryCards').innerHTML = `
-    <div class="mini-card"><div class="metric">${c.floors||'?'}</div><div class="metric-label">建物樓層</div><div class="subline">起火：${escapeHtml(c.fireFloor||'未登錄')}</div></div>
-    <div class="mini-card"><div class="metric">${c.trapped==='有'?'有':'?'}</div><div class="metric-label">受困狀況</div><div class="subline">${c.trappedCount||0} 人</div></div>
-    <div class="mini-card"><div class="metric">${live.vehicles.length}</div><div class="metric-label">車輛</div><div class="subline">目前部署</div></div>
-    <div class="mini-card"><div class="metric">${sum(live.crews,'count')}</div><div class="metric-label">人員</div><div class="subline">作業/待命/休息/RIT</div></div>`;
+  const c=currentCase; const wrap=$('summaryCards'); if(!wrap)return;
+  wrap.innerHTML = `
+    <button type="button" class="mini-card summary-link-card" data-summary-page="arrivalSection" data-summary-stage="建"><div class="metric">${c.floors||'?'}</div><div class="metric-label">建物樓層</div><div class="subline">起火：${escapeHtml(c.fireFloor||'未登錄')}｜點選查看</div></button>
+    <button type="button" class="mini-card summary-link-card" data-summary-page="arrivalSection" data-summary-stage="人"><div class="metric">${c.trapped==='有'?'有':c.trapped==='無'?'無':'?'}</div><div class="metric-label">受困狀況</div><div class="subline">${c.trappedCount||0} 人｜點選查看</div></button>
+    <button type="button" class="mini-card summary-link-card" data-summary-page="dashboardSection"><div class="metric">${live.vehicles.length}</div><div class="metric-label">車輛</div><div class="subline">部署與任務細節</div></button>
+    <button type="button" class="mini-card summary-link-card" data-summary-page="dashboardSection"><div class="metric">${sum(live.crews,'count')}</div><div class="metric-label">人員</div><div class="subline">作業／待命／休息</div></button>
+    <button type="button" class="mini-card summary-link-card" data-summary-page="tacticalMapSection"><div class="metric">${live.hoses.length}</div><div class="metric-label">水線</div><div class="subline">連接與部署細節</div></button>
+    <button type="button" class="mini-card summary-link-card" data-summary-page="sitrepSection"><div class="metric">${live.sitreps.length}</div><div class="metric-label">戰情</div><div class="subline">查看最新回報</div></button>`;
+  wrap.querySelectorAll('[data-summary-page]').forEach(btn=>btn.addEventListener('click',()=>{switchCasePage(btn.dataset.summaryPage);if(btn.dataset.summaryStage)selectCommandStage(btn.dataset.summaryStage);}));
 }
 function renderLiveParts(){
   if(!currentCase) return;
@@ -1175,20 +1252,39 @@ async function saveCaseInfo(showToast=true, logChange=true){
     hazardContact:$('hazardContact')?.value || '',
     hazardPhone:$('hazardPhone')?.value || '',
     hazardAppearance:$('hazardAppearance')?.value || '',
-    firstSideName:$('firstSideName')?.value || '',
+    firstSideMode:getRadioValue('firstSideMode') || '',
+    firstSideCustom:$('firstSideCustom')?.value || '',
+    firstSideName:getRadioValue('firstSideMode')==='custom' ? ($('firstSideCustom')?.value || '第一面') : '建物正面',
     firstSideNote:$('firstSideNote')?.value || '',
     parDetails:$('parDetails')?.value || '',
     supportDetails:$('supportDetails')?.value || '',
-    purpose:$('detailPurpose').value,
-    fireStatus:$('detailFireStatus').value,
+    purpose:$('detailPurpose')?.value || '',
+    buildingStructure:$('buildingStructure')?.value || '',
+    floors:Number($('detailFloors')?.value)||Number(currentCase.floors)||0,
+    fireFloor:$('detailFireFloor')?.value.trim() || currentCase.fireFloor || '',
+    fireObservedFloor:$('fireObservedFloor')?.value.trim() || '',
+    fireSmokeColor:$('fireSmokeColor')?.value || '',
+    fireSmokeVolume:$('fireSmokeVolume')?.value || '',
+    fireFlameState:$('fireFlameState')?.value || '',
+    fireObservation:$('fireObservation')?.value.trim() || '',
+    fireStatus:buildFireStatusFromSop(),
+    trapped:getRadioValue('trappedState')==='has'?'有':getRadioValue('trappedState')==='none'?'無':'未知',
+    trappedCount:getRadioValue('trappedState')==='has' ? (Number($('trappedCountArrival')?.value)||0) : 0,
     supports,
-    notes:$('detailNotes').value,
+    notes:$('detailNotes')?.value || '',
     updatedAt:Date.now()
   };
+  const editedAddress=$('arrivalAddressInput')?.value.trim() || currentCase.address || '';
+  if(editedAddress && editedAddress!==currentCase.address){
+    patch.address=editedAddress;
+    patch.addressConfirmed=!!$('addressConfirmCheck')?.checked;
+    patch.locationMeta={...(currentCase.locationMeta||{}),queryAddress:editedAddress,formattedAddress:'',placeId:'',confirmed:false,locked:false,unverified:true,source:'address-edited',updatedAt:Date.now(),updatedBy:radioCallSign()};
+  }
   Object.assign(currentCase, patch);
   if(firebaseEnabled) await db.collection('cases').doc(currentCaseId).set(patch,{merge:true});
   else { saveLocalCase(); renderDetail(); }
   if(logChange) await addLog('arrival','更新到場回報 / 到建火人支初資訊');
+  if(!activeStage) activeStage='到';
   renderArrivalStatusCards(); renderCommandGuide();
   if(showToast) toast('已儲存到場回報');
 }
@@ -1392,7 +1488,7 @@ async function runMapDiagnostics(){
     add('地圖底圖',mapReady?'good':mapLoadError?'danger':'warning',mapReady?'Google Maps 已顯示':mapLoadError||'尚未開啟部署頁或地圖尚未初始化');
   }catch(err){ add('定位診斷','danger',err.message||String(err)); }
   const label={good:'正常',warning:'注意',danger:'失敗'};
-  lastMapDiagnostics=[`FireCommand v22 定位診斷｜${new Date().toLocaleString('zh-TW',{hour12:false})}`,...rows.map(r=>`${r.name}：${label[r.status]}｜${r.detail}`)].join('\n');
+  lastMapDiagnostics=[`FireCommand v23 定位診斷｜${new Date().toLocaleString('zh-TW',{hour12:false})}`,...rows.map(r=>`${r.name}：${label[r.status]}｜${r.detail}`)].join('\n');
   if(panel) panel.innerHTML=rows.map(r=>`<div class="diagnostic-row ${r.status}"><span>${escapeHtml(r.name)}</span><b>${label[r.status]}</b><div class="diagnostic-detail">${escapeHtml(r.detail)}</div></div>`).join('');
   return rows;
 }
@@ -2207,37 +2303,34 @@ async function saveReportDraft(text, message){
   await addLog('report', message || '更新進度報告草稿');
 }
 function buildFullSpeech(){
-  const c=currentCase || {};
-  const supports = (c.supports || readSupports() || []).join('、') || (c.supportNeeded ? '已提出支援需求，項目待確認' : '現場暫無新增支援');
-  const commander = profile?.callName || '現場指揮官';
-  const box = c.buildingBox || {};
-  const firstSide = c.firstSideSet ? `已設定${c.firstSideName||box.firstSide||'第一面'}，${c.firstSideNote||'已成立指揮站及人員裝備集結區，請後續到達單位至第一面報到'}` : (box.firstSide ? `建物中心框已標示，${box.firstSide}為第一面，指揮站位置確認中` : '第一面及指揮站位置確認中');
-  const addressLine = c.addressConfirmed ? `現場地址確認為${c.address || '未登錄地址'}` : `現場地址為${c.address || '未登錄地址'}，地址仍需確認`;
-  const deployed = live.crews.length ? live.crews.map(p=>`${p.unit}${p.leader||''}執行${p.task||p.status||'任務未填'}`).join('、') : '初期部署資料持續登錄中';
-  const vehicles = live.vehicles.length ? live.vehicles.map(v=>`${v.name}${v.task?`執行${v.task}`:''}`).join('、') : '出勤人車持續確認中';
-  const commandSituation = c.commandSituation ? `初期指揮交接內容：${c.commandSituation}` : '';
-  const ritLine = c.ritSet ? `已律定RIT小組${c.ritUnit?`，由${c.ritUnit}擔任`:''}${c.ritNote?`，${c.ritNote}`:''}` : '尚未律定RIT小組，請儘速指派。';
-  const contactLine = c.contactState==='notfound' ? '目前尚未找到關係人，持續查找中' : ((c.contacts||[]).length ? `關係人資料：${(c.contacts||[]).map(x=>`${x.name||'未具名'}${x.phone?` ${x.phone}`:''}${x.appearance?` ${x.appearance}`:''}`).join('；')}` : '關係人狀況尚未確認');
-  const breakLine = c.breakDoorState==='none' ? '破門狀況：經評估目前不需要破門。' : (c.breakDoor ? `破門資訊：${c.breakDoorAt?fmtTime(c.breakDoorAt):'時間未登錄'}，${c.breakDoorUnit||'單位未登錄'}執行，${c.breakDoorNote||'原因與位置未補述'}，指揮官回報${c.breakDoorCommanderReport?'已完成':'未確認'}，指揮中心回報${c.breakDoorCenterReport?'已完成':'未確認'}。` : '破門狀況尚未確認。');
-  const cordonLine = c.cordonState==='pending' ? '警戒區尚未劃設，請持續評估並指派人員。' : (c.cordonSet ? `警戒區：${c.cordonArea||'範圍未登錄'}，${c.cordonAssigned?'已指派':'尚未確認指派'}${c.cordonUnit?` ${c.cordonUnit}`:''}執行。` : '警戒區狀況尚未確認。');
-  const hazardLine = c.hazardState==='none' ? '已詢問確認現場無危險物品' : (c.hazardState==='has' ? `已確認現場有危險物品${c.hazardItems?`：${c.hazardItems}`:''}${c.hazardContact?`；關係人：${c.hazardContact}`:''}${c.hazardPhone?`，電話${c.hazardPhone}`:''}${c.hazardAppearance?`，特徵：${c.hazardAppearance}`:''}` : '尚未完成危險物詢問，請持續尋找關係人確認。');
-  const parLine = c.parRequested ? `已要求各單位進行PAR安全回報${c.parDetails?`：${c.parDetails}`:''}` : 'PAR尚未完成要求。';
-  const supportLine = c.supportState==='none' ? '現場暫無新增支援需求' : `目前支援需求：${supports}${c.supportDetails?`；${c.supportDetails}`:''}`;
-  return `北海北海，${commander}回報：
-`+
-    `一、到：現場${c.arrived?'已到達':'到達確認中'}，${addressLine}；指揮權${c.commandTransfer?'已轉移接掌':'尚未完成轉移'}；${firstSide}；${parLine}
-`+
-    `二、建：現場為${c.purpose||'未登錄'}用途建物，樓高${c.floors||'未登錄'}樓，起火樓層為${c.fireFloor||'未登錄'}。
-`+
-    `三、火：目前火煙狀況為${c.fireStatus||'未登錄'}，${c.summary||'現場狀況持續確認中'}，後續將回報第一、二、三、四面360查看狀況。
-`+
-    `四、人：人員受困狀況為${c.trapped||'未知'}，受困人數${c.trappedCount||0}人；${ritLine}
-`+
-    `五、支：${supportLine}。${hazardLine}。${contactLine}
-`+
-    `六、初：${commandSituation}${commandSituation?'；':''}初期人員部署為${deployed}；車輛部署為${vehicles}。後續持續回報水源、雲梯、RIT與各面火煙狀況。
-破：${breakLine}
-警：${cordonLine}`;
+  const c=currentCase||{}; const commander=radioCallSign(); const lines=[];
+  lines.push(`北海北海，${commander}回報：`);
+  if(c.commandTransfer) lines.push('目前已完成指揮權轉移。');
+  if(c.addressConfirmed && c.address){
+    let text=`現場地址為${c.address}`;
+    if(c.firstSideSet) text+=`，${c.firstSideMode==='custom'?`律定${c.firstSideCustom||c.firstSideName||'指定位置'}為火場第一面`:'以這個地址的正面為火場第一面'}`;
+    if(c.firstSideNote) text+=`，指揮站設於${c.firstSideNote}`;
+    lines.push(`一、到：${text}。`);
+  }
+  const building=[]; if(c.buildingStructure) building.push(c.buildingStructure); if(c.purpose) building.push(`${c.purpose}用途建物`); if(c.floors) building.push(`樓高${c.floors}樓`); if(c.fireFloor) building.push(`起火樓層為${c.fireFloor}`);
+  if(building.length) lines.push(`二、建：現場為${building.join('，')}。`);
+  if(c.fireObservation||c.fireStatus) lines.push(`三、火：目前${c.fireObservation||c.fireStatus}。`);
+  const people=[];
+  if(c.contactState==='found') people.push((c.contacts||[]).length?'已找到關係人':'已找到關係人');
+  if(c.trapped==='無') people.push('確認無人受困'); else if(c.trapped==='有') people.push(`確認有${Number(c.trappedCount)||0}人受困`);
+  if(c.hazardState==='none') people.push('建物內無危險物品'); else if(c.hazardState==='has') people.push(`現場有危險物品${c.hazardItems?`：${c.hazardItems}`:''}`);
+  if(people.length) lines.push(`四、人：目前${people.join('，')}。`);
+  if(c.supportState==='needed'){
+    const supports=(c.supports||[]).join('、'); if(supports||c.supportDetails) lines.push(`五、支：目前需要${supports||'相關單位'}到場支援${c.supportDetails?`，${c.supportDetails}`:''}。`);
+  }
+  const deployment=[];
+  if(live.crews.length) deployment.push(...live.crews.map(x=>`${x.face?`${x.face}由`:''}${x.unit||'人員'}${x.task?`執行${x.task}`:''}`));
+  if(c.ritSet) deployment.push(`律定${c.ritUnit||'指定單位'}擔任RIT救援小組`);
+  if(c.parRequested && c.parDetails) deployment.push(c.parDetails);
+  if(deployment.length) lines.push(`六、初：${deployment.join('；')}。`);
+  if(c.breakDoorState==='required' && c.breakDoor) lines.push(`七、破：${c.breakDoorAt?`已於${fmtTime(c.breakDoorAt)}，`:''}${c.breakDoorUnit?`由${c.breakDoorUnit}`:''}完成破門${c.breakDoorNote?`，${c.breakDoorNote}`:''}。`);
+  if(c.cordonState==='set' && c.cordonSet) lines.push(`八、警：目前已完成火場警戒區劃設${c.cordonArea?`，範圍為${c.cordonArea}`:''}${c.cordonNote?`，${c.cordonNote}`:''}。`);
+  return lines.join('\n\n');
 }
 function parseReportText(text){
   const meta = {};
@@ -2362,7 +2455,9 @@ function renderReportPreview(text){
   el.innerHTML = `<div class="report-paper formal" data-watermark="${escapeHtml(watermarkRepeated())}">${reportHtmlFromText(cleaned)}</div>`;
 }
 function copyReportDraft(){ const text = ($('reportDraft')?.value || generateReport(false)); navigator.clipboard?.writeText(text); toast('已複製進度報告'); addLog('export','複製火場進度報告'); }
-function copyCommandSpeech(){ const text = buildFullSpeech(); navigator.clipboard?.writeText(text); $('commandSpeech').value=text; toast('已複製回報稿'); addLog('export','複製到建火人支初回報稿'); }
+function initialArrivalSpeech(){ return `北海北海，${radioCallSign()}抵達現場，開始進行指揮權轉移，稍後再向北海續報。`; }
+function copyInitialArrivalSpeech(){ const text=initialArrivalSpeech();navigator.clipboard?.writeText(text);$('arrivalInitialSpeech')&&($('arrivalInitialSpeech').value=text);toast('已複製首次到達稿');addLog('export','複製首次到達回報稿'); }
+function copyCommandSpeech(){ const text = buildFullSpeech(); navigator.clipboard?.writeText(text); $('commandSpeech').value=text; toast('已複製續報稿'); addLog('export','複製到建火人支初續報稿'); }
 function printReport(){ printReportSameTab(); }
 function printReportSameTab(){
   const text = sanitizeReportText(($('reportDraft')?.value || generateReport(false)));
@@ -2413,9 +2508,11 @@ function watermarkText(){ return `${profile?.realName || profile?.callName || '�
 function watermarkRepeated(){ const t = watermarkText(); return Array.from({length:80},()=>t).join('     '); }
 function setWatermark(){ document.body.dataset.watermark = watermarkRepeated(); }
 
-let activeStage=null;
-let activeArrivalCard=null;
-let activeBuildingView = "vertical";
+let activeStage='到';
+let activeArrivalCard='arrived';
+let activeBuildingView = 'vertical';
+let buildingViewManual = false;
+let buildingFullscreen = false;
 let activeCasePage = "caseInfo";
 let selectedFloorTool = "起火點";
 let floorDrawState = null;
@@ -2423,9 +2520,13 @@ let floorMarkerDrag = null;
 const ARRIVAL_CARD_MAP = {
   arrived:'arrivedCheck', command:'commandCheck', contact:'contactCheck', rit:'ritCheck', hazard:'hazardCheck', firstSide:'firstSideCheck', par:'parCheck', support:'supportCheck', breakDoor:'breakDoorCheck', cordon:'cordonCheck'
 };
+const STAGE_CARD_MAP={到:['arrived','command','firstSide'],建:['building'],火:['fire'],人:['contact','trapped','hazard'],支:['support'],初:['deployment','rit','par'],破:['breakDoor'],警:['cordon']};
 function selectCommandStage(stage){
-  activeStage = (activeStage === stage) ? null : stage;
-  document.querySelectorAll('[data-stage]').forEach(b=>b.classList.toggle('active', !!activeStage && b.dataset.stage===activeStage));
+  activeStage = stage || '到';
+  document.querySelectorAll('[data-stage]').forEach(b=>b.classList.toggle('active', b.dataset.stage===activeStage));
+  const allowed=STAGE_CARD_MAP[activeStage]||[];
+  if(!allowed.includes(activeArrivalCard)) activeArrivalCard=allowed[0]||null;
+  renderArrivalStatusCards();
   renderCommandGuide();
 }
 function toggleArrivalCard(key){
@@ -2454,6 +2555,8 @@ function updateArrivalConditionalPanels(){
   const supportState = getRadioValue('supportState');
   const breakDoorState = getRadioValue('breakDoorState');
   const cordonState = getRadioValue('cordonState');
+  const trappedState = getRadioValue('trappedState');
+  const firstSideMode = getRadioValue('firstSideMode');
   $('commandDetailFields') && ($('commandDetailFields').hidden = commandState !== 'transferred');
   $('contactDetailFields') && ($('contactDetailFields').hidden = contactState !== 'found');
   $('ritDetailFields') && ($('ritDetailFields').hidden = ritState !== 'assigned');
@@ -2462,6 +2565,8 @@ function updateArrivalConditionalPanels(){
   $('supportDetailFields') && ($('supportDetailFields').hidden = supportState !== 'needed');
   $('breakDoorDetailFields') && ($('breakDoorDetailFields').hidden = breakDoorState !== 'required');
   $('cordonDetailFields') && ($('cordonDetailFields').hidden = cordonState !== 'set');
+  $('trappedDetailFields') && ($('trappedDetailFields').hidden = trappedState !== 'has');
+  $('firstSideCustomFields') && ($('firstSideCustomFields').hidden = firstSideMode !== 'custom');
   $('arrivedCheck') && ($('arrivedCheck').checked = !!$('addressConfirmCheck')?.checked);
   if(supportState==='none') document.querySelectorAll('.support-grid input').forEach(x=>x.checked=false);
   $('commandCheck') && ($('commandCheck').checked = commandState === 'transferred');
@@ -2506,12 +2611,35 @@ function switchCasePage(targetId='caseInfo', resetScroll=true){
   }
 }
 function openQuickNavSection(targetId){ switchCasePage(targetId); }
-function setBuildingOpsView(view='vertical'){
-  activeBuildingView = view;
-  setActionChoice(['syncFloorsBtn','saveBuildingOpsBtn'], view==='vertical' ? 'syncFloorsBtn' : 'saveBuildingOpsBtn');
-  $('verticalBuildingPanel') && ($('verticalBuildingPanel').hidden = view !== 'vertical');
-  $('planBuildingPanel') && ($('planBuildingPanel').hidden = view !== 'plan');
-  if(view==='plan') setTimeout(refreshMapSize,50);
+function isWideBuildingViewport(){ return window.innerWidth>=900 || (window.innerWidth>=700 && window.innerWidth>window.innerHeight); }
+function setBuildingOpsView(view='vertical', manual=false){
+  if(!['vertical','plan','split'].includes(view)) view='vertical';
+  if(view==='split' && !isWideBuildingViewport()) view='plan';
+  activeBuildingView=view; if(manual) buildingViewManual=true;
+  const workspace=$('buildingWorkspace'); if(workspace) workspace.dataset.buildingView=view;
+  const vertical=$('verticalBuildingPanel'), plan=$('planBuildingPanel');
+  if(vertical) vertical.hidden=view==='plan';
+  if(plan) plan.hidden=view==='vertical';
+  [['buildingVerticalTabBtn','vertical'],['buildingPlanTabBtn','plan'],['buildingSplitTabBtn','split']].forEach(([id,key])=>{
+    const btn=$(id);if(!btn)return;const active=key===view;btn.classList.toggle('active',active);btn.setAttribute('aria-selected',active?'true':'false');
+  });
+  if(plan && !plan.hidden) requestAnimationFrame(()=>renderFloorPlan());
+  updateOrientationHint();
+}
+function handleResponsiveBuildingLayout(){
+  updateOrientationHint();
+  const details=$('buildingOpsDetails'); if(!details?.open) return;
+  if(!buildingViewManual) setBuildingOpsView(isWideBuildingViewport()?'split':'vertical',false);
+  else if(activeBuildingView==='split' && !isWideBuildingViewport()) setBuildingOpsView('plan',false);
+}
+function toggleBuildingFullscreen(){
+  const details=$('buildingOpsDetails'); if(!details)return;
+  buildingFullscreen=!buildingFullscreen;
+  details.classList.toggle('building-fullscreen',buildingFullscreen);
+  document.body.classList.toggle('building-fullscreen-open',buildingFullscreen);
+  const btn=$('toggleBuildingFullscreenBtn'); if(btn) btn.textContent=buildingFullscreen?'退出全幅':'全幅繪圖';
+  if(buildingFullscreen) setBuildingOpsView('plan',true);
+  requestAnimationFrame(()=>renderFloorPlan());
 }
 function renderParCrewChecklist(){
   const wrap = $('parCrewChecklist'); if(!wrap) return;
@@ -2536,26 +2664,39 @@ function renderArrivalStatusCards(){
   const breakDoorState = getRadioValue('breakDoorState') || currentCase?.breakDoorState || '';
   const cordonState = getRadioValue('cordonState') || currentCase?.cordonState || '';
   const contacts = readContacts();
+  const buildingDone=!!($('detailPurpose')?.value && $('detailFloors')?.value && $('detailFireFloor')?.value);
+  const fireDone=!!($('fireObservedFloor')?.value && ($('fireObservation')?.value || $('fireSmokeColor')?.value || $('fireFlameState')?.value));
+  const trappedState=getRadioValue('trappedState');
   const mapping = {
     arrived: [$('arrivedCheck'), $('addressConfirmCheck')?.checked ? '地址已確認' : '待確認地址'],
-    command: [$('commandCheck'), commandState==='transferred' ? '已接掌' : (commandState==='pending' ? '尚未轉移' : '未確認')],
-    contact: [$('contactCheck'), contactState==='found' ? (contacts.length ? `${contacts.length}名` : '已找到') : (contactState==='notfound' ? '尚未找到' : '未確認')],
+    building: [null, buildingDone ? `${$('detailPurpose').value}｜${$('detailFloors').value}樓｜${$('detailFireFloor').value}` : '尚缺必要資料'],
+    fire: [null, fireDone ? buildFireStatusFromSop() : '尚缺火煙資料'],
+    trapped: [null, trappedState==='none'?'確認無人受困':trappedState==='has'?`受困 ${Number($('trappedCountArrival')?.value)||0} 人`:'尚未確認'],
+    deployment: [null, (live.crews.length||live.vehicles.length||live.hoses.length)?`${live.vehicles.length}車｜${sum(live.crews,'count')}人｜${live.hoses.length}線`:'尚未部署'],
+    command: [$('commandCheck'), commandState==='transferred' ? '已完成轉移' : (commandState==='pending' ? '尚未完成' : '未確認')],
+    contact: [$('contactCheck'), contactState==='found' ? (contacts.length ? `已找到 ${contacts.length} 位` : '已找到，待補資料') : (contactState==='notfound' ? '尚未找到' : '未確認')],
     rit: [$('ritCheck'), ritState==='assigned' ? ($('ritUnit')?.value || '已指派') : (ritState==='unassigned' ? '尚未指派' : '未確認')],
-    hazard: [$('hazardCheck'), hazardState==='has' ? '有危險物' : (hazardState==='none' ? '無危險物' : '未確認')],
-    firstSide: [$('firstSideCheck'), firstSideState==='set' ? (($('firstSideName')?.value || '第一面') + (($('firstSideNote')?.value||'') ? `｜${$('firstSideNote').value}` : '')) : (firstSideState==='unset' ? '尚未律定' : '未確認')],
-    par: [$('parCheck'), $('parCheck')?.checked ? '已要求/回報' : '未要求'],
-    support: [$('supportCheck'), supportState==='none' ? '暫無需求' : (readSupports().length ? readSupports().join('、') : (supportState==='needed' ? '需要支援' : '評估中'))],
-    breakDoor: [$('breakDoorCheck'), breakDoorState==='none' ? '不需要' : (breakDoorState==='required' ? ($('breakDoorAt')?.value ? fmtTime(datetimeLocalToMs($('breakDoorAt').value)) : '需要 / 已執行') : '未確認')],
+    hazard: [$('hazardCheck'), hazardState==='none' ? '確認無危險物' : (hazardState==='has' ? ($('hazardItems')?.value || '有危險物') : '未確認')],
+    firstSide: [$('firstSideCheck'), firstSideState==='set' ? (firstSidePhrase() + (($('firstSideNote')?.value||'') ? `｜${$('firstSideNote').value}` : '')) : (firstSideState==='unset' ? '尚未律定' : '未確認')],
+    par: [$('parCheck'), $('parCheck')?.checked ? ($('parDetails')?.value || '已要求') : '未要求'],
+    support: [$('supportCheck'), supportState==='needed' ? (readSupports().join('、') || '需要支援') : (supportState==='none' ? '暫無需求' : '未確認')],
+    breakDoor: [$('breakDoorCheck'), breakDoorState==='required' ? '需要 / 已執行' : (breakDoorState==='none' ? '不需要' : '未確認')],
     cordon: [$('cordonCheck'), cordonState==='set' ? ($('cordonArea')?.value || '已劃設') : (cordonState==='pending' ? '尚未劃設' : '未確認')]
   };
   Object.entries(mapping).forEach(([key,[input,text]])=>{
     const card = document.querySelector(`[data-arrival-card="${key}"]`);
     const status = $(`${key}StatusText`);
-    const selected = key==='command' ? !!commandState : key==='contact' ? !!contactState : key==='rit' ? !!ritState : key==='hazard' ? !!hazardState : key==='firstSide' ? !!firstSideState : key==='support' ? !!supportState : key==='breakDoor' ? !!breakDoorState : key==='cordon' ? !!cordonState : !!input?.checked;
-    if(card){ card.classList.toggle('selected', selected); card.classList.toggle('expanded', activeArrivalCard===key); }
+    const selected = key==='building' ? buildingDone : key==='fire' ? fireDone : key==='trapped' ? trappedState!=='unknown' && !!trappedState : key==='deployment' ? !!(live.crews.length||live.vehicles.length||live.hoses.length) : key==='command' ? commandState==='transferred' : key==='contact' ? !!contactState : key==='rit' ? ritState==='assigned' : key==='hazard' ? (hazardState==='none'||hazardState==='has') : key==='firstSide' ? firstSideState==='set' : key==='support' ? (supportState==='none'||supportState==='needed') : key==='breakDoor' ? (breakDoorState==='none'||breakDoorState==='required') : key==='cordon' ? cordonState==='set' : !!input?.checked;
+    if(card){ card.classList.toggle('selected', selected); card.classList.toggle('expanded', activeArrivalCard===key); card.classList.toggle('required-missing', !selected); }
     if(status) status.textContent = text;
   });
-  document.querySelectorAll('[data-arrival-panel]').forEach(panel => { panel.hidden = panel.dataset.arrivalPanel !== activeArrivalCard; });
+  const allowed=STAGE_CARD_MAP[activeStage||'到']||[];
+  document.querySelectorAll('[data-arrival-card]').forEach(card=>{card.hidden=!allowed.includes(card.dataset.arrivalCard);});
+  document.querySelectorAll('[data-arrival-panel]').forEach(panel => { panel.hidden = panel.dataset.arrivalPanel !== activeArrivalCard || !allowed.includes(panel.dataset.arrivalPanel); });
+  $('stageChecklistTitle') && ($('stageChecklistTitle').textContent=`${activeStage||'到'}｜專屬確認事項`);
+  document.querySelectorAll('[data-stage]').forEach(btn=>btn.classList.toggle('active',btn.dataset.stage===(activeStage||'到')));
+  renderDeploymentSopSummary();
+  updateStageCompletion();
   $('arrivalAddressDisplay') && ($('arrivalAddressDisplay').textContent = currentCase?.address || '尚未登錄地址');
   updateArrivalConditionalPanels();
   document.querySelectorAll('.choice-chip').forEach(label => label.classList.toggle('checked', !!label.querySelector('input:checked')));
@@ -2573,6 +2714,7 @@ function updateCommandAutoHint(){
 
 function renderCommandGuide(){
   if(!currentCase || !$('commandAdvice')) return;
+  $('arrivalInitialSpeech') && ($('arrivalInitialSpeech').value=initialArrivalSpeech());
   if(!activeStage){
     $('commandAdvice').classList.add('collapsed');
     $('commandAdvice').innerHTML = '';
@@ -2583,7 +2725,7 @@ function renderCommandGuide(){
   const blocks = commandBlocks(stage, c);
   $('commandAdvice').classList.remove('collapsed');
   $('commandAdvice').innerHTML = `<div class="advice-grid"><div class="advice-box"><h4>${escapeHtml(stage)}｜必須確認</h4><ol>${blocks.confirm.map(x=>`<li>${escapeHtml(x)}</li>`).join('')}</ol></div><div class="advice-box"><h4>${escapeHtml(stage)}｜應執行事項</h4><ol>${blocks.action.map(x=>`<li>${escapeHtml(x)}</li>`).join('')}</ol></div></div>`;
-  $('commandSpeech').value = blocks.speech + '\n\n' + buildFullSpeech();
+  $('commandSpeech').value = buildFullSpeech();
 }
 function commandBlocks(stage,c){
   const contactLine = (c.contacts||[]).map(x=>`${x.name||'未具名'}${x.phone?`（${x.phone}）`:''}`).join('、') || '尚未登錄關係人';
@@ -2591,7 +2733,7 @@ function commandBlocks(stage,c){
     '到': {
       confirm:['是否已抵達正確地址與入口','是否完成現場安全觀察','是否宣告到達並建立初步指揮位置'],
       action:['確認地址、入口與第一面','向指揮中心回報已到達','請後續單位至指定位置報到'],
-      speech:`北海北海，${profile?.callName||'現場指揮'}抵達現場，開始進行指揮權轉移，稍後再向北海續報。`
+      speech:`北海北海，${radioCallSign()}抵達現場，開始進行指揮權轉移，稍後再向北海續報。`
     },
     '建': {
       confirm:['建物用途、樓高、起火樓層','樓梯、出入口、鐵窗、陽台、消防設備',`關係人：${contactLine}`],
@@ -2743,7 +2885,6 @@ function addBasementFloor(){
 }
 function syncBuildingFloors(){
   if(!currentCase) return;
-  setBuildingOpsView('vertical');
   const ops = getBuildingOps();
   if(!ops.levels || !ops.levels.length) ops.levels = [3,2,1];
   currentCase.buildingOps = ops;
@@ -2771,7 +2912,7 @@ function renderBuildingOps(){
   }).join('');
   document.querySelectorAll('[data-floor-action],[data-floor-note]').forEach(el => el.addEventListener('change', collectBuildingOpsFromUI));
   renderFloorPlan();
-  setBuildingOpsView(activeBuildingView || 'vertical');
+  setBuildingOpsView(activeBuildingView || (isWideBuildingViewport()?'split':'vertical'));
   selectFloorTool(selectedFloorTool || '起火點', false);
 }
 function collectBuildingOpsFromUI(){
@@ -3000,9 +3141,42 @@ function focusKeyboardVoiceTarget(id){
   const input=$(id);if(!input)return;input.focus({preventScroll:false});input.scrollIntoView({behavior:'smooth',block:'center'});toast('已開啟文字欄位；請點手機鍵盤上的麥克風進行語音轉文字。',4200);
 }
 
+function buildFireStatusFromSop(){
+  const custom=$('fireObservation')?.value.trim(); if(custom) return custom;
+  return [$('fireObservedFloor')?.value.trim(),$('fireSmokeVolume')?.value,$('fireSmokeColor')?.value,$('fireFlameState')?.value].filter(Boolean).join('，');
+}
+function firstSidePhrase(){
+  const mode=getRadioValue('firstSideMode');
+  return mode==='custom' ? `律定${$('firstSideCustom')?.value.trim()||'指定位置'}為火場第一面` : '以建物正面為火場第一面';
+}
+function syncSopDerivedFields(){
+  if($('detailFireStatus')) $('detailFireStatus').value=buildFireStatusFromSop();
+  updateArrivalConditionalPanels();renderArrivalStatusCards();
+}
+function renderDeploymentSopSummary(){
+  const el=$('deploymentSopSummary');if(!el)return;
+  const crew=live.crews.length?live.crews.map(x=>`<div class="deployment-sop-row"><b>${escapeHtml(x.face||'未分面')}｜${escapeHtml(x.unit||'人員')}</b><span>${escapeHtml(x.task||x.status||'任務未填')}｜${Number(x.count)||0}人</span></div>`).join(''):'<div class="empty">尚無人員部署。</div>';
+  const vehicles=live.vehicles.length?live.vehicles.map(x=>`<div class="deployment-sop-row"><b>${escapeHtml(x.name||x.unit||'車輛')}</b><span>${escapeHtml(x.task||'任務未填')}</span></div>`).join(''):'<div class="empty">尚無車輛部署。</div>';
+  const hoses=live.hoses.length?`<div class="deployment-sop-row"><b>水線</b><span>${live.hoses.length} 條</span></div>`:'';
+  el.innerHTML=`<div class="deployment-sop-group"><h4>人員</h4>${crew}</div><div class="deployment-sop-group"><h4>車輛／水線</h4>${vehicles}${hoses}</div>`;
+}
+function stageCompletion(stage){
+  const c=currentCase||{}; const states={
+    到:[!!c.addressConfirmed,!!c.commandTransfer,!!c.firstSideSet],
+    建:[!!c.purpose,!!c.floors,!!c.fireFloor],
+    火:[!!(c.fireObservation||c.fireStatus)],
+    人:[c.contactState==='found'||c.contactState==='notfound',c.trapped==='有'||c.trapped==='無',c.hazardState==='none'||c.hazardState==='has'],
+    支:[c.supportState==='none'||c.supportState==='needed'],
+    初:[!!(live.crews.length||live.vehicles.length),!!c.ritSet,!!c.parRequested],
+    破:[c.breakDoorState==='none'||c.breakDoorState==='required'],
+    警:[c.cordonState==='set']
+  }[stage]||[]; return {done:states.filter(Boolean).length,total:states.length};
+}
+function updateStageCompletion(){
+  document.querySelectorAll('[data-stage]').forEach(btn=>{const st=stageCompletion(btn.dataset.stage);btn.classList.toggle('stage-complete',st.total>0&&st.done===st.total);btn.classList.toggle('stage-partial',st.done>0&&st.done<st.total);btn.classList.toggle('stage-missing',st.done===0);btn.dataset.progress=`${st.done}/${st.total}`;});
+}
 async function saveBuildingOps(){
   if(!currentCase) return;
-  setBuildingOpsView('plan');
   collectBuildingOpsFromUI();
   const patch = { buildingOps: getBuildingOps(), updatedAt:Date.now() };
   Object.assign(currentCase, patch);
