@@ -204,18 +204,39 @@ let currentCase = null;
 let live = { vehicles: [], crews: [], hoses: [], hazards: [], sitreps: [], logs: [] };
 let unsubscribers = [];
 let map = null;
-let mapLayers = null;
+let mapOverlays = [];
 let incidentCircle = null;
+let mapInfoWindow = null;
+let mapLoadError = '';
+let mapReady = false;
 let pendingTool = null;
 let buildingBoxCenterMarker = null;
 let buildingBoxCornerMarker = null;
+let googleMapsConfig = null;
+let googleMapsPromise = null;
+let googleMapsLibs = null;
+let pendingIncidentLocation = null;
+let pendingCasePlace = null;
+let autocompleteSessionToken = null;
+let addressSuggestTimer = null;
+let gpsWatchId = null;
+let deploymentMode = 'select';
+let selectedMapResource = null;
+let floorHistory = [];
+let floorRedoStack = [];
+let floorPlanLocked = false;
+let floorSelectedId = null;
+let suppressFloorHistory = false;
+let reportOverlayHistoryActive = false;
+let reportReturnState = null;
+let lastMapDiagnostics = '';
 let localState = loadLocalState();
 
 function loadLocalState(){
   try { return JSON.parse(localStorage.getItem(LOCAL_KEY)) || { profile:null, cases:[] }; }
   catch { return { profile:null, cases:[] }; }
 }
-function saveLocalState(){ localStorage.setItem(LOCAL_KEY, JSON.stringify(localState)); }
+function saveLocalState(){ try{ localStorage.setItem(LOCAL_KEY, JSON.stringify(localState)); }catch(err){ console.warn('本機暫存不可用',err); } }
 function uid(prefix='id'){ return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,8)}`; }
 function todayKey(){ const d = new Date(); return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`; }
 function fmtTime(ts){ const d = ts?.toDate ? ts.toDate() : new Date(ts || Date.now()); return d.toLocaleString('zh-TW',{hour12:false}); }
@@ -236,6 +257,8 @@ function init(){
   fillTrappedSelect('summaryTrappedCountMode');
   fillTrappedSelect();
   bindEvents();
+  injectKeyboardVoiceHelpers();
+  updateOrientationHint();
   initFirebase();
 }
 
@@ -263,9 +286,37 @@ function bindEvents(){
   $('editReportBtn')?.addEventListener('click', enableReportEdit);
   $('confirmReportEditBtn')?.addEventListener('click', confirmReportEdit);
   $('printReportBtn')?.addEventListener('click', printReport);
+  $('sameTabPrintBtn')?.addEventListener('click', printReportSameTab);
+  $('runMapDiagnosticsBtn')?.addEventListener('click', runMapDiagnostics);
+  $('copyMapDiagnosticsBtn')?.addEventListener('click', copyMapDiagnostics);
+  $('retryGoogleMapBtn')?.addEventListener('click', retryGoogleMap);
+  $('caseAddress')?.addEventListener('input', () => scheduleAddressSuggestions('case'));
+  $('locationAddressInput')?.addEventListener('input', () => scheduleAddressSuggestions('location'));
+  document.querySelectorAll('[data-deploy-mode]').forEach(btn => btn.addEventListener('click', () => setDeploymentMode(btn.dataset.deployMode)));
+  $('floorUndoBtn')?.addEventListener('click', floorUndo);
+  $('floorRedoBtn')?.addEventListener('click', floorRedo);
+  $('floorEraserBtn')?.addEventListener('click', () => selectFloorTool('橡皮擦'));
+  $('floorSelectBtn')?.addEventListener('click', () => selectFloorTool('選取'));
+  $('copyPreviousFloorBtn')?.addEventListener('click', copyAdjacentFloor);
+  $('lockFloorPlanBtn')?.addEventListener('click', toggleFloorPlanLock);
+  $('clearFloorPlanBtn')?.addEventListener('click', clearActiveFloorPlan);
+  $('dismissOrientationHintBtn')?.addEventListener('click', dismissOrientationHint);
+  document.querySelectorAll('[data-close-action-sheet]').forEach(el => el.addEventListener('click', closeActionSheet));
+  window.addEventListener('popstate', handlePopState);
+  window.addEventListener('orientationchange', updateOrientationHint);
+  window.addEventListener('resize', updateOrientationHint);
+  window.addEventListener('afterprint', ensureReportOverlayUsable);
+  window.addEventListener('pageshow', ensureReportOverlayUsable);
+  $('googleAddressSearchBtn')?.addEventListener('click', searchGoogleAddress);
+  $('useCurrentGpsBtn')?.addEventListener('click', useCurrentGps);
+  $('setIncidentCenterBtn')?.addEventListener('click', beginManualIncidentCenter);
+  $('confirmIncidentLocationBtn')?.addEventListener('click', confirmIncidentLocation);
+  $('unlockIncidentLocationBtn')?.addEventListener('click', unlockIncidentLocation);
   document.querySelectorAll('[data-stage]').forEach(btn => btn.addEventListener('click', () => selectCommandStage(btn.dataset.stage)));
   document.querySelectorAll('[data-arrival-card]').forEach(btn => btn.addEventListener('click', () => toggleArrivalCard(btn.dataset.arrivalCard)));
-  document.querySelectorAll('.support-grid input').forEach(ch => ch.addEventListener('change', () => { updateSupportStatus(); renderCommandGuide(); saveCaseInfo(false); }));
+  document.querySelectorAll('[data-case-page]').forEach(btn => btn.addEventListener('click', () => switchCasePage(btn.dataset.casePage)));
+  document.addEventListener('click', handleGlobalActionClick);
+  document.querySelectorAll('.support-grid input').forEach(ch => ch.addEventListener('change', () => { updateSupportStatus(); renderCommandGuide(); saveCaseInfo(false,false); }));
   $('fitMapBtn').addEventListener('click', fitMapToIncident);
   $('setBuildingBoxCenterBtn')?.addEventListener('click', () => { pendingTool={type:'buildingBoxCenter'}; toast('請在地圖點選建物中心框中心點'); });
   $('saveBuildingBoxBtn')?.addEventListener('click', saveBuildingBoxFromForm);
@@ -287,17 +338,57 @@ function bindEvents(){
   $('reopenCaseBtn')?.addEventListener('click', reopenCase);
   $('syncFloorsBtn')?.addEventListener('click', syncBuildingFloors);
   $('saveBuildingOpsBtn')?.addEventListener('click', saveBuildingOps);
+  $('addUpperFloorBtn')?.addEventListener('click', addUpperFloor);
+  $('addBasementFloorBtn')?.addEventListener('click', addBasementFloor);
   $('floorPlanLevel')?.addEventListener('change', renderFloorPlan);
   $('floorPlanCanvas')?.addEventListener('click', addFloorMarkerFromClick);
+  $('floorPlanCanvas')?.addEventListener('pointerdown', handleFloorPlanPointerDown);
+  $('floorPlanCanvas')?.addEventListener('pointermove', handleFloorPlanPointerMove);
+  $('floorPlanCanvas')?.addEventListener('pointerup', handleFloorPlanPointerUp);
+  $('floorPlanCanvas')?.addEventListener('pointercancel', handleFloorPlanPointerCancel);
   $('floorPlanCanvas')?.addEventListener('dragover', ev => ev.preventDefault());
   $('floorPlanCanvas')?.addEventListener('drop', addFloorMarkerFromDrop);
-  document.querySelectorAll('[data-floor-tool]').forEach(btn => btn.addEventListener('dragstart', ev => ev.dataTransfer.setData('text/plain', btn.dataset.floorTool)));
+  document.querySelectorAll('[data-floor-tool]').forEach(btn => { btn.addEventListener('dragstart', ev => ev.dataTransfer.setData('text/plain', btn.dataset.floorTool)); btn.addEventListener('click', () => selectFloorTool(btn.dataset.floorTool)); });
   $('aiAdviceBtn')?.addEventListener('click', requestAiAdvice);
   $('localRuleAdviceBtn')?.addEventListener('click', () => renderLocalTacticalAdvice(true));
-  ['arrivedCheck','commandCheck','contactCheck','ritCheck','hazardCheck','firstSideCheck','parCheck','supportCheck','breakDoorCheck','cordonCheck','contactFoundCheck','breakDoorCommanderReport','breakDoorCenterReport','cordonAssignedCheck'].forEach(id => $(id)?.addEventListener('change', () => { renderArrivalStatusCards(); renderCommandGuide(); saveCaseInfo(false); }));
   $('addContactBtn')?.addEventListener('click', () => { addContactRow(); renderArrivalStatusCards(); });
-  document.querySelectorAll('.arrival-detail-input').forEach(el => el.addEventListener('change', () => { renderArrivalStatusCards(); renderCommandGuide(); saveCaseInfo(false); }));
+  document.querySelectorAll('.arrival-detail-input').forEach(el => el.addEventListener('change', () => { renderArrivalStatusCards(); renderCommandGuide(); saveCaseInfo(false,false); }));
   ['detailPurpose','detailFireStatus','detailNotes'].forEach(id => $(id)?.addEventListener('change', renderCommandGuide));
+  bindExclusiveDetails(['deploymentMapDetails','buildingOpsDetails']);
+  bindExclusiveDetails(['crewStatusDetails','vehicleStatusDetails']);
+}
+
+function bindExclusiveDetails(ids=[]){
+  const nodes = ids.map(id=>$(id)).filter(Boolean);
+  nodes.forEach(node => node.addEventListener('toggle', () => {
+    if(!node.open) return;
+    nodes.forEach(other => { if(other!==node) other.open=false; });
+    if(node.id==='deploymentMapDetails') setTimeout(refreshMapSize,220);
+    if(node.id==='buildingOpsDetails') setTimeout(updateOrientationHint,80);
+  }));
+}
+
+async function handleGlobalActionClick(ev){
+  const voice = ev.target.closest('[data-keyboard-voice-target]');
+  if(voice){ ev.preventDefault(); focusKeyboardVoiceTarget(voice.dataset.keyboardVoiceTarget); return; }
+  const resource = ev.target.closest('[data-resource-coll][data-resource-id]');
+  if(resource && !ev.target.closest('[data-resource-action]')){ ev.preventDefault(); selectMapResource(resource.dataset.resourceColl, resource.dataset.resourceId); return; }
+  const resourceAction = ev.target.closest('[data-resource-action]');
+  if(resourceAction){ ev.preventDefault(); ev.stopPropagation(); handleResourceAction(resourceAction); return; }
+  const btn = ev.target.closest('[data-map-action]');
+  if(!btn) return;
+  ev.preventDefault(); ev.stopPropagation();
+  const action = btn.dataset.mapAction;
+  const id = btn.dataset.id;
+  if(action === 'editVehicle') return editVehicle(id);
+  if(action === 'deleteVehicle') return deleteVehicle(id);
+  if(action === 'editCrew') return editCrew(id);
+  if(action === 'restCrew') return setCrewRest(id, btn.dataset.mode || '原地休息');
+  if(action === 'deleteCrew') return deleteCrew(id);
+  if(action === 'editHazard') return editHazard(id);
+  if(action === 'deleteHazard') return deleteHazard(id);
+  if(action === 'editHose') return editHoseFull(id);
+  if(action === 'deleteHose') return deleteHose(id);
 }
 
 function getCompanies(brigade){ return Object.keys(UNIT_TREE[brigade] || UNIT_TREE['第三大隊']); }
@@ -549,7 +640,8 @@ function renderCases(){
         <span class="tag ${c.trapped==='有'?'red':'green'}">受困：${escapeHtml(c.trapped||'未知')} ${c.trappedCount||0}人</span>
       </div>
     </article>`).join('');
-  wrap.querySelectorAll('[data-open-case]').forEach(btn => btn.addEventListener('click', () => openCase(btn.dataset.openCase)));
+  wrap.querySelectorAll('.case-card').forEach(card => { card.style.cursor='pointer'; card.addEventListener('click', ev => { if(ev.target.closest('button')) return; openCase(card.querySelector('[data-open-case]')?.dataset.openCase); }); });
+  wrap.querySelectorAll('[data-open-case]').forEach(btn => btn.addEventListener('click', ev => { ev.stopPropagation(); openCase(btn.dataset.openCase); }));
 }
 
 async function createCase(e){
@@ -572,6 +664,7 @@ async function createCase(e){
     purpose: '住宅',
     arrived:false, commandTransfer:false, ritSet:false, hazardChecked:false,
     notes:'', extraNotes:'', lat:loc.lat, lng:loc.lng,
+    locationMeta: { source:loc.source || 'fallback', formattedAddress:loc.formattedAddress || address, placeId:loc.placeId || '', accuracy:loc.accuracy || null, unverified:!!loc.unverified, locked:false, confirmed:false, updatedAt:Date.now(), updatedBy:profile?.callName || '' },
     brigade: profile.brigade, unit: profile.unit || '', createdBy: profile.id, createdByName: profile.callName,
     createdAt: Date.now(), updatedAt: Date.now()
   };
@@ -611,24 +704,227 @@ function isNewTaipeiResult(item){
   const name = `${item.display_name||''} ${item.address?.city||''} ${item.address?.county||''} ${item.address?.state||''}`;
   return /新北|New Taipei|Taipei County/.test(name);
 }
+function googleMapsEnabled(){ return Boolean(googleMapsConfig?.key); }
+async function fetchGoogleMapsConfig(){
+  if(googleMapsConfig) return googleMapsConfig;
+  try{
+    const res = await fetch('/api/maps-config', {cache:'no-store'});
+    if(!res.ok) throw new Error('maps config unavailable');
+    googleMapsConfig = await res.json();
+  }catch(err){
+    googleMapsConfig = {enabled:false, key:''};
+  }
+  return googleMapsConfig;
+}
+async function loadGoogleMapsClient(force=false){
+  if(force){
+    googleMapsPromise = null;
+    googleMapsLibs = null;
+    mapLoadError = '';
+    document.querySelector('script[data-google-maps-client]')?.remove();
+    if(window.google?.maps) try{ delete window.google.maps; }catch{}
+  }
+  if(window.google?.maps?.Map && window.google?.maps?.Geocoder){
+    googleMapsLibs = window.google.maps;
+    return window.google.maps;
+  }
+  if(googleMapsPromise) return googleMapsPromise;
+  googleMapsPromise = (async()=>{
+    const cfg = await fetchGoogleMapsConfig();
+    if(!cfg?.key) throw new Error('GOOGLE_MAPS_BROWSER_KEY 尚未在 Vercel Production 設定');
+    window.gm_authFailure = () => {
+      mapLoadError = 'Google Maps API 驗證失敗：請檢查 Billing、HTTP Referrer 網域限制與 API restrictions。';
+      showMapUnavailable(mapLoadError);
+    };
+    await new Promise((resolve,reject)=>{
+      const previous = document.querySelector('script[data-google-maps-client]');
+      if(previous){
+        if(window.google?.maps?.Map) return resolve();
+        previous.addEventListener('load', resolve, {once:true});
+        previous.addEventListener('error', ()=>reject(new Error('Google Maps JavaScript 載入失敗')), {once:true});
+        return;
+      }
+      const s=document.createElement('script');
+      s.dataset.googleMapsClient='true';
+      s.async=true; s.defer=true;
+      s.referrerPolicy='origin';
+      s.src=`https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(cfg.key)}&v=weekly&language=zh-TW&region=TW&libraries=places,geometry&loading=async`;
+      const timeout=setTimeout(()=>reject(new Error('Google Maps 載入逾時，請檢查網路、API Key 與網域限制')),15000);
+      s.onload=()=>{ clearTimeout(timeout); resolve(); };
+      s.onerror=()=>{ clearTimeout(timeout); reject(new Error('Google Maps 載入失敗，請確認 Maps JavaScript API、Billing 與 HTTP Referrer')); };
+      document.head.appendChild(s);
+    });
+    if(!window.google?.maps?.Map || !window.google?.maps?.Geocoder) throw new Error('Google Maps 核心元件未載入');
+    googleMapsLibs = window.google.maps;
+    return window.google.maps;
+  })();
+  try{
+    const result=await googleMapsPromise;
+    mapLoadError='';
+    return result;
+  }catch(err){
+    googleMapsPromise=null;
+    mapLoadError=err.message || String(err);
+    throw err;
+  }
+}
+function normalizeGoogleAddress(address=''){
+  const normalized = normalizeAddress(address);
+  if(!normalized) return '';
+  if(!/台灣|臺灣/.test(normalized)) return `${normalized} 台灣`;
+  return normalized;
+}
+async function googleGeocodeCandidates(address){
+  const maps = await loadGoogleMapsClient();
+  const geocoder = new maps.Geocoder();
+  const query = normalizeGoogleAddress(address);
+  const response = await geocoder.geocode({address:query, region:'TW', componentRestrictions:{country:'TW'}});
+  const results = response?.results || [];
+  return results.map(r=>({
+    lat:r.geometry?.location?.lat?.(), lng:r.geometry?.location?.lng?.(),
+    formattedAddress:r.formatted_address || query,
+    placeId:r.place_id || '',
+    types:r.types || [],
+    source:'google-address'
+  })).filter(x=>Number.isFinite(x.lat) && Number.isFinite(x.lng));
+}
+async function fetchPlaceSuggestions(input, context='location'){
+  const value = normalizeAddress(input);
+  if(value.length < 3) return [];
+  await loadGoogleMapsClient();
+  if(!google.maps.importLibrary) return googleGeocodeCandidates(value);
+  try{
+    const {AutocompleteSuggestion, AutocompleteSessionToken} = await google.maps.importLibrary('places');
+    if(!autocompleteSessionToken) autocompleteSessionToken = new AutocompleteSessionToken();
+    const center = currentCase ? {lat:Number(currentCase.lat||DEFAULT_CENTER.lat),lng:Number(currentCase.lng||DEFAULT_CENTER.lng)} : DEFAULT_CENTER;
+    const request = {
+      input:value,
+      sessionToken:autocompleteSessionToken,
+      language:'zh-TW',
+      region:'tw',
+      includedRegionCodes:['tw'],
+      origin:center,
+      locationBias:{center,radius:50000}
+    };
+    const {suggestions} = await AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
+    return (suggestions||[]).map(s=>s.placePrediction).filter(Boolean).slice(0,6);
+  }catch(err){
+    console.warn('Places autocomplete unavailable', err);
+    return [];
+  }
+}
+async function placePredictionToCandidate(prediction){
+  const place = prediction.toPlace();
+  await place.fetchFields({fields:['displayName','formattedAddress','location','viewport','id']});
+  const loc=place.location;
+  if(!loc) throw new Error('Google Places 未回傳座標');
+  return {
+    lat:typeof loc.lat==='function'?loc.lat():loc.lat,
+    lng:typeof loc.lng==='function'?loc.lng():loc.lng,
+    formattedAddress:place.formattedAddress || prediction.text?.toString() || '',
+    placeId:place.id || prediction.placeId || '',
+    source:'google-address',
+    viewport:place.viewport || null
+  };
+}
+function scheduleAddressSuggestions(context='location'){
+  clearTimeout(addressSuggestTimer);
+  const input = context==='case' ? $('caseAddress') : $('locationAddressInput');
+  const list = context==='case' ? $('caseAddressCandidateList') : $('locationCandidateList');
+  if(!input || !list) return;
+  if(context==='case') pendingCasePlace=null;
+  const value=input.value.trim();
+  if(value.length<3){ list.innerHTML=''; return; }
+  addressSuggestTimer=setTimeout(()=>renderAddressSuggestions(context,value),350);
+}
+async function renderAddressSuggestions(context,inputValue){
+  const input = context==='case' ? $('caseAddress') : $('locationAddressInput');
+  const list = context==='case' ? $('caseAddressCandidateList') : $('locationCandidateList');
+  if(!input || !list || input.value.trim()!==inputValue.trim()) return;
+  list.innerHTML='<div class="location-loading">Google 地址候選搜尋中…</div>';
+  try{
+    const predictions=await fetchPlaceSuggestions(inputValue,context);
+    if(input.value.trim()!==inputValue.trim()) return;
+    if(!predictions.length){
+      const geos=await googleGeocodeCandidates(inputValue);
+      renderGeocodeCandidateButtons(context,geos);
+      return;
+    }
+    list.innerHTML=predictions.map((p,i)=>`<button type="button" class="location-candidate" data-place-prediction="${i}"><b>${escapeHtml(p.text?.toString()||'Google 地址候選')}</b><span>Google Places</span></button>`).join('')+'<div class="powered-by-google-note">Powered by Google</div>';
+    list.querySelectorAll('[data-place-prediction]').forEach(btn=>btn.addEventListener('click',async()=>{
+      const candidate=await placePredictionToCandidate(predictions[Number(btn.dataset.placePrediction)]);
+      autocompleteSessionToken=null;
+      if(context==='case'){
+        pendingCasePlace=candidate;
+        $('caseAddress').value=candidate.formattedAddress;
+        list.innerHTML='<div class="location-selected">已選定 Google 地址；建立案件後仍可用現場 GPS 校正。</div>';
+      }else{
+        $('locationAddressInput').value=candidate.formattedAddress;
+        await setIncidentLocation(candidate,false);
+        list.innerHTML='<div class="location-selected">已套用 Google 地址，請比對 GPS 或地圖後鎖定。</div>';
+      }
+    }));
+  }catch(err){
+    list.innerHTML=`<div class="location-error">地址候選載入失敗：${escapeHtml(err.message||String(err))}</div>`;
+  }
+}
+function renderGeocodeCandidateButtons(context,candidates=[]){
+  const list=context==='case'?$('caseAddressCandidateList'):$('locationCandidateList');
+  if(!list) return;
+  if(!candidates.length){ list.innerHTML='<div class="location-error">找不到 Google 地址候選，請執行定位診斷或改用現場 GPS。</div>'; return; }
+  list.innerHTML=candidates.slice(0,5).map((c,i)=>`<button type="button" class="location-candidate" data-geocode-candidate="${i}"><b>${escapeHtml(c.formattedAddress)}</b><span>${Number(c.lat).toFixed(6)}, ${Number(c.lng).toFixed(6)}</span></button>`).join('');
+  list.querySelectorAll('[data-geocode-candidate]').forEach(btn=>btn.addEventListener('click',async()=>{
+    const c=candidates[Number(btn.dataset.geocodeCandidate)];
+    if(context==='case'){
+      pendingCasePlace=c; $('caseAddress').value=c.formattedAddress;
+      list.innerHTML='<div class="location-selected">已選定 Google 地址；建立案件後仍可用 GPS 校正。</div>';
+    }else{
+      $('locationAddressInput').value=c.formattedAddress;
+      await setIncidentLocation(c,false);
+      list.innerHTML='<div class="location-selected">已套用 Google 地址，請確認後鎖定。</div>';
+    }
+  }));
+}
+function getLocationMeta(){ return currentCase?.locationMeta || {}; }
+function locationSourceLabel(source=''){
+  return ({'google-address':'Google 地址','gps':'現場 GPS','manual':'手動地圖','fallback':'備援中心','legacy':'既有資料'})[source] || '未確認';
+}
+function locationQualityLabel(meta={}){
+  if(meta.locked) return '已確認並鎖定';
+  if(meta.source==='google-address') return 'Google 地址待現場確認';
+  if(meta.source==='gps') return `GPS 待確認${meta.accuracy?`（±${Math.round(meta.accuracy)}m）`:''}`;
+  if(meta.source==='manual') return '手動地圖待確認';
+  return '尚未確認';
+}
 async function geocodeAddress(address){
   const normalized = normalizeAddress(address);
-  const candidates = [normalized, `${normalized} 台灣`, `${normalized} New Taipei City Taiwan`];
-  for(const qRaw of candidates){
-    try{
-      const q = encodeURIComponent(qRaw);
-      const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&countrycodes=tw&accept-language=zh-TW&viewbox=121.30,25.33,121.90,24.80&bounded=1&q=${q}`;
-      const res = await fetch(url);
-      const data = await res.json();
-      if(Array.isArray(data) && data.length){
-        const preferred = data.find(isNewTaipeiResult) || data[0];
-        return { lat:Number(preferred.lat), lng:Number(preferred.lon) };
-      }
-    }catch(err){ console.warn(err); }
+  if(pendingCasePlace && normalizeAddress(pendingCasePlace.formattedAddress)===normalized) return pendingCasePlace;
+  try{
+    const candidates = await googleGeocodeCandidates(normalized);
+    if(candidates.length===1) return candidates[0];
+    if(candidates.length>1){
+      const selected = await chooseLocationCandidate(candidates, normalized);
+      if(selected) return selected;
+    }
+  }catch(err){
+    console.warn('Google geocode unavailable', err);
+    toast(`Google 地址定位失敗：${err.message||err}。案件仍可建立，請進入部署頁使用 GPS 或手動定位。`,5200);
   }
-  toast('地址定位未找到精準點，先使用行政區中心點，進入後可拖曳標記修正。', 4200);
-  return fallbackCenter(normalized);
+  return {...fallbackCenter(normalized), source:'fallback', formattedAddress:normalized, placeId:'', unverified:true};
 }
+function chooseLocationCandidate(candidates,address){
+  return new Promise(resolve=>{
+    const rows=candidates.slice(0,5).map((c,i)=>`<button type="button" class="action-option" data-location-choice="${i}"><b>${escapeHtml(c.formattedAddress)}</b><div class="diagnostic-detail">${Number(c.lat).toFixed(6)}, ${Number(c.lng).toFixed(6)}</div></button>`).join('');
+    openActionSheet('請選擇正確門牌',`<div class="notice compact">Google 找到多個結果，請選擇正確地址；取消後會以未確認中心建立案件。</div><div class="action-grid">${rows}<button type="button" class="action-option danger" data-location-choice="cancel">暫不選擇，稍後以 GPS 校正</button></div>`);
+    const body=$('appActionBody');
+    body.querySelectorAll('[data-location-choice]').forEach(btn=>btn.addEventListener('click',()=>{
+      const value=btn.dataset.locationChoice;
+      closeActionSheet();
+      resolve(value==='cancel'?null:candidates[Number(value)]);
+    },{once:true}));
+  });
+}
+
 
 
 function backHome(){
@@ -639,6 +935,7 @@ function backHome(){
 function openCase(id){
   cleanupSubscriptions(); currentCaseId = id;
   $('homePage').hidden=true; $('detailPage').hidden=false;
+  switchCasePage('caseInfo', false);
   if(firebaseEnabled){ subscribeCaseRemote(id); }
   else { loadCaseLocal(id); }
   setTimeout(()=>{ initMap(); renderMap(); }, 120);
@@ -680,19 +977,25 @@ function renderDetail(){
   $('adminSection') && ($('adminSection').hidden = true);
   $('arrivedCheck').checked = !!currentCase.arrived;
   $('commandCheck').checked = !!currentCase.commandTransfer;
+  setRadioValue('commandState', currentCase.commandState || (currentCase.commandTransfer ? 'transferred' : ''));
   $('ritCheck').checked = !!currentCase.ritSet;
   $('hazardCheck').checked = !!currentCase.hazardChecked;
   $('firstSideCheck').checked = !!currentCase.firstSideSet;
+  setRadioValue('firstSideState', currentCase.firstSideState || (currentCase.firstSideSet ? 'set' : ''));
   $('parCheck').checked = !!currentCase.parRequested;
   $('supportCheck').checked = !!currentCase.supportNeeded || (currentCase.supports||[]).length>0;
+  setRadioValue('supportState', currentCase.supportState || ((currentCase.supportNeeded || (currentCase.supports||[]).length) ? 'needed' : ''));
   $('addressConfirmCheck') && ($('addressConfirmCheck').checked = !!currentCase.addressConfirmed);
   $('arrivalAddressNote') && ($('arrivalAddressNote').value = currentCase.arrivalAddressNote || '');
-  $('contactCheck') && ($('contactCheck').checked = !!currentCase.contactFound);
+  $('contactCheck') && ($('contactCheck').checked = !!currentCase.contactFound || currentCase.contactState==='notfound');
   $('contactFoundCheck') && ($('contactFoundCheck').checked = !!currentCase.contactFound);
+  setRadioValue('contactState', currentCase.contactState || (currentCase.contactFound ? 'found' : ''));
   renderContactRows(currentCase.contacts || []);
   $('commandSituation') && ($('commandSituation').value = currentCase.commandSituation || '');
+  setRadioValue('ritState', currentCase.ritState || (currentCase.ritSet ? 'assigned' : ''));
   $('ritUnit') && ($('ritUnit').value = currentCase.ritUnit || '');
   $('ritNote') && ($('ritNote').value = currentCase.ritNote || '');
+  setRadioValue('hazardState', currentCase.hazardState || (currentCase.hazardChecked ? 'has' : ''));
   $('hazardItems') && ($('hazardItems').value = currentCase.hazardItems || '');
   $('hazardContact') && ($('hazardContact').value = currentCase.hazardContact || '');
   $('hazardPhone') && ($('hazardPhone').value = currentCase.hazardPhone || '');
@@ -718,16 +1021,20 @@ function renderDetail(){
   syncSummaryVictimDetails();
   applySupportValues(currentCase.supports || []);
   $('breakDoorCheck') && ($('breakDoorCheck').checked = !!currentCase.breakDoor);
+  setRadioValue('breakDoorState', currentCase.breakDoorState || (currentCase.breakDoor ? 'required' : ''));
   $('breakDoorCommanderReport') && ($('breakDoorCommanderReport').checked = !!currentCase.breakDoorCommanderReport);
   $('breakDoorCenterReport') && ($('breakDoorCenterReport').checked = !!currentCase.breakDoorCenterReport);
   $('breakDoorAt') && ($('breakDoorAt').value = currentCase.breakDoorAt ? toDatetimeLocalValue(currentCase.breakDoorAt) : '');
   $('breakDoorUnit') && ($('breakDoorUnit').value = currentCase.breakDoorUnit || '');
   $('breakDoorNote') && ($('breakDoorNote').value = currentCase.breakDoorNote || '');
   $('cordonCheck') && ($('cordonCheck').checked = !!currentCase.cordonSet);
+  setRadioValue('cordonState', currentCase.cordonState || (currentCase.cordonSet ? 'set' : ''));
   $('cordonAssignedCheck') && ($('cordonAssignedCheck').checked = !!currentCase.cordonAssigned);
   $('cordonUnit') && ($('cordonUnit').value = currentCase.cordonUnit || '');
   $('cordonArea') && ($('cordonArea').value = currentCase.cordonArea || '');
   $('cordonNote') && ($('cordonNote').value = currentCase.cordonNote || '');
+  updateArrivalConditionalPanels();
+  renderLocationControl();
   renderSummaryCards(); renderArrivalStatusCards(); renderCommandGuide(); renderBuildingOps(); renderLocalTacticalAdvice(false); updateAiAdviceButton(); updateAssessmentAvailability(); renderLiveParts(); maybeAutoAiAdvice();
 }
 function renderSummaryCards(){
@@ -740,7 +1047,7 @@ function renderSummaryCards(){
 }
 function renderLiveParts(){
   if(!currentCase) return;
-  renderSummaryCards(); renderToolOptions(); renderMap(); renderDashboard(); renderRules(); renderSitreps(); renderLogs(); renderCommandGuide(); renderBuildingOps(); renderLocalTacticalAdvice(false); updateAiAdviceButton(); updateAssessmentAvailability(); renderParCrewChecklist(); generateReport(false);
+  renderSummaryCards(); renderToolOptions(); renderDeploymentPalette(); renderMap(); renderLocationControl(); renderDashboard(); renderRules(); renderSitreps(); renderLogs(); renderCommandGuide(); renderBuildingOps(); renderLocalTacticalAdvice(false); updateAiAdviceButton(); updateAssessmentAvailability(); renderParCrewChecklist(); generateReport(false);
 }
 function renderToolOptions(){
   const canHose = live.vehicles.filter(v => v.canHose);
@@ -760,26 +1067,101 @@ function renderToolOptions(){
     $('hoseTarget').innerHTML = '<option value="">請點地圖目的地</option>';
   }
 }
-async function saveCaseInfo(showToast=true){
+function setDeploymentMode(mode='select'){
+  deploymentMode=mode;
+  document.querySelectorAll('[data-deploy-mode]').forEach(btn=>{
+    const active=btn.dataset.deployMode===mode;
+    btn.classList.toggle('primary',active); btn.classList.toggle('ghost',!active);
+  });
+  selectedMapResource=null;
+  if(mode!=='hose' && pendingTool?.type==='hoseConnect') pendingTool=null;
+  const hint=$('deploymentActionHint');
+  if(hint) hint.textContent=mode==='hose'?'水線模式：先點可接水線車輛，再點另一台車、人員編組或地圖位置。':mode==='hazard'?'危害模式：點下方危害圖示，再點地圖放置。':'選取模式：點資源後再點地圖，或直接拖曳地圖上的標示。';
+  renderDeploymentPalette();
+}
+function renderDeploymentPalette(){
+  const wrap=$('mapResourcePalette'); if(!wrap) return;
+  const vehicleHtml=live.vehicles.map(v=>`<article class="resource-chip ${selectedMapResource?.coll==='vehicles'&&selectedMapResource?.id===v.id?'active':''}" draggable="true" data-resource-coll="vehicles" data-resource-id="${v.id}" data-resource-label="${escapeHtml(v.name)}"><b>${vehEmoji(v.type)} ${escapeHtml(v.name)}</b><span>${escapeHtml(v.unit)}｜${escapeHtml(v.task||v.status||'待命')}</span><div class="resource-chip-actions">${v.canHose?`<button type="button" data-resource-action="quickHose" data-resource-id="${v.id}">拉水線</button>`:''}<button type="button" data-map-action="editVehicle" data-id="${v.id}">修改</button></div></article>`).join('');
+  const crewHtml=live.crews.map(c=>`<article class="resource-chip ${selectedMapResource?.coll==='crews'&&selectedMapResource?.id===c.id?'active':''}" draggable="true" data-resource-coll="crews" data-resource-id="${c.id}" data-resource-label="${escapeHtml(c.unit+c.leader)}"><b>👥 ${escapeHtml(c.unit)}${escapeHtml(c.leader)}</b><span>${c.count||0}人｜${escapeHtml(c.task||c.status||'待命')}</span><div class="resource-chip-actions"><button type="button" data-map-action="editCrew" data-id="${c.id}">修改</button><button type="button" data-map-action="restCrew" data-mode="原地休息" data-id="${c.id}">休息</button></div></article>`).join('');
+  const hazards=['起火點','指揮站','前進指揮所','休息區','瓦斯','高壓電','危險物'].map(t=>`<button type="button" class="resource-chip quick-symbol" data-resource-action="newHazard" data-hazard-type="${t}"><b>${hazEmoji(t)} ${t}</b><span>點選後再點地圖</span></button>`).join('');
+  wrap.innerHTML=(vehicleHtml+crewHtml+hazards)||'<div class="resource-empty">尚無人車資料；可先使用下方表單新增。</div>';
+  wrap.querySelectorAll('[draggable="true"]').forEach(el=>el.addEventListener('dragstart',ev=>{
+    ev.dataTransfer.setData('application/json',JSON.stringify({coll:el.dataset.resourceColl,id:el.dataset.resourceId,label:el.dataset.resourceLabel||''}));
+  }));
+}
+function selectMapResource(coll,id){
+  const item=(live[coll]||[]).find(x=>x.id===id); if(!item) return;
+  if(deploymentMode==='hose' && coll==='vehicles'){
+    if(!item.canHose){ toast('此車輛類型不可建立水線'); return; }
+    beginQuickHose(id); return;
+  }
+  selectedMapResource={coll,id};
+  pendingTool={type:'moveExisting',coll,id};
+  toast(`已選擇 ${item.name||item.unit||'資源'}，請點地圖部署位置。`,3600);
+  renderDeploymentPalette();
+}
+function handleResourceAction(btn){
+  const action=btn.dataset.resourceAction;
+  if(action==='quickHose') return beginQuickHose(btn.dataset.resourceId);
+  if(action==='newHazard'){
+    setDeploymentMode('hazard');
+    startHazardTool(btn.dataset.hazardType||'危險物');
+  }
+}
+function firstAvailableHosePort(vehicleId){
+  const used=new Set(live.hoses.filter(h=>h.vehicleId===vehicleId).map(h=>String(h.port||'')));
+  return ['1線','2線','3線','4線'].find(x=>!used.has(x))||'1線';
+}
+function beginQuickHose(vehicleId){
+  const v=live.vehicles.find(x=>x.id===vehicleId); if(!v) return;
+  if(!v.canHose){ toast('此車輛不可接水線'); return; }
+  setDeploymentMode('hose');
+  pendingTool={type:'hoseConnect',vehicleId:v.id,vehicleName:v.name,unit:v.unit,owner:v.unit||profile?.unit||'',port:firstAvailableHosePort(v.id),task:'水線作業',kind:'進攻水線',targetType:'map',targetId:''};
+  selectedMapResource={coll:'vehicles',id:v.id};
+  toast(`已選擇 ${v.name} ${pendingTool.port}；請點目標車輛、人員或地圖位置。`,4800);
+  renderDeploymentPalette();
+}
+function completeQuickHoseTarget(targetType,item){
+  if(!pendingTool || !['hoseConnect','hoseReconnect'].includes(pendingTool.type)) return false;
+  if(targetType==='vehicle' && item.id===pendingTool.vehicleId){ toast('水線終點不能是同一台來源車輛'); return true; }
+  const tool={...pendingTool,targetType,targetId:item.id};
+  const reconnect=pendingTool.type==='hoseReconnect';
+  pendingTool=null; selectedMapResource=null;
+  if(reconnect){
+    const targetName=targetType==='vehicle'?`${item.name}｜${item.unit}`:`${item.unit}${item.leader}｜${item.count}人`;
+    updateItem('hoses',tool.hoseId,{targetType,targetId:item.id,targetName,lat:null,lng:null}).then(()=>addLog('hose',`重新指定水線終點：${targetName}`)).then(()=>{renderDeploymentPalette();renderMap();});
+  }else addHoseToTarget(tool).then(()=>{ renderDeploymentPalette(); renderMap(); });
+  return true;
+}
+
+async function saveCaseInfo(showToast=true, logChange=true){
   if(!currentCase) return;
-  const supports = readSupports();
+  const supports = getRadioValue('supportState') === 'needed' ? readSupports() : [];
   const patch = {
-    arrived:$('arrivedCheck').checked,
-    commandTransfer:$('commandCheck').checked,
-    contactFound: $('contactCheck')?.checked || $('contactFoundCheck')?.checked || false,
-    contacts: readContacts(),
-    ritSet:$('ritCheck').checked,
-    hazardChecked:$('hazardCheck').checked,
-    firstSideSet:$('firstSideCheck').checked,
+    arrived:!!$('addressConfirmCheck')?.checked,
+    commandState:getRadioValue('commandState') || '',
+    commandTransfer:getRadioValue('commandState') === 'transferred',
+    contactState: getRadioValue('contactState') || '',
+    contactFound: getRadioValue('contactState') === 'found',
+    contacts: getRadioValue('contactState') === 'found' ? readContacts() : [],
+    ritState: getRadioValue('ritState') || '',
+    ritSet:getRadioValue('ritState') === 'assigned',
+    hazardState: getRadioValue('hazardState') || '',
+    hazardChecked:getRadioValue('hazardState') === 'has' || getRadioValue('hazardState') === 'none',
+    firstSideState:getRadioValue('firstSideState') || '',
+    firstSideSet:getRadioValue('firstSideState') === 'set',
     parRequested:$('parCheck').checked,
-    supportNeeded:$('supportCheck')?.checked || supports.length>0,
-    breakDoor: $('breakDoorCheck')?.checked || false,
+    supportState:getRadioValue('supportState') || '',
+    supportNeeded:getRadioValue('supportState') === 'needed',
+    breakDoorState:getRadioValue('breakDoorState') || '',
+    breakDoor:getRadioValue('breakDoorState') === 'required',
     breakDoorCommanderReport: $('breakDoorCommanderReport')?.checked || false,
     breakDoorCenterReport: $('breakDoorCenterReport')?.checked || false,
     breakDoorAt: datetimeLocalToMs($('breakDoorAt')?.value) || null,
     breakDoorUnit: $('breakDoorUnit')?.value || '',
     breakDoorNote: $('breakDoorNote')?.value || '',
-    cordonSet: $('cordonCheck')?.checked || false,
+    cordonState:getRadioValue('cordonState') || '',
+    cordonSet:getRadioValue('cordonState') === 'set',
     cordonAssigned: $('cordonAssignedCheck')?.checked || false,
     cordonUnit: $('cordonUnit')?.value || '',
     cordonArea: $('cordonArea')?.value || '',
@@ -806,7 +1188,7 @@ async function saveCaseInfo(showToast=true){
   Object.assign(currentCase, patch);
   if(firebaseEnabled) await db.collection('cases').doc(currentCaseId).set(patch,{merge:true});
   else { saveLocalCase(); renderDetail(); }
-  await addLog('arrival','更新到場回報 / 到建火人支初資訊');
+  if(logChange) await addLog('arrival','更新到場回報 / 到建火人支初資訊');
   renderArrivalStatusCards(); renderCommandGuide();
   if(showToast) toast('已儲存到場回報');
 }
@@ -833,8 +1215,8 @@ function renderContactRows(rows=[]){
     <div class="field"><label>補充</label><input class="arrival-detail-input contact-note" value="${escapeHtml(r.note||'')}" placeholder="關係人說明、鑰匙、樓層、住戶資訊" /></div>
     <button type="button" class="btn small ghost" data-delete-contact="${i}">刪除此關係人</button>
   </div>`).join('');
-  wrap.querySelectorAll('[data-delete-contact]').forEach(btn => btn.addEventListener('click', () => { const arr = readContacts(); arr.splice(Number(btn.dataset.deleteContact),1); renderContactRows(arr); saveCaseInfo(false); }));
-  wrap.querySelectorAll('input').forEach(el => el.addEventListener('change', () => { $('contactCheck') && ($('contactCheck').checked = readContacts().length>0 || $('contactFoundCheck')?.checked); renderArrivalStatusCards(); renderCommandGuide(); saveCaseInfo(false); }));
+  wrap.querySelectorAll('[data-delete-contact]').forEach(btn => btn.addEventListener('click', () => { const arr = readContacts(); arr.splice(Number(btn.dataset.deleteContact),1); renderContactRows(arr); saveCaseInfo(false,false); }));
+  wrap.querySelectorAll('input').forEach(el => el.addEventListener('change', () => { $('contactCheck') && ($('contactCheck').checked = getRadioValue('contactState')==='found' || getRadioValue('contactState')==='notfound'); renderArrivalStatusCards(); renderCommandGuide(); saveCaseInfo(false,false); }));
 }
 function addContactRow(){ const arr = readContacts(); arr.push(emptyContact()); renderContactRows(arr); }
 function readContacts(){
@@ -855,50 +1237,316 @@ async function saveExtraNotes(){
   await addLog('case','更新案件補充資料'); toast('已儲存補充資料');
 }
 
-function initMap(){
-  if(map) { setTimeout(()=> map.invalidateSize(), 100); return; }
-  map = L.map('map', { zoomControl:true }).setView([currentCase?.lat || DEFAULT_CENTER.lat, currentCase?.lng || DEFAULT_CENTER.lng], 17);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 20, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
-  mapLayers = L.layerGroup().addTo(map);
-  map.on('click', handleMapClick);
-  setTimeout(()=> map.invalidateSize(), 200);
+function renderLocationControl(){
+  if(!currentCase) return;
+  const meta = getLocationMeta();
+  const input = $('locationAddressInput');
+  if(input && document.activeElement !== input) input.value = meta.queryAddress || currentCase.address || '';
+  const panel = $('locationStatusPanel');
+  if(panel){
+    const gps = meta.gpsLat && meta.gpsLng ? `${Number(meta.gpsLat).toFixed(6)}, ${Number(meta.gpsLng).toFixed(6)}${meta.gpsAccuracy?`（±${Math.round(meta.gpsAccuracy)}m）`:''}` : '尚未取得';
+    const delta = Number(meta.addressGpsDistanceM);
+    const deltaText = Number.isFinite(delta) ? `${Math.round(delta)}m` : '尚未比對';
+    const tone = Number.isFinite(delta) ? (delta>300?'danger':delta>100?'warning':'good') : 'neutral';
+    panel.innerHTML = `<div class="location-status-grid">
+      <div><span>定位來源</span><b>${escapeHtml(locationSourceLabel(meta.source || 'legacy'))}</b></div>
+      <div><span>案件中心</span><b>${Number(currentCase.lat||0).toFixed(6)}, ${Number(currentCase.lng||0).toFixed(6)}</b></div>
+      <div><span>現場 GPS</span><b>${escapeHtml(gps)}</b></div>
+      <div class="${tone}"><span>地址 / GPS 差距</span><b>${escapeHtml(deltaText)}</b></div>
+      <div class="wide"><span>確認狀態</span><b>${escapeHtml(locationQualityLabel(meta))}${meta.formattedAddress?`｜${escapeHtml(meta.formattedAddress)}`:''}</b></div>
+    </div>`;
+  }
+  const lockBtn=$('confirmIncidentLocationBtn'), unlockBtn=$('unlockIncidentLocationBtn');
+  if(lockBtn) lockBtn.hidden = !!meta.locked;
+  if(unlockBtn) unlockBtn.hidden = !meta.locked;
+}
+async function searchGoogleAddress(){
+  const input=$('locationAddressInput');
+  const address=normalizeAddress(input?.value || currentCase?.address || '');
+  if(!address){ toast('請先輸入地址'); return; }
+  const list=$('locationCandidateList');
+  if(list) list.innerHTML='<div class="location-loading">Google 地址搜尋中…</div>';
+  try{
+    const candidates=await googleGeocodeCandidates(address);
+    if(!candidates.length) throw new Error('沒有找到候選地址');
+    if(list){
+      list.innerHTML = candidates.slice(0,5).map((c,i)=>`<button type="button" class="location-candidate" data-location-candidate="${i}"><b>${escapeHtml(c.formattedAddress)}</b><span>${Number(c.lat).toFixed(6)}, ${Number(c.lng).toFixed(6)}</span></button>`).join('');
+      list.querySelectorAll('[data-location-candidate]').forEach(btn=>btn.addEventListener('click', async()=>{
+        const candidate=candidates[Number(btn.dataset.locationCandidate)];
+        await setIncidentLocation(candidate, false);
+        if(list) list.innerHTML='<div class="location-selected">已套用 Google 地址候選，請在地圖確認後鎖定案件中心。</div>';
+      }));
+    }
+  }catch(err){
+    if(list) list.innerHTML=`<div class="location-error">Google 地址搜尋失敗：${escapeHtml(err.message)}。請確認已在 Vercel 設定 GOOGLE_MAPS_BROWSER_KEY，並啟用 Maps JavaScript API、Places API（New）及 Geocoding API。</div>`;
+  }
+}
+async function useCurrentGps(){
+  if(!navigator.geolocation){ toast('此瀏覽器不支援 GPS 定位'); return; }
+  if(gpsWatchId!==null){ navigator.geolocation.clearWatch(gpsWatchId); gpsWatchId=null; }
+  const samples=[];
+  const started=Date.now();
+  const panel=$('locationStatusPanel');
+  toast('正在連續取樣 GPS，將自動採用精度最佳的位置…',5000);
+  const finish=async(reason='timeout')=>{
+    if(gpsWatchId!==null){ navigator.geolocation.clearWatch(gpsWatchId); gpsWatchId=null; }
+    if(!samples.length){ toast('尚未取得 GPS；請檢查定位權限、GPS 與網路。',4200); return; }
+    samples.sort((a,b)=>a.accuracy-b.accuracy);
+    const best=samples[0];
+    const loc={lat:best.lat,lng:best.lng,source:'gps',formattedAddress:currentCase?.address||'',accuracy:best.accuracy,gpsLat:best.lat,gpsLng:best.lng,gpsAccuracy:best.accuracy,gpsSampleCount:samples.length,gpsSampleDurationMs:Date.now()-started};
+    await setIncidentLocation(loc,false);
+    const quality=best.accuracy<=30?'良好':best.accuracy<=80?'可用但需確認':'精度偏差，請手動校正';
+    toast(`GPS 取樣完成：±${Math.round(best.accuracy)}m（${quality}），請確認後鎖定案件中心。`,4800);
+  };
+  const timer=setTimeout(()=>finish('timeout'),18000);
+  gpsWatchId=navigator.geolocation.watchPosition(pos=>{
+    const c=pos.coords;
+    samples.push({lat:c.latitude,lng:c.longitude,accuracy:Number(c.accuracy||9999),ts:pos.timestamp||Date.now()});
+    samples.sort((a,b)=>a.accuracy-b.accuracy);
+    const best=samples[0];
+    if(panel) panel.insertAdjacentHTML('afterbegin',`<div class="location-selected" data-gps-progress="1">GPS 取樣 ${samples.length} 筆｜目前最佳 ±${Math.round(best.accuracy)}m</div>`);
+    panel?.querySelectorAll('[data-gps-progress]').forEach((x,i)=>{ if(i>0)x.remove(); });
+    if(best.accuracy<=20 && samples.length>=2){ clearTimeout(timer); finish('good'); }
+  },err=>{
+    clearTimeout(timer);
+    if(gpsWatchId!==null){ navigator.geolocation.clearWatch(gpsWatchId); gpsWatchId=null; }
+    const msg=({1:'定位權限未允許，請在常見故障排除依 iOS / Android 步驟開啟。',2:'目前無法取得位置，請確認 GPS、網路與室外環境。',3:'定位逾時，請稍候再試或改用手動設定。'})[err.code]||'無法取得目前位置';
+    toast(msg,4600);
+  },{enableHighAccuracy:true,maximumAge:0,timeout:12000});
+}
+function beginManualIncidentCenter(){
+  if(getLocationMeta().locked){ toast('案件中心已鎖定，請先解除鎖定後再調整。'); return; }
+  pendingTool={type:'incidentCenter'};
+  toast('請在地圖上點選正確火場中心 / 入口附近位置。', 3600);
+}
+async function setIncidentLocation(loc, confirmed=false){
+  if(!currentCase) return;
+  const currentMeta=getLocationMeta();
+  if(currentMeta.locked && !confirmed){ toast('案件中心已鎖定，請先解除鎖定後再調整。'); return; }
+  const source=loc.source || 'manual';
+  const meta={...currentMeta,
+    source, formattedAddress:loc.formattedAddress || currentMeta.formattedAddress || currentCase.address || '', placeId:loc.placeId || currentMeta.placeId || '',
+    queryAddress:$('locationAddressInput')?.value || currentMeta.queryAddress || currentCase.address || '',
+    accuracy:loc.accuracy ?? currentMeta.accuracy ?? null,
+    gpsLat:loc.gpsLat ?? currentMeta.gpsLat ?? null, gpsLng:loc.gpsLng ?? currentMeta.gpsLng ?? null, gpsAccuracy:loc.gpsAccuracy ?? currentMeta.gpsAccuracy ?? null,
+    unverified:source==='fallback', locked:confirmed ? true : false, confirmed:confirmed ? true : false,
+    updatedAt:Date.now(), updatedBy:profile?.callName || ''};
+  if(meta.gpsLat && meta.gpsLng && source==='google-address') meta.addressGpsDistanceM=distanceMeters({lat:loc.lat,lng:loc.lng},{lat:meta.gpsLat,lng:meta.gpsLng});
+  if(source==='gps' && currentMeta.addressLat && currentMeta.addressLng) meta.addressGpsDistanceM=distanceMeters({lat:currentMeta.addressLat,lng:currentMeta.addressLng},{lat:loc.lat,lng:loc.lng});
+  if(source==='google-address'){ meta.addressLat=loc.lat; meta.addressLng=loc.lng; }
+  const patch={lat:Number(loc.lat),lng:Number(loc.lng),locationMeta:meta,updatedAt:Date.now()};
+  Object.assign(currentCase,patch);
+  if(firebaseEnabled) await db.collection('cases').doc(currentCaseId).set(patch,{merge:true}); else { saveLocalCase(); renderDetail(); }
+  await addLog('map', `更新案件中心：${locationSourceLabel(source)}${confirmed?'，並鎖定':''}`);
+  if(map){ map.setCenter({lat:Number(loc.lat),lng:Number(loc.lng)}); if((map.getZoom()||0)<17) map.setZoom(17); }
+  renderLocationControl(); renderMap();
+}
+async function confirmIncidentLocation(){
+  if(!currentCase) return;
+  const meta=getLocationMeta();
+  await setIncidentLocation({lat:currentCase.lat,lng:currentCase.lng,source:meta.source||'manual',formattedAddress:meta.formattedAddress||currentCase.address,placeId:meta.placeId||'',accuracy:meta.accuracy||null}, true);
+  toast('案件中心已確認並鎖定；後續部署將以此中心為基準。', 3600);
+}
+async function unlockIncidentLocation(){
+  if(!currentCase) return;
+  const meta={...getLocationMeta(),locked:false,confirmed:false,updatedAt:Date.now(),updatedBy:profile?.callName||''};
+  const patch={locationMeta:meta,updatedAt:Date.now()}; Object.assign(currentCase,patch);
+  if(firebaseEnabled) await db.collection('cases').doc(currentCaseId).set(patch,{merge:true}); else saveLocalCase();
+  await addLog('map','解除案件中心鎖定');
+  renderLocationControl(); renderMap(); toast('已解除案件中心鎖定，可重新定位或拖曳修正。');
+}
+
+async function runMapDiagnostics(){
+  const panel=$('mapDiagnosticsPanel');
+  if(panel) panel.innerHTML='<div class="location-loading">正在檢查 Google Maps、Places、GPS 與網域設定…</div>';
+  const rows=[];
+  const add=(name,status,detail='')=>rows.push({name,status,detail});
+  try{
+    googleMapsConfig=null;
+    const cfg=await fetchGoogleMapsConfig();
+    add('Vercel maps-config',cfg?.enabled?'good':'danger',cfg?.enabled?`已讀取瀏覽器金鑰；版本 ${cfg.version||'未知'}`:'GOOGLE_MAPS_BROWSER_KEY 未設定或目前部署讀不到');
+    add('目前網站來源',location.protocol==='https:'?'good':'danger',location.origin);
+    if(cfg?.enabled){
+      try{
+        await loadGoogleMapsClient();
+        add('Maps JavaScript API','good','Google 地圖核心已載入');
+      }catch(err){ add('Maps JavaScript API','danger',err.message||String(err)); }
+      if(window.google?.maps?.Geocoder){
+        try{
+          const geocoder=new google.maps.Geocoder();
+          const query=normalizeGoogleAddress(currentCase?.address||'新北市政府消防局');
+          const resp=await geocoder.geocode({address:query,region:'TW',componentRestrictions:{country:'TW'}});
+          add('Geocoding API',resp?.results?.length?'good':'warning',resp?.results?.length?`找到 ${resp.results.length} 筆結果`:'沒有回傳地址結果');
+        }catch(err){ add('Geocoding API','danger',err.message||String(err)); }
+      }else add('Geocoding API','danger','Geocoder 未載入');
+      try{
+        const places=await google.maps.importLibrary?.('places');
+        add('Places API（New）',places?.AutocompleteSuggestion?'good':'warning',places?.AutocompleteSuggestion?'AutocompleteSuggestion 可用':'Places 已載入，但 AutocompleteSuggestion 不可用');
+      }catch(err){ add('Places API（New）','danger',err.message||String(err)); }
+    }
+    if(!navigator.geolocation) add('手機 GPS','danger','瀏覽器不支援 Geolocation');
+    else if(navigator.permissions?.query){
+      try{ const perm=await navigator.permissions.query({name:'geolocation'}); add('手機 GPS 權限',perm.state==='denied'?'danger':perm.state==='prompt'?'warning':'good',perm.state); }
+      catch{ add('手機 GPS 權限','warning','此瀏覽器無法預先查詢，請直接點「使用目前 GPS」'); }
+    }else add('手機 GPS 權限','warning','iOS Safari 通常需在實際定位時確認權限');
+    add('地圖底圖',mapReady?'good':mapLoadError?'danger':'warning',mapReady?'Google Maps 已顯示':mapLoadError||'尚未開啟部署頁或地圖尚未初始化');
+  }catch(err){ add('定位診斷','danger',err.message||String(err)); }
+  const label={good:'正常',warning:'注意',danger:'失敗'};
+  lastMapDiagnostics=[`FireCommand v22 定位診斷｜${new Date().toLocaleString('zh-TW',{hour12:false})}`,...rows.map(r=>`${r.name}：${label[r.status]}｜${r.detail}`)].join('\n');
+  if(panel) panel.innerHTML=rows.map(r=>`<div class="diagnostic-row ${r.status}"><span>${escapeHtml(r.name)}</span><b>${label[r.status]}</b><div class="diagnostic-detail">${escapeHtml(r.detail)}</div></div>`).join('');
+  return rows;
+}
+function copyMapDiagnostics(){
+  if(!lastMapDiagnostics){ runMapDiagnostics().then(copyMapDiagnostics); return; }
+  navigator.clipboard?.writeText(lastMapDiagnostics);
+  toast('已複製定位診斷結果；內容不包含完整 API Key。');
+}
+
+async function initMap(force=false){
+  if(map && !force){ refreshMapSize(); renderMap(); return; }
+  try{
+    await loadGoogleMapsClient(force);
+    const el=$('map');
+    if(!el) return;
+    clearMapOverlays();
+    map = new google.maps.Map(el, {
+      center:{lat:Number(currentCase?.lat||DEFAULT_CENTER.lat),lng:Number(currentCase?.lng||DEFAULT_CENTER.lng)},
+      zoom:17,
+      mapTypeId:'roadmap',
+      mapTypeControl:true,
+      streetViewControl:false,
+      fullscreenControl:true,
+      clickableIcons:false,
+      gestureHandling:'greedy',
+      zoomControl:true
+    });
+    mapInfoWindow = new google.maps.InfoWindow();
+    map.addListener('click', handleMapClick);
+    mapReady=true;
+    hideMapUnavailable();
+    bindMapDropTarget();
+    renderMap();
+    renderDeploymentPalette();
+  }catch(err){
+    mapReady=false;
+    map=null;
+    showMapUnavailable(err.message||String(err));
+  }
+}
+function refreshMapSize(){
+  if(!map || !window.google?.maps) return;
+  const center=map.getCenter();
+  google.maps.event.trigger(map,'resize');
+  if(center) map.setCenter(center);
+}
+function showMapUnavailable(message){
+  mapLoadError=message||mapLoadError||'Google 地圖無法載入';
+  const panel=$('mapUnavailablePanel'), msg=$('mapUnavailableMessage');
+  if(panel) panel.hidden=false;
+  if(msg) msg.textContent=mapLoadError;
+}
+function hideMapUnavailable(){ const panel=$('mapUnavailablePanel'); if(panel) panel.hidden=true; }
+async function retryGoogleMap(){
+  googleMapsConfig=null;
+  map=null;
+  await initMap(true);
+  await runMapDiagnostics();
+}
+function clearMapOverlays(){
+  mapOverlays.forEach(o=>{ try{o.setMap(null);}catch{} });
+  mapOverlays=[];
+  incidentCircle=null;
+  buildingBoxCenterMarker=null;
+  buildingBoxCornerMarker=null;
+}
+function addMapOverlay(o){ if(o) mapOverlays.push(o); return o; }
+function escapeXml(s=''){ return String(s).replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&apos;'}[c])); }
+function googleMarkerStyle(className='hazard'){
+  if(className.includes('water')) return {bg:'#b5281d',fg:'#fff'};
+  if(className.includes('ladder')) return {bg:'#7c4d00',fg:'#fff'};
+  if(className.includes('ambulance')) return {bg:'#0b7a4b',fg:'#fff'};
+  if(className.includes('rescue')) return {bg:'#345b9f',fg:'#fff'};
+  if(className.includes('person') && className.includes('rest')) return {bg:'#18784f',fg:'#fff'};
+  if(className.includes('person') && className.includes('rit')) return {bg:'#d8a645',fg:'#1d1a17'};
+  if(className.includes('person')) return {bg:'#111827',fg:'#fff'};
+  if(className.includes('hose')) return {bg:'#245fc6',fg:'#fff'};
+  if(className.includes('building-center')) return {bg:'#1d1a17',fg:'#fff'};
+  if(className.includes('building-handle')) return {bg:'#a43a30',fg:'#fff'};
+  if(className.includes('face')) return {bg:'#fffdf8',fg:'#1d1a17'};
+  return {bg:'#fffdf8',fg:'#111827'};
+}
+function googleMarkerIcon(text,className='hazard'){
+  const style=googleMarkerStyle(className);
+  const clean=String(text||'標示').slice(0,24);
+  const width=Math.min(260,Math.max(70,clean.length*15+26));
+  const height=40;
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect x="1" y="1" width="${width-2}" height="32" rx="16" fill="${style.bg}" stroke="#ffffff" stroke-width="2"/><path d="M ${width/2-6} 32 L ${width/2} 39 L ${width/2+6} 32 Z" fill="${style.bg}"/><text x="${width/2}" y="22" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Noto Sans TC,sans-serif" font-size="13" font-weight="800" fill="${style.fg}">${escapeXml(clean)}</text></svg>`;
+  return {url:`data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,scaledSize:new google.maps.Size(width,height),anchor:new google.maps.Point(width/2,height)};
+}
+function makeGoogleMarker({position,text,className='hazard',draggable=false,title='',onDragEnd=null,onClick=null,zIndex=null}){
+  const marker=addMapOverlay(new google.maps.Marker({map,position,draggable,title:title||text,icon:googleMarkerIcon(text,className),zIndex:zIndex||undefined,optimized:false}));
+  if(onDragEnd) marker.addListener('dragend',ev=>onDragEnd({lat:ev.latLng.lat(),lng:ev.latLng.lng()},marker));
+  if(onClick) marker.addListener('click',()=>onClick(marker));
+  return marker;
+}
+function openMapInfo(anchor,html){
+  if(!mapInfoWindow) mapInfoWindow=new google.maps.InfoWindow();
+  mapInfoWindow.setContent(`<div class="google-info-card">${html}</div>`);
+  mapInfoWindow.open({map,anchor,shouldFocus:false});
 }
 function renderMap(){
-  if(!map || !currentCase || !mapLayers) return;
-  mapLayers.clearLayers();
-  const lat = Number(currentCase.lat || DEFAULT_CENTER.lat), lng = Number(currentCase.lng || DEFAULT_CENTER.lng);
-  if(!incidentCircle){ incidentCircle = L.circle([lat,lng], {radius:200,color:'#b5281d',weight:2,fillColor:'#b5281d',fillOpacity:.05}).addTo(map); }
-  else incidentCircle.setLatLng([lat,lng]);
-  if(map.getZoom() < 15) map.setView([lat,lng],17);
-  L.marker([lat,lng], {icon:labelIcon('📍 案件中心','hazard')}).addTo(mapLayers).bindPopup('案件中心');
+  if(!map || !currentCase || !window.google?.maps) return;
+  clearMapOverlays();
+  const lat=Number(currentCase.lat||DEFAULT_CENTER.lat), lng=Number(currentCase.lng||DEFAULT_CENTER.lng);
+  const center={lat,lng};
+  if((map.getZoom()||0)<15){ map.setCenter(center); map.setZoom(17); }
+  incidentCircle=addMapOverlay(new google.maps.Circle({map,center,radius:200,strokeColor:'#b5281d',strokeWeight:2,fillColor:'#b5281d',fillOpacity:.05,clickable:false}));
+  const locationMeta=getLocationMeta();
+  const fallbackLocation=locationMeta.source==='fallback' || locationMeta.unverified===true;
+  const warning=$('mapLocationWarning'); if(warning) warning.hidden=!fallbackLocation;
+  if(fallbackLocation && !locationMeta.locked && (map.getZoom()||0)>14) map.setZoom(13);
+  const incidentMarker=makeGoogleMarker({position:center,text:locationMeta.locked?'📍 案件中心｜已鎖定':fallbackLocation?'⚠ 備援中心｜非火場位置':'📍 案件中心｜待確認',className:'hazard',draggable:!locationMeta.locked,zIndex:1000,
+    onDragEnd:async ll=>setIncidentLocation({lat:ll.lat,lng:ll.lng,source:'manual',formattedAddress:currentCase.address},false),
+    onClick:marker=>openMapInfo(marker,`<b>案件中心</b><div class="meta">來源：${escapeHtml(locationSourceLabel(locationMeta.source||'legacy'))}<br>狀態：${escapeHtml(locationQualityLabel(locationMeta))}</div>`)});
   renderBuildingBoxOnMap();
 
-  live.hoses.forEach(h => {
-    const pts = getHosePoints(h);
-    const from = pts.from, to = pts.to;
-    if(from && to){
-      const label = `${h.owner || h.unit || ''}${h.port || ''}｜${h.kind || '水線'}｜${h.task || ''}`;
-      const poly = L.polyline([from,to], { color:'#245fc6', weight:5, opacity:.85 }).addTo(mapLayers);
-      poly.bindPopup(`${escapeHtml(h.vehicleName)} ${escapeHtml(h.port)}<br>歸屬：${escapeHtml(h.owner||h.unit||'')}<br>目的地：${escapeHtml(h.targetName||'地圖點')}<br>性質：${escapeHtml(h.kind||'水線')}<br>${escapeHtml(h.task||'')}`);
-      poly.on('click', () => editHoseLabel(h));
-      L.marker([(from[0]+to[0])/2,(from[1]+to[1])/2], {icon:labelIcon(label,'hose-label')}).addTo(mapLayers);
+  live.hoses.forEach(h=>{
+    const pts=getHosePoints(h), from=pts.from, to=pts.to;
+    if(!from||!to) return;
+    const path=[{lat:Number(from[0]),lng:Number(from[1])},{lat:Number(to[0]),lng:Number(to[1])}];
+    const poly=addMapOverlay(new google.maps.Polyline({map,path,strokeColor:'#245fc6',strokeWeight:6,strokeOpacity:.88,clickable:true,zIndex:20}));
+    const info=`<b>${escapeHtml(h.vehicleName||'水線來源')} ${escapeHtml(h.port||'')}</b><div class="meta">歸屬：${escapeHtml(h.owner||h.unit||'')}<br>目的地：${escapeHtml(h.targetName||'地圖點')}<br>性質：${escapeHtml(h.kind||'水線')}<br>任務：${escapeHtml(h.task||'')}</div><div class="popup-actions"><button data-map-action="editHose" data-id="${h.id}">修改</button><button data-map-action="deleteHose" data-id="${h.id}">刪除</button></div>`;
+    poly.addListener('click',ev=>{ mapInfoWindow.setPosition(ev.latLng); mapInfoWindow.setContent(`<div class="google-info-card">${info}</div>`); mapInfoWindow.open({map,shouldFocus:false}); });
+    const mid={lat:(path[0].lat+path[1].lat)/2,lng:(path[0].lng+path[1].lng)/2};
+    makeGoogleMarker({position:mid,text:`💧 ${h.owner||h.unit||'水線'}｜${h.kind||''}`,className:'hose-label',onClick:m=>openMapInfo(m,info),zIndex:40});
+    if(h.targetType==='map' && h.lat && h.lng){
+      makeGoogleMarker({position:{lat:Number(h.lat),lng:Number(h.lng)},text:'💧 水線終點',className:'hose-label',draggable:true,zIndex:45,
+        onDragEnd:async ll=>{ await updateItem('hoses',h.id,{lat:ll.lat,lng:ll.lng,targetName:'地圖點 / 手動調整'}); await addLog('hose',`移動水線終點：${h.owner||h.unit||''}`); },
+        onClick:m=>openMapInfo(m,info)});
     }
   });
-  live.vehicles.forEach(v => {
-    const m = L.marker([v.lat,v.lng], { draggable:true, icon:labelIcon(`${vehEmoji(v.type)} ${escapeHtml(v.name)}`, `veh ${vehClass(v.type)}`) }).addTo(mapLayers);
-    m.bindPopup(`<b>${escapeHtml(v.name)}</b><br>${escapeHtml(v.unit)}｜${escapeHtml(v.type)}<br>任務：${escapeHtml(v.task)}<br>${v.canHose?'水線接口：1～4線':'不可接水線'}`);
-    m.on('dragend', async ev => { const ll=ev.target.getLatLng(); await updateItem('vehicles', v.id, {lat:ll.lat,lng:ll.lng}); await addLog('vehicle', `${v.name} 部署位置更新`); });
+  live.vehicles.forEach(v=>{
+    const marker=makeGoogleMarker({position:{lat:Number(v.lat),lng:Number(v.lng)},text:`${vehEmoji(v.type)} ${v.name}`,className:`veh ${vehClass(v.type)}`,draggable:true,zIndex:100,
+      onDragEnd:async ll=>{ await updateItem('vehicles',v.id,{lat:ll.lat,lng:ll.lng}); await addLog('vehicle',`${v.name} 部署位置更新`); },
+      onClick:m=>{
+        if(completeQuickHoseTarget('vehicle',v)) return;
+        openMapInfo(m,`<b>${escapeHtml(v.name)}</b><div class="meta">${escapeHtml(v.unit)}｜${escapeHtml(v.type)}<br>任務：${escapeHtml(v.task)}<br>${v.canHose?'水線接口：1～4線':'不可接水線'}</div><div class="popup-actions">${v.canHose?`<button data-resource-action="quickHose" data-resource-id="${v.id}">拉水線</button>`:''}<button data-map-action="editVehicle" data-id="${v.id}">修改</button><button data-map-action="deleteVehicle" data-id="${v.id}">刪除</button></div>`);
+      }});
   });
-  live.crews.forEach(p => {
-    const m = L.marker([p.lat,p.lng], { draggable:true, icon:labelIcon(`👥 ${escapeHtml(p.unit)}${escapeHtml(p.leader)}｜${p.count}人`, `person ${personClass(p.status)}`) }).addTo(mapLayers);
-    m.bindPopup(`<b>${escapeHtml(p.unit)}${escapeHtml(p.leader)}</b><br>${p.count}人｜${escapeHtml(p.status)}<br>${escapeHtml(p.task)}`);
-    m.on('dragend', async ev => { const ll=ev.target.getLatLng(); await handleCrewDragEnd(p, ll); });
+  live.crews.forEach(p=>{
+    makeGoogleMarker({position:{lat:Number(p.lat),lng:Number(p.lng)},text:`👥 ${p.unit}${p.leader}｜${p.count}人`,className:`person ${personClass(p.status)}`,draggable:true,zIndex:110,
+      onDragEnd:async ll=>handleCrewDragEnd(p,ll),
+      onClick:m=>{
+        if(completeQuickHoseTarget('crew',p)) return;
+        openMapInfo(m,`<b>${escapeHtml(p.unit)}${escapeHtml(p.leader)}</b><div class="meta">${p.count}人｜${escapeHtml(p.status)}<br>${escapeHtml(p.task)}</div><div class="popup-actions"><button data-map-action="editCrew" data-id="${p.id}">修改</button><button data-map-action="restCrew" data-mode="原地休息" data-id="${p.id}">原地休息</button><button data-map-action="restCrew" data-mode="移至休息區" data-id="${p.id}">移至休息區</button><button data-map-action="deleteCrew" data-id="${p.id}">刪除</button></div>`);
+      }});
   });
-  live.hazards.forEach(h => {
-    const m = L.marker([h.lat,h.lng], { draggable:true, icon:labelIcon(`${hazEmoji(h.type)} ${escapeHtml(h.type)}`,'hazard') }).addTo(mapLayers);
-    m.bindPopup(escapeHtml(h.type));
-    m.on('dragend', async ev => { const ll=ev.target.getLatLng(); await updateItem('hazards', h.id, {lat:ll.lat,lng:ll.lng}); await addLog('hazard', `${h.type} 標示位置更新`); });
+  live.hazards.forEach(h=>{
+    makeGoogleMarker({position:{lat:Number(h.lat),lng:Number(h.lng)},text:`${hazEmoji(h.type)} ${h.type}`,className:'hazard',draggable:true,zIndex:120,
+      onDragEnd:async ll=>{ await updateItem('hazards',h.id,{lat:ll.lat,lng:ll.lng}); await addLog('hazard',`${h.type} 標示位置更新`); },
+      onClick:m=>openMapInfo(m,`<b>${escapeHtml(h.type)}</b><div class="popup-actions"><button data-map-action="editHazard" data-id="${h.id}">修改</button><button data-map-action="deleteHazard" data-id="${h.id}">刪除</button></div>`)});
   });
+  renderDeploymentPalette();
 }
 function getHosePoints(h){
   const v = live.vehicles.find(x=>x.id===h.vehicleId);
@@ -909,22 +1557,60 @@ function getHosePoints(h){
   const to = target ? [Number(target.lat), Number(target.lng)] : (h.lat && h.lng ? [Number(h.lat), Number(h.lng)] : null);
   return { from, to };
 }
-async function editHoseLabel(h){
-  const next = prompt('請輸入水線歸屬 / 標籤', h.owner || h.unit || '');
-  if(next === null) return;
-  await updateItem('hoses', h.id, { owner: next.trim() || h.owner || h.unit || '' });
-  await addLog('hose', `更新水線標籤：${h.vehicleName || ''} ${h.port || ''}`);
+async function editHoseLabel(h){ return editHoseFull(h.id); }
+function fitMapToIncident(){
+  if(!map||!currentCase) return;
+  if(incidentCircle?.getBounds) map.fitBounds(incidentCircle.getBounds());
+  else { map.setCenter({lat:Number(currentCase.lat),lng:Number(currentCase.lng)}); map.setZoom(17); }
 }
-function labelIcon(text, className){ return L.divIcon({ html:`<div class="map-label ${className}">${text}</div>`, className:'leaflet-div-icon', iconSize:[1,1], iconAnchor:[0,0] }); }
-function fitMapToIncident(){ if(!map || !currentCase) return; map.fitBounds(L.circle([currentCase.lat,currentCase.lng],{radius:200}).getBounds()); }
-function handleMapClick(e){
-  if(!pendingTool) return;
-  if(pendingTool.type === 'hazard') addHazardAt(pendingTool.hazardType, e.latlng.lat, e.latlng.lng);
-  if(pendingTool.type === 'hose') addHoseAt(pendingTool, e.latlng.lat, e.latlng.lng);
-  if(pendingTool.type === 'buildingBoxCenter') saveBuildingBox({lat:e.latlng.lat,lng:e.latlng.lng}, '設定建物中心框中心點');
-  pendingTool = null;
+async function handleMapClick(e){
+  const ll=e?.latLng?{lat:e.latLng.lat(),lng:e.latLng.lng()}:e;
+  if(!ll || !pendingTool) return;
+  if(pendingTool.type==='hazard') await addHazardAt(pendingTool.hazardType,ll.lat,ll.lng);
+  else if(pendingTool.type==='hose' || pendingTool.type==='hoseConnect') await addHoseAt(pendingTool,ll.lat,ll.lng);
+  else if(pendingTool.type==='hoseReconnect'){ await updateItem('hoses',pendingTool.hoseId,{targetType:'map',targetId:null,targetName:'地圖點 / 手動指定',lat:ll.lat,lng:ll.lng}); await addLog('hose','重新指定水線終點至地圖位置'); }
+  else if(pendingTool.type==='buildingBoxCenter') await saveBuildingBox({lat:ll.lat,lng:ll.lng},'設定建物中心框中心點');
+  else if(pendingTool.type==='incidentCenter') await setIncidentLocation({lat:ll.lat,lng:ll.lng,source:'manual',formattedAddress:currentCase?.address||''},false);
+  else if(pendingTool.type==='moveExisting'){
+    const item=(live[pendingTool.coll]||[]).find(x=>x.id===pendingTool.id);
+    if(item){ await updateItem(pendingTool.coll,pendingTool.id,{lat:ll.lat,lng:ll.lng}); await addLog('map',`部署位置更新：${item.name||item.unit||item.type||''}`); toast('已更新部署位置'); }
+  }
+  pendingTool=null; selectedMapResource=null; renderDeploymentPalette();
 }
-
+function bindMapDropTarget(){
+  const el=$('map'); if(!el || el.dataset.dropBound==='1') return;
+  el.dataset.dropBound='1';
+  el.addEventListener('dragover',ev=>ev.preventDefault());
+  el.addEventListener('drop',async ev=>{
+    ev.preventDefault();
+    try{
+      const data=JSON.parse(ev.dataTransfer.getData('application/json')||'{}');
+      if(!data.coll||!data.id) return;
+      const ll=await latLngFromMapClientPoint(ev.clientX,ev.clientY);
+      await updateItem(data.coll,data.id,{lat:ll.lat,lng:ll.lng});
+      await addLog('map',`拖放部署：${data.label||data.id}`);
+    }catch(err){ console.warn('map drop failed',err); }
+  });
+}
+function latLngFromMapClientPoint(clientX,clientY){
+  return new Promise((resolve,reject)=>{
+    if(!map) return reject(new Error('地圖尚未載入'));
+    const rect=$('map').getBoundingClientRect();
+    class ProjectionOverlay extends google.maps.OverlayView{
+      onAdd(){}
+      draw(){
+        try{
+          const projection=this.getProjection();
+          const ll=projection.fromContainerPixelToLatLng(new google.maps.Point(clientX-rect.left,clientY-rect.top));
+          resolve({lat:ll.lat(),lng:ll.lng()});
+        }catch(err){ reject(err); }
+        this.setMap(null);
+      }
+      onRemove(){}
+    }
+    new ProjectionOverlay().setMap(map);
+  });
+}
 async function addItem(coll, data){
   data.createdAt = data.createdAt || Date.now();
   if(firebaseEnabled){ await db.collection('cases').doc(currentCaseId).collection(coll).add(data); }
@@ -939,6 +1625,78 @@ async function deleteItem(coll, id, label='資料'){
   if(firebaseEnabled){ await db.collection('cases').doc(currentCaseId).collection(coll).doc(id).delete(); }
   else { const arr=live[coll]; const idx=arr.findIndex(x=>x.id===id); if(idx>=0) arr.splice(idx,1); saveLocalCase(); renderLiveParts(); }
   await addLog(coll, `刪除${label}`);
+}
+
+function openActionSheet(title,html){
+  const sheet=$('appActionSheet'); if(!sheet) return;
+  $('appActionTitle').textContent=title||'快速操作';
+  $('appActionBody').innerHTML=html||'';
+  sheet.hidden=false;
+  document.body.classList.add('action-sheet-open');
+}
+function closeActionSheet(){
+  const sheet=$('appActionSheet'); if(sheet) sheet.hidden=true;
+  document.body.classList.remove('action-sheet-open');
+}
+function bindQuickFillButtons(container){
+  container?.querySelectorAll('[data-fill-target][data-fill-value]').forEach(btn=>btn.addEventListener('click',()=>{
+    const input=$(btn.dataset.fillTarget)||container.querySelector(`#${CSS.escape(btn.dataset.fillTarget)}`);
+    if(input){ input.value=btn.dataset.fillValue; input.dispatchEvent(new Event('change',{bubbles:true})); }
+  }));
+}
+async function editVehicle(id){
+  const v=live.vehicles.find(x=>x.id===id); if(!v) return;
+  openActionSheet(`車輛｜${v.name}`,`<div class="field"><label>任務</label><input id="sheetVehicleTask" value="${escapeHtml(v.task||'')}" /></div><div class="choice-row"><button class="action-option" data-fill-target="sheetVehicleTask" data-fill-value="第一線攻擊">第一線攻擊</button><button class="action-option" data-fill-target="sheetVehicleTask" data-fill-value="佔據水源">佔據水源</button><button class="action-option" data-fill-target="sheetVehicleTask" data-fill-value="待命">待命</button><button class="action-option" data-fill-target="sheetVehicleTask" data-fill-value="救護區">救護區</button></div><div class="button-row"><button id="saveVehicleSheetBtn" class="btn primary">儲存</button><button id="deleteVehicleSheetBtn" class="btn ghost">刪除車輛</button></div>`);
+  bindQuickFillButtons($('appActionBody'));
+  $('saveVehicleSheetBtn').onclick=async()=>{ const task=$('sheetVehicleTask').value.trim()||v.task||'部署'; await updateItem('vehicles',id,{task}); await addLog('vehicle',`修改車輛任務：${v.name} → ${task}`); closeActionSheet(); };
+  $('deleteVehicleSheetBtn').onclick=()=>{ closeActionSheet(); deleteVehicle(id); };
+}
+async function deleteVehicle(id){
+  const v=live.vehicles.find(x=>x.id===id); if(!v) return;
+  const linked=live.hoses.filter(h=>h.vehicleId===id||h.targetId===id).length;
+  if(!confirm(`確認刪除 ${v.name}？${linked?`\n注意：相關水線 ${linked} 條也會刪除。`:''}`)) return;
+  for(const h of live.hoses.filter(h=>h.vehicleId===id||h.targetId===id)) await deleteItem('hoses',h.id,`相關水線 ${h.port||''}`);
+  await deleteItem('vehicles',id,v.name);
+}
+async function editCrew(id){
+  const p=live.crews.find(x=>x.id===id); if(!p) return;
+  const statuses=['作業中','待命','休息','RIT','撤出'].map(x=>`<option ${p.status===x?'selected':''}>${x}</option>`).join('');
+  openActionSheet(`人員｜${p.unit}${p.leader}`,`<div class="field"><label>任務</label><input id="sheetCrewTask" value="${escapeHtml(p.task||'')}" /></div><div class="choice-row"><button class="action-option" data-fill-target="sheetCrewTask" data-fill-value="第一面內攻">第一面內攻</button><button class="action-option" data-fill-target="sheetCrewTask" data-fill-value="人命搜救">人命搜救</button><button class="action-option" data-fill-target="sheetCrewTask" data-fill-value="RIT待命">RIT待命</button><button class="action-option" data-fill-target="sheetCrewTask" data-fill-value="佔據水源">佔據水源</button></div><div class="two-col"><div class="field"><label>狀態</label><select id="sheetCrewStatus">${statuses}</select></div><div class="field"><label>人數</label><input id="sheetCrewCount" type="number" min="1" value="${Number(p.count)||4}" /></div></div><div class="button-row"><button id="saveCrewSheetBtn" class="btn primary">儲存</button><button id="deleteCrewSheetBtn" class="btn ghost">刪除編組</button></div>`);
+  bindQuickFillButtons($('appActionBody'));
+  $('saveCrewSheetBtn').onclick=async()=>{ const patch={task:$('sheetCrewTask').value.trim()||p.task,status:$('sheetCrewStatus').value,count:Number($('sheetCrewCount').value)||p.count}; await updateItem('crews',id,patch); await addLog('crew',`修改人員：${p.unit}${p.leader}｜${patch.status}｜${patch.task}`); closeActionSheet(); };
+  $('deleteCrewSheetBtn').onclick=()=>{ closeActionSheet(); deleteCrew(id); };
+}
+async function deleteCrew(id){
+  const p=live.crews.find(x=>x.id===id); if(!p) return;
+  const linked=live.hoses.filter(h=>h.targetType==='crew'&&h.targetId===id).length;
+  if(!confirm(`確認刪除 ${p.unit}${p.leader}？${linked?`\n相關水線 ${linked} 條會保留在原部署位置。`:''}`)) return;
+  for(const h of live.hoses.filter(h=>h.targetType==='crew'&&h.targetId===id)) await updateItem('hoses',h.id,{targetType:'map',targetId:null,lat:p.lat,lng:p.lng,targetName:`${p.unit}${p.leader} 原部署位置`});
+  await deleteItem('crews',id,`${p.unit}${p.leader}`);
+}
+async function editHazard(id){
+  const h=live.hazards.find(x=>x.id===id); if(!h) return;
+  const types=['起火點','瓦斯','高壓電','危險物','指揮站','前進指揮所','休息區','救護區','警戒區'];
+  openActionSheet(`標示｜${h.type}`,`<div class="field"><label>標示類型</label><select id="sheetHazardType">${types.map(x=>`<option ${x===h.type?'selected':''}>${x}</option>`).join('')}<option ${types.includes(h.type)?'':'selected'}>其他</option></select></div><div class="field"><label>自訂名稱（選其他時使用）</label><input id="sheetHazardCustom" value="${types.includes(h.type)?'':escapeHtml(h.type||'')}" /></div><div class="button-row"><button id="saveHazardSheetBtn" class="btn primary">儲存</button><button id="deleteHazardSheetBtn" class="btn ghost">刪除標示</button></div>`);
+  $('saveHazardSheetBtn').onclick=async()=>{ const type=$('sheetHazardType').value==='其他'?($('sheetHazardCustom').value.trim()||'其他'):$('sheetHazardType').value; await updateItem('hazards',id,{type}); await addLog('hazard',`修改地圖標示：${h.type} → ${type}`); closeActionSheet(); };
+  $('deleteHazardSheetBtn').onclick=()=>{ closeActionSheet(); deleteHazard(id); };
+}
+async function deleteHazard(id){
+  const h=live.hazards.find(x=>x.id===id); if(!h) return;
+  if(!confirm(`確認刪除標示「${h.type}」？`)) return;
+  await deleteItem('hazards',id,h.type);
+}
+async function editHoseFull(id){
+  const h=live.hoses.find(x=>x.id===id); if(!h) return;
+  const kinds=['進攻水線','供水線','防護水線','搜救掩護水線','中繼水線'].map(x=>`<option ${h.kind===x?'selected':''}>${x}</option>`).join('');
+  openActionSheet(`水線｜${h.vehicleName||''} ${h.port||''}`,`<div class="field"><label>水線歸屬</label><input id="sheetHoseOwner" value="${escapeHtml(h.owner||h.unit||'')}" /></div><div class="field"><label>水線性質</label><select id="sheetHoseKind">${kinds}</select></div><div class="field"><label>任務</label><input id="sheetHoseTask" value="${escapeHtml(h.task||'')}" /></div><div class="button-row"><button id="saveHoseSheetBtn" class="btn primary">儲存</button><button id="reconnectHoseSheetBtn" class="btn ghost">重新指定終點</button><button id="deleteHoseSheetBtn" class="btn ghost">刪除水線</button></div>`);
+  $('saveHoseSheetBtn').onclick=async()=>{ const patch={owner:$('sheetHoseOwner').value.trim()||h.owner||h.unit,kind:$('sheetHoseKind').value,task:$('sheetHoseTask').value.trim()||h.task}; await updateItem('hoses',id,patch); await addLog('hose',`修改水線：${h.vehicleName||''}${h.port||''}`); closeActionSheet(); };
+  $('reconnectHoseSheetBtn').onclick=()=>{ closeActionSheet(); pendingTool={type:'hoseReconnect',hoseId:h.id,vehicleId:h.vehicleId,vehicleName:h.vehicleName,unit:h.unit,owner:h.owner,port:h.port,task:h.task,kind:h.kind}; setDeploymentMode('hose'); toast('請點新的車輛、人員或地圖位置，重新指定水線終點。',4800); };
+  $('deleteHoseSheetBtn').onclick=()=>{ closeActionSheet(); deleteHose(id); };
+}
+async function deleteHose(id){
+  const h=live.hoses.find(x=>x.id===id); if(!h) return;
+  if(!confirm(`確認刪除水線「${h.vehicleName||''} ${h.port||''}」？`)) return;
+  await deleteItem('hoses',id,`${h.vehicleName||''}${h.port||''}`);
 }
 async function addVehicle(){
   if(!currentCase) return;
@@ -1026,26 +1784,26 @@ function buildingBoxSidePoints(box){
   return [{name:'第一面',lat:box.lat,lng:west},{name:'第二面',lat:north,lng:box.lng},{name:'第三面',lat:box.lat,lng:east},{name:'第四面',lat:south,lng:box.lng}];
 }
 function renderBuildingBoxOnMap(){
-  if(!mapLayers || !currentCase) return;
-  const box = getBuildingBox();
-  const bounds = boxBounds(box);
-  const rect = L.rectangle(bounds, {color: box.locked?'#1d1a17':'#a43a30', weight:2, dashArray: box.locked?'':'6 6', fillColor:'#b5281d', fillOpacity:.04}).addTo(mapLayers);
-  rect.bindPopup(`建物中心框<br>${Math.round(box.widthM)}m × ${Math.round(box.heightM)}m<br>${box.locked?'已鎖定':'未鎖定，可調整'}<br>第一面設定：${escapeHtml(box.firstSide||'第一面')}`);
+  if(!map || !currentCase || !window.google?.maps) return;
+  const box=getBuildingBox();
+  const boundsArr=boxBounds(box);
+  const bounds={south:boundsArr[0][0],west:boundsArr[0][1],north:boundsArr[1][0],east:boundsArr[1][1]};
+  const rect=addMapOverlay(new google.maps.Rectangle({map,bounds,strokeColor:box.locked?'#1d1a17':'#a43a30',strokeWeight:2,strokeOpacity:1,fillColor:'#b5281d',fillOpacity:.04,clickable:true,editable:false,draggable:false}));
+  rect.addListener('click',ev=>{
+    mapInfoWindow.setPosition(ev.latLng);
+    mapInfoWindow.setContent(`<div class="google-info-card"><b>建物中心框</b><div class="meta">${Math.round(box.widthM)}m × ${Math.round(box.heightM)}m<br>${box.locked?'已鎖定':'未鎖定，可調整'}<br>第一面：${escapeHtml(box.firstSide||'第一面')}</div></div>`);
+    mapInfoWindow.open({map,shouldFocus:false});
+  });
   buildingBoxSidePoints(box).forEach(pt=>{
-    const cls = pt.name === (box.firstSide||'第一面') ? 'face active' : 'face';
-    L.marker([pt.lat,pt.lng], {icon:labelIcon(pt.name, cls)}).addTo(mapLayers);
+    makeGoogleMarker({position:{lat:pt.lat,lng:pt.lng},text:pt.name,className:pt.name===(box.firstSide||'第一面')?'face active':'face',zIndex:80});
   });
   if(!box.locked){
-    const center = L.marker([box.lat,box.lng], {draggable:true, icon:labelIcon('▣ 建物中心','building-center')}).addTo(mapLayers);
-    center.on('dragend', ev => { const ll=ev.target.getLatLng(); saveBuildingBox({lat:ll.lat,lng:ll.lng}, '拖曳更新建物中心框'); });
-    const ne = bounds[1];
-    const corner = L.marker([ne[0],ne[1]], {draggable:true, icon:labelIcon('↘ 拉大小','building-handle')}).addTo(mapLayers);
-    corner.on('dragend', ev => {
-      const ll=ev.target.getLatLng();
-      const widthM = Math.max(8, Math.abs(ll.lng-box.lng) * 2 * 111320 * Math.max(.2, Math.cos(box.lat*Math.PI/180)));
-      const heightM = Math.max(8, Math.abs(ll.lat-box.lat) * 2 * 111320);
-      saveBuildingBox({widthM:Math.round(widthM), heightM:Math.round(heightM)}, '拖曳調整建物中心框大小');
-    });
+    buildingBoxCenterMarker=makeGoogleMarker({position:{lat:box.lat,lng:box.lng},text:'▣ 建物中心',className:'building-center',draggable:true,zIndex:90,onDragEnd:ll=>saveBuildingBox({lat:ll.lat,lng:ll.lng},'拖曳更新建物中心框')});
+    buildingBoxCornerMarker=makeGoogleMarker({position:{lat:bounds.north,lng:bounds.east},text:'↘ 拉大小',className:'building-handle',draggable:true,zIndex:91,onDragEnd:ll=>{
+      const widthM=Math.max(8,Math.abs(ll.lng-box.lng)*2*111320*Math.max(.2,Math.cos(box.lat*Math.PI/180)));
+      const heightM=Math.max(8,Math.abs(ll.lat-box.lat)*2*111320);
+      saveBuildingBox({widthM:Math.round(widthM),heightM:Math.round(heightM)},'拖曳調整建物中心框大小');
+    }});
   }
 }
 function syncBuildingBoxForm(){
@@ -1078,13 +1836,16 @@ function distanceMeters(a,b){
 }
 async function handleCrewDragEnd(p, ll){
   const nearest = live.crews.filter(x=>x.id!==p.id && x.status==='作業中').map(x=>({item:x, d:distanceMeters({lat:ll.lat,lng:ll.lng},{lat:Number(x.lat),lng:Number(x.lng)})})).sort((a,b)=>a.d-b.d)[0];
-  if(nearest && nearest.d < 18 && p.status !== '作業中'){
+  if(nearest && nearest.d < 18){
     const target = nearest.item;
     if(confirm(`是否由 ${p.unit}${p.leader} 接替 ${target.unit}${target.leader} 執行「${target.task||'作業任務'}」？`)){
       const oldTask = target.task || '作業任務';
+      for(const h of live.hoses.filter(h=>h.targetType==='crew' && h.targetId===target.id)){
+        await updateItem('hoses', h.id, {targetId:p.id, targetName:`${p.unit}${p.leader||''}｜${p.count||0}人`, owner:h.owner || `${p.unit}${p.leader||''}`});
+      }
       await updateItem('crews', p.id, {lat:target.lat,lng:target.lng,status:'作業中',task:oldTask,startAt:Date.now(),dispatchCount:(p.dispatchCount||0)+1});
       await updateItem('crews', target.id, {lat:ll.lat,lng:ll.lng,status:'休息',task:'輪替休息',endAt:Date.now()});
-      await addLog('crew', `${p.unit}${p.leader} 接替 ${target.unit}${target.leader} 執行「${oldTask}」，${target.unit}${target.leader} 改為休息`);
+      await addLog('crew', `${p.unit}${p.leader} 接替 ${target.unit}${target.leader} 執行「${oldTask}」，相關水線改由接替單位承接，${target.unit}${target.leader} 改為休息`);
       toast('已完成任務輪替');
       return;
     }
@@ -1229,6 +1990,10 @@ function renderDashboard(){
 async function setCrewRest(crewId, mode){
   const p = live.crews.find(x=>x.id===crewId); if(!p) return;
   if(!confirm(`確認將 ${p.unit}${p.leader} 設定為「${mode}」？`)) return;
+  const original = {lat:p.lat, lng:p.lng};
+  for(const h of live.hoses.filter(h=>h.targetType==='crew' && h.targetId===crewId)){
+    await updateItem('hoses', h.id, {targetType:'map', targetId:null, lat:original.lat, lng:original.lng, targetName:`${p.unit}${p.leader} 原作業位置`, status:'留置'});
+  }
   const patch = { status:'休息', task:mode, endAt:Date.now() };
   if(mode === '移至休息區'){
     const rest = live.hazards.find(h=>h.type==='休息區');
@@ -1236,18 +2001,18 @@ async function setCrewRest(crewId, mode){
     else toast('尚未標示休息區，先改為休息狀態並保留原位置');
   }
   await updateItem('crews', crewId, patch);
-  await addLog('crew', `${p.unit}${p.leader} 設定為${mode}${mode==='移至休息區'?'，水線標示保留於原部署':''}`);
+  await addLog('crew', `${p.unit}${p.leader} 設定為${mode}；原本連接該組人員之水線已留置於原部署位置`);
   toast('已更新人員休息狀態');
 }
 function jumpFromStatus(kind){
   if(kind==='vehicle' || kind==='crew'){
+    switchCasePage('dashboardSection');
     const target = kind==='vehicle' ? $('vehicleCards') : $('crewCards');
     const acc = target?.closest('details'); if(acc) acc.open = true;
-    $('dashboardSection')?.scrollIntoView({behavior:'smooth',block:'start'});
   } else {
+    switchCasePage('tacticalMapSection');
     const acc = document.querySelector('#tacticalMapSection details.tool-accordion'); if(acc) acc.open = true;
-    setTimeout(()=>{ if(map) map.invalidateSize(); },250);
-    $('tacticalMapSection')?.scrollIntoView({behavior:'smooth',block:'start'});
+    setTimeout(refreshMapSize,250);
   }
 }
 
@@ -1452,12 +2217,12 @@ function buildFullSpeech(){
   const vehicles = live.vehicles.length ? live.vehicles.map(v=>`${v.name}${v.task?`執行${v.task}`:''}`).join('、') : '出勤人車持續確認中';
   const commandSituation = c.commandSituation ? `初期指揮交接內容：${c.commandSituation}` : '';
   const ritLine = c.ritSet ? `已律定RIT小組${c.ritUnit?`，由${c.ritUnit}擔任`:''}${c.ritNote?`，${c.ritNote}`:''}` : '尚未律定RIT小組，請儘速指派。';
-  const contactLine = (c.contacts||[]).length ? `關係人資料：${(c.contacts||[]).map(x=>`${x.name||'未具名'}${x.phone?` ${x.phone}`:''}${x.appearance?` ${x.appearance}`:''}`).join('；')}` : '關係人資料尚未完整登錄';
-  const breakLine = c.breakDoor ? `破門資訊：${c.breakDoorAt?fmtTime(c.breakDoorAt):'時間未登錄'}，${c.breakDoorUnit||'單位未登錄'}執行，${c.breakDoorNote||'原因與位置未補述'}，指揮官回報${c.breakDoorCommanderReport?'已完成':'未確認'}，指揮中心回報${c.breakDoorCenterReport?'已完成':'未確認'}。` : '破門狀況：未執行或未登錄。';
-  const cordonLine = c.cordonSet ? `警戒區：${c.cordonArea||'範圍未登錄'}，${c.cordonAssigned?'已指派':'尚未確認指派'}${c.cordonUnit?` ${c.cordonUnit}`:''}執行。` : '警戒區劃設尚未完成登錄。';
-  const hazardLine = c.hazardChecked ? `已詢問危險物狀況${c.hazardItems?`，現場有${c.hazardItems}`:''}${c.hazardContact?`；關係人：${c.hazardContact}`:''}${c.hazardPhone?`，電話${c.hazardPhone}`:''}${c.hazardAppearance?`，特徵：${c.hazardAppearance}`:''}` : '尚未完成危險物詢問，請中隊幕僚尋找關係人確認。';
+  const contactLine = c.contactState==='notfound' ? '目前尚未找到關係人，持續查找中' : ((c.contacts||[]).length ? `關係人資料：${(c.contacts||[]).map(x=>`${x.name||'未具名'}${x.phone?` ${x.phone}`:''}${x.appearance?` ${x.appearance}`:''}`).join('；')}` : '關係人狀況尚未確認');
+  const breakLine = c.breakDoorState==='none' ? '破門狀況：經評估目前不需要破門。' : (c.breakDoor ? `破門資訊：${c.breakDoorAt?fmtTime(c.breakDoorAt):'時間未登錄'}，${c.breakDoorUnit||'單位未登錄'}執行，${c.breakDoorNote||'原因與位置未補述'}，指揮官回報${c.breakDoorCommanderReport?'已完成':'未確認'}，指揮中心回報${c.breakDoorCenterReport?'已完成':'未確認'}。` : '破門狀況尚未確認。');
+  const cordonLine = c.cordonState==='pending' ? '警戒區尚未劃設，請持續評估並指派人員。' : (c.cordonSet ? `警戒區：${c.cordonArea||'範圍未登錄'}，${c.cordonAssigned?'已指派':'尚未確認指派'}${c.cordonUnit?` ${c.cordonUnit}`:''}執行。` : '警戒區狀況尚未確認。');
+  const hazardLine = c.hazardState==='none' ? '已詢問確認現場無危險物品' : (c.hazardState==='has' ? `已確認現場有危險物品${c.hazardItems?`：${c.hazardItems}`:''}${c.hazardContact?`；關係人：${c.hazardContact}`:''}${c.hazardPhone?`，電話${c.hazardPhone}`:''}${c.hazardAppearance?`，特徵：${c.hazardAppearance}`:''}` : '尚未完成危險物詢問，請持續尋找關係人確認。');
   const parLine = c.parRequested ? `已要求各單位進行PAR安全回報${c.parDetails?`：${c.parDetails}`:''}` : 'PAR尚未完成要求。';
-  const supportLine = `目前支援需求：${supports}${c.supportDetails?`；${c.supportDetails}`:''}`;
+  const supportLine = c.supportState==='none' ? '現場暫無新增支援需求' : `目前支援需求：${supports}${c.supportDetails?`；${c.supportDetails}`:''}`;
   return `北海北海，${commander}回報：
 `+
     `一、到：現場${c.arrived?'已到達':'到達確認中'}，${addressLine}；指揮權${c.commandTransfer?'已轉移接掌':'尚未完成轉移'}；${firstSide}；${parLine}
@@ -1505,13 +2270,68 @@ function structuredSectionHtml(section){
   return `<section class="report-section"><h2>${escapeHtml(section.title)}</h2><div class="report-list">${body || '<div class="report-list-item">尚無資料</div>'}</div></section>`;
 }
 function buildReportSummaryTable(){
-  const c = currentCase || {};
+  const c = currentCase || {}; const meta=c.locationMeta || {};
   return `<table class="report-plain-table"><tbody>
     <tr><th>案件類型</th><td>${escapeHtml(c.type||'未登錄')}</td><th>建物用途</th><td>${escapeHtml(c.purpose||'未登錄')}</td></tr>
     <tr><th>建物樓層</th><td>${escapeHtml(String(c.floors||'未登錄'))}</td><th>起火樓層</th><td>${escapeHtml(c.fireFloor||'未登錄')}</td></tr>
     <tr><th>受困狀況</th><td>${escapeHtml(`${c.trapped||'未知'} / ${c.trappedCount||0}人`)}</td><th>火煙狀況</th><td>${escapeHtml(c.fireStatus||'未登錄')}</td></tr>
     <tr><th>到場回報</th><td>${escapeHtml(c.arrived?'已到達':'未確認')}</td><th>指揮權</th><td>${escapeHtml(c.commandTransfer?'已轉移':'未確認')}</td></tr>
+    <tr><th>案件中心定位</th><td>${escapeHtml(locationSourceLabel(meta.source||'legacy'))}｜${escapeHtml(locationQualityLabel(meta))}</td><th>案件中心座標</th><td>${Number(c.lat||0).toFixed(6)}, ${Number(c.lng||0).toFixed(6)}</td></tr>
   </tbody></table>`;
+}
+function deploymentSchematicHtml(){
+  const c=currentCase || {};
+  const points=[];
+  const add=(lat,lng,kind,label,id='')=>{
+    const a=Number(lat), b=Number(lng); if(Number.isFinite(a)&&Number.isFinite(b)) points.push({lat:a,lng:b,kind,label:String(label||''),id});
+  };
+  add(c.lat,c.lng,'incident','案件中心','incident');
+  live.vehicles.forEach(v=>add(v.lat,v.lng,'vehicle',v.name||v.unit||'車輛',v.id));
+  live.crews.forEach(x=>add(x.lat,x.lng,'crew',`${x.unit||''}${x.leader||''}`,x.id));
+  live.hazards.forEach(h=>add(h.lat,h.lng,'hazard',h.type||'危害',h.id));
+  live.hoses.forEach(h=>{ if(h.targetType==='map' && h.lat && h.lng) add(h.lat,h.lng,'hoseEnd',h.targetName||'水線終點',`hose_${h.id}`); });
+  if(!points.length) return '<div class="report-list-item">尚無戰術部署圖資料。</div>';
+  let minLat=Math.min(...points.map(x=>x.lat)), maxLat=Math.max(...points.map(x=>x.lat));
+  let minLng=Math.min(...points.map(x=>x.lng)), maxLng=Math.max(...points.map(x=>x.lng));
+  if(Math.abs(maxLat-minLat)<.0006){ minLat-=.0003; maxLat+=.0003; }
+  if(Math.abs(maxLng-minLng)<.0006){ minLng-=.0003; maxLng+=.0003; }
+  const pad=.12, W=900,H=520;
+  const xy=(lat,lng)=>({
+    x:(pad+(Number(lng)-minLng)/(maxLng-minLng)*(1-pad*2))*W,
+    y:(pad+(maxLat-Number(lat))/(maxLat-minLat)*(1-pad*2))*H
+  });
+  const pointMap=new Map(points.map(x=>[x.id,{...x,...xy(x.lat,x.lng)}]));
+  const hoseLines=live.hoses.map(h=>{
+    const a=pointMap.get(h.vehicleId);
+    let b=null;
+    if(h.targetType==='vehicle'||h.targetType==='crew') b=pointMap.get(h.targetId);
+    else b=pointMap.get(`hose_${h.id}`);
+    if(!a||!b) return '';
+    return `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" class="scheme-hose"/><text x="${((a.x+b.x)/2).toFixed(1)}" y="${((a.y+b.y)/2-6).toFixed(1)}" class="scheme-hose-label">${escapeHtml(h.owner||h.kind||'水線')}</text>`;
+  }).join('');
+  const building=(()=>{
+    const box=c.buildingBox; if(!box?.lat||!box?.lng) return '';
+    const center=xy(box.lat,box.lng); const w=Math.max(85,Math.min(260,Number(box.widthM||40)*3.2)); const h=Math.max(60,Math.min(190,Number(box.heightM||28)*3.2));
+    return `<rect x="${(center.x-w/2).toFixed(1)}" y="${(center.y-h/2).toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="10" class="scheme-building"/><text x="${center.x.toFixed(1)}" y="${(center.y+4).toFixed(1)}" class="scheme-building-label">建物／${escapeHtml(box.firstSide||'第一面')}</text>`;
+  })();
+  const nodes=points.map(p=>{
+    const {x,y}=xy(p.lat,p.lng);
+    const cls=`scheme-node ${p.kind}`;
+    const icon=p.kind==='vehicle'?'🚒':p.kind==='crew'?'人':p.kind==='hazard'?'⚠':p.kind==='incident'?'指':'●';
+    return `<g class="${cls}"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${p.kind==='incident'?18:15}"/><text x="${x.toFixed(1)}" y="${(y+5).toFixed(1)}" class="scheme-icon">${escapeHtml(icon)}</text><text x="${x.toFixed(1)}" y="${(y+34).toFixed(1)}" class="scheme-label">${escapeHtml(p.label)}</text></g>`;
+  }).join('');
+  return `<div class="report-schematic-card"><div class="report-schematic-head"><strong>外部戰術部署示意圖</strong><span>非導航底圖，依系統座標相對呈現</span></div><svg class="report-schematic" viewBox="0 0 ${W} ${H}" role="img" aria-label="火場外部戰術部署示意圖"><rect width="${W}" height="${H}" class="scheme-bg"/><path d="M0 ${H*.5} H${W} M${W*.5} 0 V${H}" class="scheme-axis"/>${building}${hoseLines}${nodes}</svg></div>`;
+}
+function floorPlanSchematicHtml(){
+  const ops=getBuildingOps();
+  const levels=floorsArray();
+  const selected=Number($('floorPlanLevel')?.value || levels[0] || 1);
+  const markers=(ops.planMarkers||[]).filter(m=>Number(m.floor)===selected);
+  if(!markers.length) return '';
+  const W=900,H=480;
+  const lineHtml=markers.filter(m=>m.x2!==undefined).map(m=>`<line x1="${(m.x/100*W).toFixed(1)}" y1="${(m.y/100*H).toFixed(1)}" x2="${(m.x2/100*W).toFixed(1)}" y2="${(m.y2/100*H).toFixed(1)}" class="floor-scheme-line ${markerClass(m.type)}"/><text x="${(((m.x+m.x2)/200)*W).toFixed(1)}" y="${((((m.y+m.y2)/200)*H)-5).toFixed(1)}" class="floor-scheme-label">${escapeHtml(m.note||m.type)}</text>`).join('');
+  const pointHtml=markers.filter(m=>m.x2===undefined).map(m=>`<g><circle cx="${(m.x/100*W).toFixed(1)}" cy="${(m.y/100*H).toFixed(1)}" r="18" class="floor-scheme-point ${markerClass(m.type)}"/><text x="${(m.x/100*W).toFixed(1)}" y="${(m.y/100*H+5).toFixed(1)}" class="floor-scheme-icon">${escapeHtml(markerIcon(m.type))}</text><text x="${(m.x/100*W).toFixed(1)}" y="${(m.y/100*H+39).toFixed(1)}" class="floor-scheme-label">${escapeHtml(m.note||m.label||m.type)}</text></g>`).join('');
+  return `<div class="report-schematic-card"><div class="report-schematic-head"><strong>${escapeHtml(floorLabel(selected))} 建物內部作戰示意圖</strong><span>依現場繪圖資料正式化呈現</span></div><svg class="report-schematic floor" viewBox="0 0 ${W} ${H}" role="img" aria-label="建物內部作戰示意圖"><rect width="${W}" height="${H}" class="scheme-bg"/><defs><pattern id="floorGrid" width="45" height="45" patternUnits="userSpaceOnUse"><path d="M45 0H0V45" class="scheme-grid"/></pattern></defs><rect width="${W}" height="${H}" fill="url(#floorGrid)"/>${lineHtml}${pointHtml}</svg></div>`;
 }
 function reportHtmlFromText(text){
   const cleaned = sanitizeReportText(text);
@@ -1521,6 +2341,11 @@ function reportHtmlFromText(text){
     <tr><th>案件編號</th><td>${escapeHtml(meta['案件編號']||currentCase?.caseNo||'')}</td><th>地址</th><td>${escapeHtml(meta['地址']||currentCase?.address||'')}</td></tr>
     <tr><th>產出者</th><td>${escapeHtml(meta['產出者']||`${profile?.realName||profile?.callName||''}｜${profile?.brigade||''}/${profile?.unit||''}`)}</td><th>產出時間</th><td>${escapeHtml(meta['產出時間']||fmtTime(Date.now()))}</td></tr>
   </tbody></table>`;
+  const sectionHtml=sections.map(section=>{
+    const base=structuredSectionHtml(section);
+    if(/^四、/.test(section.title)) return base + deploymentSchematicHtml() + floorPlanSchematicHtml();
+    return base;
+  }).join('');
   return `<div class="report-cover">
       <div class="report-kicker">FireCommand｜火場指揮系統</div>
       <h1 class="report-case-title">火場進度報告</h1>
@@ -1529,7 +2354,7 @@ function reportHtmlFromText(text){
       ${metaTable}
       ${buildReportSummaryTable()}
       <div class="report-note">${escapeHtml(meta['保密註記']||'本報告僅供勤務指揮、內部彙整與交接使用，禁止外流。')}</div>
-    </div>` + sections.map(structuredSectionHtml).join('') + `<div class="report-watermark-foot">${escapeHtml(watermarkText())}｜僅供勤務使用，禁止外流</div>`;
+    </div>${sectionHtml}<div class="report-watermark-foot">${escapeHtml(watermarkText())}｜僅供勤務使用，禁止外流</div>`;
 }
 function renderReportPreview(text){
   const el=$('reportPreview'); if(!el) return;
@@ -1538,24 +2363,63 @@ function renderReportPreview(text){
 }
 function copyReportDraft(){ const text = ($('reportDraft')?.value || generateReport(false)); navigator.clipboard?.writeText(text); toast('已複製進度報告'); addLog('export','複製火場進度報告'); }
 function copyCommandSpeech(){ const text = buildFullSpeech(); navigator.clipboard?.writeText(text); $('commandSpeech').value=text; toast('已複製回報稿'); addLog('export','複製到建火人支初回報稿'); }
-function printReport(){
+function printReport(){ printReportSameTab(); }
+function printReportSameTab(){
   const text = sanitizeReportText(($('reportDraft')?.value || generateReport(false)));
-  const wm = watermarkText();
-  const wmLong = watermarkRepeated();
-  const win = window.open('', '_blank');
-  if(!win){ toast('瀏覽器阻擋彈出視窗，請允許彈出後再試'); return; }
-  win.document.write(`<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>${escapeHtml(currentCase.caseNo||'FireCommand進度報告')}</title><style>
-    body{font-family:-apple-system,BlinkMacSystemFont,'Noto Sans TC',sans-serif;margin:24px;color:#10231f;line-height:1.75;background:#fff}.page{position:relative;min-height:100vh;border-top:8px solid #0f7f73;padding-top:18px}.page:before{content:attr(data-watermark);position:fixed;inset:-12%;white-space:pre-wrap;font-size:20px;font-weight:900;color:rgba(15,127,115,.075);transform:rotate(-24deg);line-height:3.4;z-index:9999;pointer-events:none}.report-cover{display:flex;flex-direction:column;gap:10px;margin-bottom:18px;padding:16px 18px;border:1px solid #cde4df;border-radius:16px;background:linear-gradient(180deg,#f7fbfa,#eef7f5)}.report-kicker{font-size:14px;font-weight:1000;color:#0f7f73;letter-spacing:.04em}.report-case-title{font-size:30px;font-weight:1000;letter-spacing:-.03em;color:#10231f;margin:0}.report-subtitle{font-size:16px;color:#49625d;font-weight:800}.report-chip-row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 6px}.report-chip{display:inline-flex;align-items:center;padding:6px 10px;border-radius:999px;border:1px solid #c9dcd8;background:#fff;font-size:12px;font-weight:900;color:#0f514b}.report-meta-table,.report-plain-table{width:100%;border-collapse:collapse;margin:12px 0 18px;background:#fff}.report-meta-table th,.report-plain-table th{background:#eef7f5;text-align:left;font-weight:1000}.report-meta-table th,.report-meta-table td,.report-plain-table th,.report-plain-table td{border:1px solid #c9dcd8;padding:10px 12px;vertical-align:top}.report-section h2{font-size:22px;border-left:6px solid #0f7f73;padding-left:10px;margin:24px 0 10px}.report-list{display:grid;gap:8px}.report-list-item{background:#f7fbfa;border:1px solid #dcebea;border-radius:10px;padding:9px 12px;margin:0}.report-note{font-size:14px;color:#49625d}.report-watermark-foot,.footer{color:#60726f;font-size:12px;border-top:1px solid #c9dcd8;padding-top:8px}.footer{position:fixed;bottom:12px;left:24px;right:24px;background:rgba(255,255,255,.85)}@media print{button{display:none} body{margin:14mm}.page:before{color:rgba(15,127,115,.09)} .footer{position:fixed}}
-  </style></head><body><div class="page" data-watermark="${escapeHtml(wmLong)}">${reportHtmlFromText(text)}<div class="footer">${escapeHtml(wm)}｜僅供勤務使用，禁止外流</div></div><script>setTimeout(()=>window.print(),400)<\/script></body></html>`);
-  win.document.close();
-  addLog('export','開啟進度報告列印 / PDF');
+  let view=$('sameTabPrintOverlay');
+  if(!view){
+    view=document.createElement('section'); view.id='sameTabPrintOverlay'; view.className='same-tab-print-overlay'; view.hidden=true;
+    $('appScreen')?.appendChild(view);
+  }
+  reportReturnState={scrollY:window.scrollY,casePage:activeCasePage};
+  const shareButton=navigator.share ? '<button type="button" class="btn small ghost" id="shareSameTabReportBtn">分享</button>' : '';
+  view.innerHTML=`<div class="same-tab-print-toolbar"><button type="button" class="btn small ghost" id="closeSameTabPrintBtn">← 返回系統</button><div class="same-tab-print-title">火場進度報告預覽</div>${shareButton}<button type="button" class="btn small primary" id="triggerSameTabPrintBtn">列印 / 存 PDF</button></div><div class="same-tab-print-help">此頁不會另開視窗。列印完成後仍可按「返回系統」，也可使用瀏覽器返回鍵。</div><div class="same-tab-print-paper" data-watermark="${escapeHtml(watermarkRepeated())}">${reportHtmlFromText(text)}</div>`;
+  view.hidden=false;
+  document.body.classList.add('same-tab-print-mode');
+  if(!reportOverlayHistoryActive){ history.pushState({firecommandReport:true},'',location.href); reportOverlayHistoryActive=true; }
+  $('closeSameTabPrintBtn')?.addEventListener('click',()=>closeReportOverlay());
+  $('triggerSameTabPrintBtn')?.addEventListener('click',()=>{ ensureReportOverlayUsable(); window.print(); });
+  $('shareSameTabReportBtn')?.addEventListener('click',async()=>{
+    try{ await navigator.share({title:`${currentCase?.caseNo||'FireCommand'} 火場進度報告`,text:text.slice(0,2500)}); }
+    catch(err){ if(err?.name!=='AbortError') toast('此裝置暫時無法分享，請改用列印 / 存 PDF'); }
+  });
+  view.scrollTop=0; window.scrollTo({top:0,left:0,behavior:'auto'});
+  toast('已開啟同頁報告預覽；完成後可直接返回系統。',3000);
+  addLog('export','開啟同頁進度報告預覽 / 列印模式');
 }
+function closeReportOverlay({fromPopState=false}={}){
+  const view=$('sameTabPrintOverlay');
+  if(view) view.hidden=true;
+  document.body.classList.remove('same-tab-print-mode');
+  const state=reportReturnState;
+  reportReturnState=null;
+  const shouldBack=reportOverlayHistoryActive && !fromPopState;
+  reportOverlayHistoryActive=false;
+  if(state){ switchCasePage(state.casePage||'reportSection',false); requestAnimationFrame(()=>window.scrollTo({top:state.scrollY||0,left:0,behavior:'auto'})); }
+  if(shouldBack) history.back();
+}
+function handlePopState(){
+  const view=$('sameTabPrintOverlay');
+  if(view && !view.hidden) closeReportOverlay({fromPopState:true});
+}
+function ensureReportOverlayUsable(){
+  const view=$('sameTabPrintOverlay');
+  if(!view || view.hidden) return;
+  document.body.classList.add('same-tab-print-mode');
+  const toolbar=view.querySelector('.same-tab-print-toolbar'); if(toolbar) toolbar.style.display='flex';
+}
+
 function watermarkText(){ return `${profile?.realName || profile?.callName || '未具名'}｜${profile?.brigade || ''}/${profile?.unit || ''}｜${currentCase?.caseNo || 'FireCommand'}｜${new Date().toLocaleString('zh-TW',{hour12:false})}｜僅供勤務使用`; }
 function watermarkRepeated(){ const t = watermarkText(); return Array.from({length:80},()=>t).join('     '); }
 function setWatermark(){ document.body.dataset.watermark = watermarkRepeated(); }
 
 let activeStage=null;
 let activeArrivalCard=null;
+let activeBuildingView = "vertical";
+let activeCasePage = "caseInfo";
+let selectedFloorTool = "起火點";
+let floorDrawState = null;
+let floorMarkerDrag = null;
 const ARRIVAL_CARD_MAP = {
   arrived:'arrivedCheck', command:'commandCheck', contact:'contactCheck', rit:'ritCheck', hazard:'hazardCheck', firstSide:'firstSideCheck', par:'parCheck', support:'supportCheck', breakDoor:'breakDoorCheck', cordon:'cordonCheck'
 };
@@ -1565,17 +2429,90 @@ function selectCommandStage(stage){
   renderCommandGuide();
 }
 function toggleArrivalCard(key){
-  const inputId = ARRIVAL_CARD_MAP[key];
-  const input = inputId ? $(inputId) : null;
   const wasActive = activeArrivalCard === key;
-  if(input) input.checked = !wasActive;
   activeArrivalCard = wasActive ? null : key;
-  if(key === 'support' && input && input.checked === false){ applySupportValues([]); }
   renderArrivalStatusCards();
   renderCommandGuide();
-  saveCaseInfo(false);
 }
 
+
+function getRadioValue(name){
+  const checked = document.querySelector(`input[name="${name}"]:checked`);
+  return checked ? checked.value : '';
+}
+function setRadioValue(name, value){
+  const target = document.querySelector(`input[name="${name}"][value="${value}"]`);
+  if(target) target.checked = true;
+  else document.querySelectorAll(`input[name="${name}"]`).forEach(x=>x.checked=false);
+}
+function updateArrivalConditionalPanels(){
+  const commandState = getRadioValue('commandState');
+  const contactState = getRadioValue('contactState');
+  const ritState = getRadioValue('ritState');
+  const hazardState = getRadioValue('hazardState');
+  const firstSideState = getRadioValue('firstSideState');
+  const supportState = getRadioValue('supportState');
+  const breakDoorState = getRadioValue('breakDoorState');
+  const cordonState = getRadioValue('cordonState');
+  $('commandDetailFields') && ($('commandDetailFields').hidden = commandState !== 'transferred');
+  $('contactDetailFields') && ($('contactDetailFields').hidden = contactState !== 'found');
+  $('ritDetailFields') && ($('ritDetailFields').hidden = ritState !== 'assigned');
+  $('hazardDetailFields') && ($('hazardDetailFields').hidden = hazardState !== 'has');
+  $('firstSideDetailFields') && ($('firstSideDetailFields').hidden = firstSideState !== 'set');
+  $('supportDetailFields') && ($('supportDetailFields').hidden = supportState !== 'needed');
+  $('breakDoorDetailFields') && ($('breakDoorDetailFields').hidden = breakDoorState !== 'required');
+  $('cordonDetailFields') && ($('cordonDetailFields').hidden = cordonState !== 'set');
+  $('arrivedCheck') && ($('arrivedCheck').checked = !!$('addressConfirmCheck')?.checked);
+  if(supportState==='none') document.querySelectorAll('.support-grid input').forEach(x=>x.checked=false);
+  $('commandCheck') && ($('commandCheck').checked = commandState === 'transferred');
+  $('contactCheck') && ($('contactCheck').checked = !!contactState);
+  $('ritCheck') && ($('ritCheck').checked = ritState === 'assigned');
+  $('hazardCheck') && ($('hazardCheck').checked = !!hazardState);
+  $('firstSideCheck') && ($('firstSideCheck').checked = firstSideState === 'set');
+  $('supportCheck') && ($('supportCheck').checked = supportState === 'needed');
+  $('breakDoorCheck') && ($('breakDoorCheck').checked = breakDoorState === 'required');
+  $('cordonCheck') && ($('cordonCheck').checked = cordonState === 'set');
+}
+function switchCasePage(targetId='caseInfo', resetScroll=true){
+  const allowed = ['caseInfo','arrivalSection','sitrepSection','tacticalMapSection','aiSection','dashboardSection','reportSection','assessmentSection'];
+  const next = allowed.includes(targetId) ? targetId : 'caseInfo';
+  activeCasePage = next;
+  document.querySelectorAll('[data-case-page-panel]').forEach(panel => {
+    panel.hidden = panel.dataset.casePagePanel !== next;
+  });
+  document.querySelectorAll('[data-case-page]').forEach(btn => {
+    const active = btn.dataset.casePage === next;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  const section = $(next);
+  if(section){
+    const firstDetails = Array.from(section.children || []).find(node => node.matches?.('details.accordion')) || section.querySelector('details.accordion');
+    if(firstDetails) firstDetails.open = true;
+  }
+  if(next==='tacticalMapSection'){
+    const mapDetails = $('deploymentMapDetails') || section?.querySelector('details.tool-accordion');
+    const buildingDetails = $('buildingOpsDetails');
+    if(buildingDetails) buildingDetails.open = false;
+    if(mapDetails) mapDetails.open = true;
+    setTimeout(refreshMapSize,240);
+  }
+  if(next==='dashboardSection'){
+    const first = section?.querySelector('details.accordion'); if(first) first.open = true;
+  }
+  if(resetScroll){
+    const header = document.querySelector('#detailPage .detail-header');
+    requestAnimationFrame(()=>header?.scrollIntoView({block:'start',behavior:'auto'}));
+  }
+}
+function openQuickNavSection(targetId){ switchCasePage(targetId); }
+function setBuildingOpsView(view='vertical'){
+  activeBuildingView = view;
+  setActionChoice(['syncFloorsBtn','saveBuildingOpsBtn'], view==='vertical' ? 'syncFloorsBtn' : 'saveBuildingOpsBtn');
+  $('verticalBuildingPanel') && ($('verticalBuildingPanel').hidden = view !== 'vertical');
+  $('planBuildingPanel') && ($('planBuildingPanel').hidden = view !== 'plan');
+  if(view==='plan') setTimeout(refreshMapSize,50);
+}
 function renderParCrewChecklist(){
   const wrap = $('parCrewChecklist'); if(!wrap) return;
   const checked = currentCase?.parCrewChecked || {};
@@ -1590,31 +2527,43 @@ function renderParCrewChecklist(){
   }));
 }
 function renderArrivalStatusCards(){
+  const commandState = getRadioValue('commandState') || currentCase?.commandState || '';
+  const contactState = getRadioValue('contactState') || currentCase?.contactState || '';
+  const ritState = getRadioValue('ritState') || currentCase?.ritState || '';
+  const hazardState = getRadioValue('hazardState') || currentCase?.hazardState || '';
+  const firstSideState = getRadioValue('firstSideState') || currentCase?.firstSideState || '';
+  const supportState = getRadioValue('supportState') || currentCase?.supportState || '';
+  const breakDoorState = getRadioValue('breakDoorState') || currentCase?.breakDoorState || '';
+  const cordonState = getRadioValue('cordonState') || currentCase?.cordonState || '';
+  const contacts = readContacts();
   const mapping = {
-    arrived: [$('arrivedCheck'), currentCase?.addressConfirmed ? '地址已確認' : '待確認地址'],
-    command: [$('commandCheck'), currentCase?.commandTransfer ? '已接掌' : '未轉移'],
-    contact: [$('contactCheck'), readContacts().length ? `${readContacts().length}名` : (currentCase?.contactFound?'已找到':'未登錄')],
-    rit: [$('ritCheck'), currentCase?.ritSet ? (currentCase.ritUnit || '已律定') : '未律定'],
-    hazard: [$('hazardCheck'), currentCase?.hazardChecked ? '已詢問' : '未詢問'],
-    firstSide: [$('firstSideCheck'), currentCase?.firstSideSet ? (currentCase.firstSideName || '已設定') : '未設定'],
-    par: [$('parCheck'), currentCase?.parRequested ? '已要求/回報' : '未要求'],
-    support: [$('supportCheck'), readSupports().length ? readSupports().join('、') : '評估中'],
-    breakDoor: [$('breakDoorCheck'), currentCase?.breakDoor ? (currentCase.breakDoorAt?fmtTime(currentCase.breakDoorAt):'已登錄') : '未執行'],
-    cordon: [$('cordonCheck'), currentCase?.cordonSet ? (currentCase.cordonArea || '已劃設') : '未劃設']
+    arrived: [$('arrivedCheck'), $('addressConfirmCheck')?.checked ? '地址已確認' : '待確認地址'],
+    command: [$('commandCheck'), commandState==='transferred' ? '已接掌' : (commandState==='pending' ? '尚未轉移' : '未確認')],
+    contact: [$('contactCheck'), contactState==='found' ? (contacts.length ? `${contacts.length}名` : '已找到') : (contactState==='notfound' ? '尚未找到' : '未確認')],
+    rit: [$('ritCheck'), ritState==='assigned' ? ($('ritUnit')?.value || '已指派') : (ritState==='unassigned' ? '尚未指派' : '未確認')],
+    hazard: [$('hazardCheck'), hazardState==='has' ? '有危險物' : (hazardState==='none' ? '無危險物' : '未確認')],
+    firstSide: [$('firstSideCheck'), firstSideState==='set' ? (($('firstSideName')?.value || '第一面') + (($('firstSideNote')?.value||'') ? `｜${$('firstSideNote').value}` : '')) : (firstSideState==='unset' ? '尚未律定' : '未確認')],
+    par: [$('parCheck'), $('parCheck')?.checked ? '已要求/回報' : '未要求'],
+    support: [$('supportCheck'), supportState==='none' ? '暫無需求' : (readSupports().length ? readSupports().join('、') : (supportState==='needed' ? '需要支援' : '評估中'))],
+    breakDoor: [$('breakDoorCheck'), breakDoorState==='none' ? '不需要' : (breakDoorState==='required' ? ($('breakDoorAt')?.value ? fmtTime(datetimeLocalToMs($('breakDoorAt').value)) : '需要 / 已執行') : '未確認')],
+    cordon: [$('cordonCheck'), cordonState==='set' ? ($('cordonArea')?.value || '已劃設') : (cordonState==='pending' ? '尚未劃設' : '未確認')]
   };
   Object.entries(mapping).forEach(([key,[input,text]])=>{
     const card = document.querySelector(`[data-arrival-card="${key}"]`);
     const status = $(`${key}StatusText`);
-    const selected = !!input?.checked || (key==='support' && readSupports().length>0) || (key==='contact' && readContacts().length>0);
+    const selected = key==='command' ? !!commandState : key==='contact' ? !!contactState : key==='rit' ? !!ritState : key==='hazard' ? !!hazardState : key==='firstSide' ? !!firstSideState : key==='support' ? !!supportState : key==='breakDoor' ? !!breakDoorState : key==='cordon' ? !!cordonState : !!input?.checked;
     if(card){ card.classList.toggle('selected', selected); card.classList.toggle('expanded', activeArrivalCard===key); }
     if(status) status.textContent = text;
   });
   document.querySelectorAll('[data-arrival-panel]').forEach(panel => { panel.hidden = panel.dataset.arrivalPanel !== activeArrivalCard; });
   $('arrivalAddressDisplay') && ($('arrivalAddressDisplay').textContent = currentCase?.address || '尚未登錄地址');
+  updateArrivalConditionalPanels();
+  document.querySelectorAll('.choice-chip').forEach(label => label.classList.toggle('checked', !!label.querySelector('input:checked')));
+  document.querySelectorAll('.support-grid label').forEach(label => label.classList.toggle('checked', !!label.querySelector('input:checked')));
   updateCommandAutoHint();
   renderParCrewChecklist();
 }
-function updateSupportStatus(){ if(readSupports().length) $('supportCheck') && ($('supportCheck').checked = true); renderArrivalStatusCards(); }
+function updateSupportStatus(){ if(readSupports().length){ setRadioValue('supportState','needed'); $('supportCheck') && ($('supportCheck').checked = true); } renderArrivalStatusCards(); }
 function updateCommandAutoHint(){
   const el = $('commandAutoHint'); if(!el) return;
   const crewText = live.crews.length ? live.crews.map(p=>`${p.unit}${p.leader||''}：${p.task||p.status||'任務未填'}${p.face?`（${p.face}）`:''}`).join('；') : '尚無人員編組資料。';
@@ -1758,22 +2707,46 @@ async function updateUserStatus(userId, status){
     toast('最高管理員帳號為系統固定帳號，不能停權、待審或刪除。');
     return;
   }
-  await ref.set({status, approvedBy:profile.email, approvedAt:Date.now(), updatedAt:Date.now()},{merge:true});
-  await addLog('admin', `帳號狀態更新：${userId} → ${status}`);
+  await ref.set({status, approvedBy:profile.email, approvedAt:Date.now(), updatedAt:Date.now(), lastAdminAction:{action:'status-update',status,operator:profile.email,at:Date.now()}},{merge:true});
+  console.info('FireCommand admin status update', {userId,status,operator:profile.email});
   toast(`已更新帳號狀態：${status}`); loadUsersForAdmin();
 }
 
-function defaultBuildingOps(){ return { floorActions: [], planMarkers: [] }; }
-function getBuildingOps(){ return currentCase?.buildingOps || defaultBuildingOps(); }
+function defaultBuildingOps(){ return { floorActions: [], planMarkers: [], levels:[3,2,1] }; }
+function getBuildingOps(){
+  currentCase.buildingOps = Object.assign(defaultBuildingOps(), currentCase?.buildingOps || {});
+  if(!Array.isArray(currentCase.buildingOps.levels) || !currentCase.buildingOps.levels.length) currentCase.buildingOps.levels = [3,2,1];
+  return currentCase.buildingOps;
+}
 function setActionChoice(ids, activeId){ ids.forEach(id=>$(id)?.classList.toggle('active-choice', id===activeId)); }
-function floorsArray(){
-  const floors = Math.max(Number(currentCase?.floors)||1, 1);
-  return Array.from({length:floors}, (_,i)=>floors-i);
+function floorLabel(f){ return Number(f) > 0 ? `${Number(f)}F` : `B${Math.abs(Number(f))}`; }
+function floorsArray(){ return (getBuildingOps().levels || [3,2,1]).map(Number).sort((a,b)=>b-a); }
+function addUpperFloor(){
+  recordFloorHistory();
+  const ops = getBuildingOps();
+  const positives = (ops.levels||[]).filter(f=>Number(f)>0).map(Number);
+  const next = (positives.length ? Math.max(...positives) : 0) + 1;
+  if(!ops.levels.includes(next)) ops.levels.unshift(next);
+  ops.levels = ops.levels.map(Number).sort((a,b)=>b-a);
+  renderBuildingOps();
+  toast(`已新增 ${floorLabel(next)}`);
+}
+function addBasementFloor(){
+  recordFloorHistory();
+  const ops = getBuildingOps();
+  const negatives = (ops.levels||[]).filter(f=>Number(f)<0).map(Number);
+  const next = negatives.length ? Math.min(...negatives) - 1 : -1;
+  if(!ops.levels.includes(next)) ops.levels.push(next);
+  ops.levels = ops.levels.map(Number).sort((a,b)=>b-a);
+  renderBuildingOps();
+  toast(`已新增 ${floorLabel(next)}`);
 }
 function syncBuildingFloors(){
   if(!currentCase) return;
-  setActionChoice(['syncFloorsBtn','saveBuildingOpsBtn'], 'syncFloorsBtn');
-  currentCase.buildingOps = getBuildingOps();
+  setBuildingOpsView('vertical');
+  const ops = getBuildingOps();
+  if(!ops.levels || !ops.levels.length) ops.levels = [3,2,1];
+  currentCase.buildingOps = ops;
   renderBuildingOps();
   toast('已同步樓層');
 }
@@ -1781,23 +2754,25 @@ function renderBuildingOps(){
   if(!$('verticalSection') || !currentCase) return;
   const ops = getBuildingOps();
   const levels = floorsArray();
-  const fireFloorNum = parseInt(String(currentCase.fireFloor||'').match(/\d+/)?.[0] || currentCase.floors || levels[0], 10);
+  const fireFloorNum = parseInt(String(currentCase.fireFloor||'').match(/B(\d+)|(-?\d+)/i)?.[1] ? '-' + String(currentCase.fireFloor).match(/B(\d+)/i)[1] : String(currentCase.fireFloor||'').match(/-?\d+/)?.[0] || levels[0] || 1, 10);
   const select = $('floorPlanLevel');
   if(select){
     const prev = select.value || String(fireFloorNum);
-    select.innerHTML = levels.map(f=>`<option value="${f}">${f}樓</option>`).join('');
-    select.value = levels.includes(Number(prev)) ? prev : String(fireFloorNum);
+    select.innerHTML = levels.map(f=>`<option value="${f}">${floorLabel(f)}</option>`).join('');
+    select.value = levels.includes(Number(prev)) ? prev : String(levels.includes(fireFloorNum) ? fireFloorNum : levels[0]);
   }
   $('verticalSection').innerHTML = levels.map(f => {
     const a = ops.floorActions?.find(x=>Number(x.floor)===f) || {floor:f, action:'未標示', note:''};
     return `<div class="floor-row ${f===fireFloorNum?'fire-floor':''}" data-floor="${f}">
-      <div class="floor-label">${f}F</div>
+      <div class="floor-label">${floorLabel(f)}</div>
       <select class="floor-action" data-floor-action="${f}"><option ${a.action==='滅火攻擊'?'selected':''}>滅火攻擊</option><option ${a.action==='阻隔延燒'?'selected':''}>阻隔延燒</option><option ${a.action==='就地避難'?'selected':''}>就地避難</option><option ${a.action==='疏散離開'?'selected':''}>疏散離開</option><option ${a.action==='搜索救援'?'selected':''}>搜索救援</option><option ${a.action==='未標示'?'selected':''}>未標示</option></select>
       <input class="floor-note" data-floor-note="${f}" placeholder="補述" value="${escapeHtml(a.note||'')}" />
     </div>`;
   }).join('');
   document.querySelectorAll('[data-floor-action],[data-floor-note]').forEach(el => el.addEventListener('change', collectBuildingOpsFromUI));
   renderFloorPlan();
+  setBuildingOpsView(activeBuildingView || 'vertical');
+  selectFloorTool(selectedFloorTool || '起火點', false);
 }
 function collectBuildingOpsFromUI(){
   if(!currentCase) return;
@@ -1808,53 +2783,226 @@ function collectBuildingOpsFromUI(){
   });
   currentCase.buildingOps = ops;
 }
+function cloneBuildingOps(value=getBuildingOps()){ return JSON.parse(JSON.stringify(value || defaultBuildingOps())); }
+function recordFloorHistory(){
+  if(suppressFloorHistory || !currentCase) return;
+  floorHistory.push(cloneBuildingOps());
+  if(floorHistory.length>40) floorHistory.shift();
+  floorRedoStack=[];
+  updateFloorCommandState();
+}
+function restoreFloorSnapshot(snapshot){
+  if(!currentCase||!snapshot) return;
+  suppressFloorHistory=true;
+  currentCase.buildingOps=cloneBuildingOps(snapshot);
+  suppressFloorHistory=false;
+  floorSelectedId=null;
+  renderBuildingOps();
+  updateFloorCommandState();
+}
+function floorUndo(){
+  if(!floorHistory.length){ toast('目前沒有可復原的動作'); return; }
+  floorRedoStack.push(cloneBuildingOps());
+  restoreFloorSnapshot(floorHistory.pop());
+  toast('已復原上一個繪圖動作');
+}
+function floorRedo(){
+  if(!floorRedoStack.length){ toast('目前沒有可重做的動作'); return; }
+  floorHistory.push(cloneBuildingOps());
+  restoreFloorSnapshot(floorRedoStack.pop());
+  toast('已重做繪圖動作');
+}
+function updateFloorCommandState(){
+  $('floorUndoBtn') && ($('floorUndoBtn').disabled=!floorHistory.length);
+  $('floorRedoBtn') && ($('floorRedoBtn').disabled=!floorRedoStack.length);
+  $('lockFloorPlanBtn') && ($('lockFloorPlanBtn').textContent=floorPlanLocked?'🔒 圖面已鎖定':'🔓 鎖定圖面');
+  $('floorPlanCanvas')?.classList.toggle('locked',floorPlanLocked);
+}
+function selectFloorTool(tool, show=true){
+  if(floorPlanLocked && tool!=='選取'){ toast('圖面已鎖定，請先解除鎖定'); return; }
+  selectedFloorTool = tool || selectedFloorTool || '起火點';
+  document.querySelectorAll('[data-floor-tool]').forEach(btn => btn.classList.toggle('active-choice', btn.dataset.floorTool===selectedFloorTool));
+  $('floorEraserBtn')?.classList.toggle('active-choice', selectedFloorTool==='橡皮擦');
+  $('floorSelectBtn')?.classList.toggle('active-choice', selectedFloorTool==='選取');
+  const hint = $('floorToolHint');
+  if(hint){
+    if(selectedFloorTool==='隔間' || selectedFloorTool==='水線') hint.textContent=`目前工具：${selectedFloorTool}。手指拖曳即可畫線，系統會吸附到水平、垂直或45度；點選線條可移動、調整端點或刪除。`;
+    else if(selectedFloorTool==='橡皮擦') hint.textContent='目前工具：橡皮擦。點一下圖示或線條即可刪除。';
+    else if(selectedFloorTool==='選取') hint.textContent='目前工具：選取。點選物件後可直接拖動；線條可拖動整條或調整兩端。';
+    else hint.textContent=`目前工具：${selectedFloorTool}。點一下放置標示；長按或使用選取工具拖動，點選可修改或刪除。`;
+  }
+  if(show) toast(`已選擇：${selectedFloorTool}`);
+}
 function renderFloorPlan(){
   const canvas = $('floorPlanCanvas'); if(!canvas || !currentCase) return;
   collectBuildingOpsFromUI();
-  const level = Number($('floorPlanLevel')?.value || parseInt(String(currentCase.fireFloor||'1').match(/\d+/)?.[0] || '1',10));
+  const level = Number($('floorPlanLevel')?.value || 1);
+  floorPlanLocked=!!getBuildingOps().locked;
   const markers = (getBuildingOps().planMarkers || []).filter(m=>Number(m.floor)===level);
-  canvas.innerHTML = `<div class="floor-plan-grid"></div>` + markers.map(m => `<button class="floor-marker ${markerClass(m.type)}" style="left:${m.x}%;top:${m.y}%" data-marker-id="${m.id}" title="${escapeHtml(m.note||m.type)}">${markerIcon(m.type)}<span>${escapeHtml(m.label||m.type)}</span></button>`).join('');
-  canvas.querySelectorAll('[data-marker-id]').forEach(btn => btn.addEventListener('click', ev => { ev.stopPropagation(); editFloorMarker(btn.dataset.markerId); }));
+  canvas.innerHTML = `<div class="floor-plan-grid"></div>` + markers.map(m => {
+    const selected=floorSelectedId===m.id?' selected':'';
+    if(m.x2 !== undefined && m.y2 !== undefined){
+      const dx = Number(m.x2)-Number(m.x), dy = Number(m.y2)-Number(m.y);
+      const len = Math.sqrt(dx*dx + dy*dy);
+      const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+      const handles=selected&&!floorPlanLocked?`<button type="button" class="floor-line-handle start" style="left:${m.x}%;top:${m.y}%" data-line-endpoint="start" data-marker-id="${m.id}" aria-label="調整線段起點"></button><button type="button" class="floor-line-handle end" style="left:${m.x2}%;top:${m.y2}%" data-line-endpoint="end" data-marker-id="${m.id}" aria-label="調整線段終點"></button>`:'';
+      return `<button type="button" class="floor-line ${markerClass(m.type)}${selected}" style="left:${m.x}%;top:${m.y}%;width:${len}%;transform:rotate(${angle}deg)" data-marker-id="${m.id}" title="${escapeHtml(m.note||m.type)}"><span>${escapeHtml(m.note||m.type)}</span></button>${handles}`;
+    }
+    return `<button type="button" class="floor-marker ${markerClass(m.type)}${selected}" style="left:${m.x}%;top:${m.y}%" data-marker-id="${m.id}" title="${escapeHtml(m.note||m.type)}">${markerIcon(m.type)}<span>${escapeHtml(m.label||m.type)}</span></button>`;
+  }).join('');
+  canvas.querySelectorAll('[data-marker-id]:not([data-line-endpoint])').forEach(btn => {
+    btn.addEventListener('click', ev => {
+      ev.stopPropagation();
+      const id=btn.dataset.markerId;
+      if(floorMarkerDrag?.moved) return;
+      if(selectedFloorTool==='橡皮擦'){ deleteFloorMarker(id); return; }
+      if(selectedFloorTool==='選取'){ floorSelectedId=id; renderFloorPlan(); return; }
+      editFloorMarker(id);
+    });
+    btn.addEventListener('pointerdown', ev => startFloorMarkerDrag(ev, btn.dataset.markerId));
+  });
+  canvas.querySelectorAll('[data-line-endpoint]').forEach(handle=>handle.addEventListener('pointerdown',ev=>startLineEndpointDrag(ev,handle.dataset.markerId,handle.dataset.lineEndpoint)));
+  updateFloorCommandState();
 }
 function markerIcon(t){ return {'起火點':'🔥','待救者':'🟢','死亡者':'🔴','入口':'🚪','水線':'💧','隔間':'▦','危害物':'☣️'}[t] || '•'; }
 function markerClass(t){ return {'起火點':'fire','待救者':'rescue','死亡者':'fatal','入口':'entry','水線':'hose','隔間':'wall','危害物':'hazard'}[t] || ''; }
-function addFloorMarkerFromClick(ev){
-  if(!currentCase || ev.target.closest('[data-marker-id]')) return;
-  const rect = ev.currentTarget.getBoundingClientRect();
-  const x = Math.max(0, Math.min(100, ((ev.clientX - rect.left) / rect.width) * 100));
-  const y = Math.max(0, Math.min(100, ((ev.clientY - rect.top) / rect.height) * 100));
-  // v16 以拖拉工具為主；空白點擊不再新增，避免誤觸。
-  return;
-}
-
-function addFloorMarkerFromDrop(ev){
-  ev.preventDefault();
-  const type = ev.dataTransfer?.getData('text/plain') || '起火點';
-  addFloorMarkerAtEvent(ev, type);
-}
-function addFloorMarkerAtEvent(ev, type){
-  if(!currentCase) return;
+function floorPointFromEvent(ev){
   const rect = $('floorPlanCanvas').getBoundingClientRect();
-  const x = Math.max(0, Math.min(100, ((ev.clientX - rect.left) / rect.width) * 100));
-  const y = Math.max(0, Math.min(100, ((ev.clientY - rect.top) / rect.height) * 100));
-  const floor = Number($('floorPlanLevel')?.value || 1);
-  const note = prompt(`新增 ${floor}樓 ${type} 標示，請輸入備註`, '') || '';
-  const ops = getBuildingOps(); ops.planMarkers = ops.planMarkers || [];
-  ops.planMarkers.push({ id:uid('marker'), floor, type, x:Math.round(x*10)/10, y:Math.round(y*10)/10, label:type, note });
-  currentCase.buildingOps = ops; renderFloorPlan();
+  return { x:Math.max(0, Math.min(100, ((ev.clientX - rect.left) / rect.width) * 100)), y:Math.max(0, Math.min(100, ((ev.clientY - rect.top) / rect.height) * 100)) };
+}
+function snapFloorEnd(start,end){
+  const dx=end.x-start.x,dy=end.y-start.y; const len=Math.hypot(dx,dy); if(len<1) return end;
+  const step=Math.PI/4; const angle=Math.round(Math.atan2(dy,dx)/step)*step;
+  return {x:Math.max(0,Math.min(100,start.x+Math.cos(angle)*len)),y:Math.max(0,Math.min(100,start.y+Math.sin(angle)*len))};
+}
+function activeFloor(){ return Number($('floorPlanLevel')?.value || 1); }
+function addFloorMarkerFromClick(ev){ /* pointer handler manages touch/click placement */ }
+function handleFloorPlanPointerDown(ev){
+  if(!currentCase || ev.target.closest('[data-marker-id]')) return;
+  if(floorPlanLocked){ toast('圖面已鎖定，請先解除鎖定'); return; }
+  ev.preventDefault();
+  if(selectedFloorTool==='選取'){ floorSelectedId=null; renderFloorPlan(); return; }
+  if(selectedFloorTool==='橡皮擦') return;
+  const pt = floorPointFromEvent(ev);
+  const tool = selectedFloorTool || '起火點';
+  if(tool==='隔間' || tool==='水線'){
+    recordFloorHistory();
+    floorDrawState = {type:tool, start:pt, current:pt, pointerId:ev.pointerId};
+    $('floorPlanCanvas').setPointerCapture?.(ev.pointerId);
+    renderFloorPreviewLine(pt, pt, tool);
+  } else {
+    recordFloorHistory(); addFloorMarkerAtPoint(pt, tool, '');
+  }
+}
+function handleFloorPlanPointerMove(ev){
+  if(floorMarkerDrag?.active){
+    const pt = floorPointFromEvent(ev); const drag=floorMarkerDrag; const m=drag.marker;
+    if(drag.mode==='endpoint'){
+      const fixed=drag.endpoint==='start'?{x:m.x2,y:m.y2}:{x:m.x,y:m.y}; const snapped=snapFloorEnd(fixed,pt);
+      if(drag.endpoint==='start'){m.x=snapped.x;m.y=snapped.y;}else{m.x2=snapped.x;m.y2=snapped.y;}
+    }else if(m.x2!==undefined){
+      const dx=pt.x-drag.startPointer.x,dy=pt.y-drag.startPointer.y;
+      m.x=Math.max(0,Math.min(100,drag.origin.x+dx));m.y=Math.max(0,Math.min(100,drag.origin.y+dy));
+      m.x2=Math.max(0,Math.min(100,drag.origin.x2+dx));m.y2=Math.max(0,Math.min(100,drag.origin.y2+dy));
+    }else{m.x=Math.round(pt.x*10)/10;m.y=Math.round(pt.y*10)/10;}
+    drag.moved=true; renderFloorPlan(); return;
+  }
+  if(!floorDrawState) return;
+  const pt = snapFloorEnd(floorDrawState.start,floorPointFromEvent(ev));
+  floorDrawState.current = pt;
+  renderFloorPreviewLine(floorDrawState.start, pt, floorDrawState.type);
+}
+function handleFloorPlanPointerUp(ev){
+  if(floorMarkerDrag?.active){
+    floorMarkerDrag.active=false; currentCase.buildingOps=getBuildingOps();
+    const moved=floorMarkerDrag.moved; setTimeout(()=>{ if(floorMarkerDrag) floorMarkerDrag.moved=false; },250);
+    if(moved) renderFloorPlan(); return;
+  }
+  if(!floorDrawState) return;
+  const start=floorDrawState.start,end=snapFloorEnd(start,floorDrawState.current||floorPointFromEvent(ev)),type=floorDrawState.type;
+  const dist=Math.hypot(end.x-start.x,end.y-start.y); removeFloorPreviewLine();
+  if(dist>2) addFloorLine(start,end,type); else floorHistory.pop();
+  floorDrawState=null; updateFloorCommandState();
+}
+function handleFloorPlanPointerCancel(){ floorDrawState=null; floorMarkerDrag=null; removeFloorPreviewLine(); }
+function renderFloorPreviewLine(a,b,type){
+  const canvas=$('floorPlanCanvas'); if(!canvas) return; removeFloorPreviewLine();
+  const dx=b.x-a.x,dy=b.y-a.y,len=Math.sqrt(dx*dx+dy*dy),angle=Math.atan2(dy,dx)*180/Math.PI;
+  const div=document.createElement('div'); div.className=`floor-line preview ${type==='水線'?'hose':'wall'}`; div.dataset.preview='1'; div.style.left=a.x+'%'; div.style.top=a.y+'%'; div.style.width=len+'%'; div.style.transform=`rotate(${angle}deg)`; canvas.appendChild(div);
+}
+function removeFloorPreviewLine(){ document.querySelectorAll('#floorPlanCanvas [data-preview="1"]').forEach(x=>x.remove()); }
+function addFloorMarkerAtPoint(pt,type,note=''){
+  const ops=getBuildingOps(); ops.planMarkers=ops.planMarkers||[];
+  ops.planMarkers.push({id:uid('marker'),floor:activeFloor(),type,x:Math.round(pt.x*10)/10,y:Math.round(pt.y*10)/10,label:type,note});
+  currentCase.buildingOps=ops; renderFloorPlan();
+}
+function addFloorLine(a,b,type){
+  const ops=getBuildingOps(); ops.planMarkers=ops.planMarkers||[];
+  ops.planMarkers.push({id:uid('marker'),floor:activeFloor(),type,x:Math.round(a.x*10)/10,y:Math.round(a.y*10)/10,x2:Math.round(b.x*10)/10,y2:Math.round(b.y*10)/10,label:type,note:''});
+  currentCase.buildingOps=ops; renderFloorPlan();
+}
+function addFloorMarkerFromDrop(ev){
+  ev.preventDefault(); if(floorPlanLocked) return;
+  const type=ev.dataTransfer?.getData('text/plain')||selectedFloorTool||'起火點'; const pt=floorPointFromEvent(ev); recordFloorHistory();
+  if(type==='隔間'||type==='水線') addFloorLine({x:Math.max(0,pt.x-10),y:pt.y},{x:Math.min(100,pt.x+10),y:pt.y},type); else addFloorMarkerAtPoint(pt,type,'');
+}
+function addFloorMarkerAtEvent(ev,type){ const pt=floorPointFromEvent(ev); recordFloorHistory(); if(type==='隔間'||type==='水線') addFloorLine({x:Math.max(0,pt.x-10),y:pt.y},{x:Math.min(100,pt.x+10),y:pt.y},type); else addFloorMarkerAtPoint(pt,type,''); }
+function startFloorMarkerDrag(ev,markerId){
+  if(floorPlanLocked||selectedFloorTool==='橡皮擦') return;
+  const ops=getBuildingOps(),m=ops.planMarkers?.find(x=>x.id===markerId); if(!m) return;
+  const begin=()=>{ recordFloorHistory(); floorSelectedId=markerId; floorMarkerDrag={marker:m,active:true,moved:false,mode:'move',startPointer:floorPointFromEvent(ev),origin:{x:m.x,y:m.y,x2:m.x2,y2:m.y2}}; ev.target.setPointerCapture?.(ev.pointerId); toast('可拖曳移動標示'); };
+  if(selectedFloorTool==='選取'){ ev.preventDefault();begin();return; }
+  const timer=setTimeout(begin,350); const clear=()=>{clearTimeout(timer);ev.target.removeEventListener('pointerup',clear);ev.target.removeEventListener('pointercancel',clear);}; ev.target.addEventListener('pointerup',clear);ev.target.addEventListener('pointercancel',clear);
+}
+function startLineEndpointDrag(ev,markerId,endpoint){
+  if(floorPlanLocked) return; ev.preventDefault();ev.stopPropagation();
+  const m=getBuildingOps().planMarkers?.find(x=>x.id===markerId);if(!m)return;recordFloorHistory();floorSelectedId=markerId;
+  floorMarkerDrag={marker:m,active:true,moved:false,mode:'endpoint',endpoint,startPointer:floorPointFromEvent(ev),origin:{x:m.x,y:m.y,x2:m.x2,y2:m.y2}};ev.target.setPointerCapture?.(ev.pointerId);
+}
+function deleteFloorMarker(markerId){
+  const ops=getBuildingOps(),m=ops.planMarkers?.find(x=>x.id===markerId);if(!m)return;
+  recordFloorHistory();ops.planMarkers=ops.planMarkers.filter(x=>x.id!==markerId);floorSelectedId=null;currentCase.buildingOps=ops;renderFloorPlan();toast('已刪除標示');
 }
 function editFloorMarker(markerId){
-  const ops = getBuildingOps();
-  const m = ops.planMarkers?.find(x=>x.id===markerId); if(!m) return;
-  const next = prompt('修改標示備註；輸入 DELETE 可刪除', m.note || m.label || m.type);
-  if(next === null) return;
-  if(next.trim().toUpperCase()==='DELETE') ops.planMarkers = ops.planMarkers.filter(x=>x.id!==markerId);
-  else m.note = next.trim();
-  currentCase.buildingOps = ops; renderFloorPlan();
+  const ops=getBuildingOps(),m=ops.planMarkers?.find(x=>x.id===markerId);if(!m)return;
+  floorSelectedId=markerId;
+  openActionSheet(`${floorLabel(m.floor)}｜${m.type}`,`<div class="field"><label>標示／線條備註</label><input id="floorMarkerNoteInput" value="${escapeHtml(m.note||'')}" placeholder="可留空，非必要不輸入文字" /></div><div class="quick-choice-row"><button type="button" class="btn small primary" id="saveFloorMarkerEditBtn">儲存</button><button type="button" class="btn small ghost" id="selectFloorMarkerMoveBtn">選取並移動</button><button type="button" class="btn small danger" id="deleteFloorMarkerBtn">刪除</button></div>`);
+  $('saveFloorMarkerEditBtn')?.addEventListener('click',()=>{recordFloorHistory();m.note=$('floorMarkerNoteInput')?.value.trim()||'';currentCase.buildingOps=ops;closeActionSheet();renderFloorPlan();});
+  $('selectFloorMarkerMoveBtn')?.addEventListener('click',()=>{selectedFloorTool='選取';closeActionSheet();selectFloorTool('選取',false);renderFloorPlan();toast('請直接拖曳選取的物件');});
+  $('deleteFloorMarkerBtn')?.addEventListener('click',()=>{closeActionSheet();deleteFloorMarker(markerId);});
 }
+function copyAdjacentFloor(){
+  if(!currentCase||floorPlanLocked)return;
+  const target=activeFloor(),levels=floorsArray(),source=levels.filter(x=>x!==target).sort((a,b)=>Math.abs(a-target)-Math.abs(b-target))[0];
+  if(source===undefined){toast('沒有其他樓層可複製');return;}
+  const ops=getBuildingOps(),sourceMarkers=(ops.planMarkers||[]).filter(m=>Number(m.floor)===source);
+  if(!sourceMarkers.length){toast(`${floorLabel(source)} 尚無圖面資料`);return;}
+  if(!confirm(`確認將 ${floorLabel(source)} 的平面配置複製到 ${floorLabel(target)}？目前樓層標示會被取代。`))return;
+  recordFloorHistory();ops.planMarkers=(ops.planMarkers||[]).filter(m=>Number(m.floor)!==target).concat(sourceMarkers.map(m=>({...cloneBuildingOps(m),id:uid('marker'),floor:target})));currentCase.buildingOps=ops;renderFloorPlan();toast('已複製相鄰樓層配置');
+}
+function toggleFloorPlanLock(){
+  if(!currentCase)return;const ops=getBuildingOps();ops.locked=!ops.locked;floorPlanLocked=ops.locked;currentCase.buildingOps=ops;floorSelectedId=null;renderFloorPlan();toast(floorPlanLocked?'圖面已鎖定，可避免誤觸':'已解除圖面鎖定');
+}
+function clearActiveFloorPlan(){
+  if(!currentCase||floorPlanLocked){toast('請先解除圖面鎖定');return;}const level=activeFloor();if(!confirm(`確認清除 ${floorLabel(level)} 的所有圖示與線條？`))return;
+  recordFloorHistory();const ops=getBuildingOps();ops.planMarkers=(ops.planMarkers||[]).filter(m=>Number(m.floor)!==level);currentCase.buildingOps=ops;floorSelectedId=null;renderFloorPlan();toast('已清除本樓層圖面');
+}
+function updateOrientationHint(){
+  const el=$('orientationHint');if(!el)return;const portrait=window.matchMedia?.('(orientation: portrait)').matches ?? window.innerHeight>window.innerWidth;
+  let dismissed=false;try{dismissed=sessionStorage.getItem('firecommand_orientation_hint')==='1';}catch{}el.hidden=!portrait||dismissed||!$('buildingOpsDetails')?.open;
+}
+function dismissOrientationHint(){try{sessionStorage.setItem('firecommand_orientation_hint','1');}catch{}$('orientationHint')&&($('orientationHint').hidden=true);}
+function injectKeyboardVoiceHelpers(){
+  const ids=['sitrepDetail','patientNote','detailNotes','supportDetails','commandSituation','arrivalAddressNote','breakDoorNote','cordonNote'];
+  ids.forEach(id=>{const input=$(id);if(!input||document.querySelector(`[data-keyboard-voice-target="${id}"]`))return;const helper=document.createElement('button');helper.type='button';helper.className='keyboard-voice-helper';helper.dataset.keyboardVoiceTarget=id;helper.textContent='🎙 使用手機鍵盤語音輸入';input.insertAdjacentElement('afterend',helper);});
+}
+function focusKeyboardVoiceTarget(id){
+  const input=$(id);if(!input)return;input.focus({preventScroll:false});input.scrollIntoView({behavior:'smooth',block:'center'});toast('已開啟文字欄位；請點手機鍵盤上的麥克風進行語音轉文字。',4200);
+}
+
 async function saveBuildingOps(){
   if(!currentCase) return;
-  setActionChoice(['syncFloorsBtn','saveBuildingOpsBtn'], 'saveBuildingOpsBtn');
+  setBuildingOpsView('plan');
   collectBuildingOpsFromUI();
   const patch = { buildingOps: getBuildingOps(), updatedAt:Date.now() };
   Object.assign(currentCase, patch);
@@ -1865,8 +3013,8 @@ async function saveBuildingOps(){
 
 function buildingReportLines(){
   const ops = getBuildingOps();
-  const floors = (ops.floorActions||[]).filter(x=>x.action && x.action !== '未標示').map(x=>`- ${x.floor}F：${x.action}${x.note?`｜${x.note}`:''}`);
-  const markers = (ops.planMarkers||[]).map(m=>`- ${m.floor}F ${m.type}：${m.note||m.label||''}`);
+  const floors = (ops.floorActions||[]).filter(x=>x.action && x.action !== '未標示').map(x=>`- ${floorLabel(x.floor)}：${x.action}${x.note?`｜${x.note}`:''}`);
+  const markers = (ops.planMarkers||[]).map(m=>`- ${floorLabel(m.floor)} ${m.type}：${m.note||m.label||''}`);
   return floors.concat(markers).length ? floors.concat(markers) : ['尚無建物內部作戰圖標示。'];
 }
 

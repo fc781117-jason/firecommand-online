@@ -4,8 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#15120e" />
-  <title>FireCommand 火場指揮系統 v17</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <title>FireCommand 火場指揮系統 v22</title>
   <link rel="stylesheet" href="./assets/styles.css" />
 </head>
 <body>
@@ -76,6 +75,49 @@
       <button id="adminManageBtn" class="btn small ghost" hidden>帳號管理</button><button id="logoutBtn" class="btn small ghost">登出</button>
     </header>
 
+    <section class="page top-help-wrap" aria-label="常見故障排除">
+      <details id="troubleshootingDetails" class="accordion troubleshooting-accordion">
+        <summary><span>常見故障排除｜定位、PDF、登入</span><span class="chevron">›</span></summary>
+        <div class="accordion-body">
+          <div class="notice compact">測試人員遇到定位、PDF 或登入問題時，請先依下列步驟排除；操作完成後重新整理本頁。</div>
+          <div class="troubleshooting-grid">
+            <section class="troubleshooting-card">
+              <h4>iPhone / iPad（Safari）</h4>
+              <ol>
+                <li><b>定位：</b>設定 → 隱私權與安全性 → 定位服務 → Safari 網站，允許使用定位。</li>
+                <li><b>PDF：</b>若「匯出 PDF」沒有反應，使用「同頁列印 / 存 PDF」；再按分享 → 列印或儲存到檔案。</li>
+                <li><b>彈出式視窗：</b>設定 → App → Safari → 暫時關閉「阻擋彈出式視窗」，完成匯出後可再開啟。</li>
+              </ol>
+            </section>
+            <section class="troubleshooting-card">
+              <h4>Android（Chrome）</h4>
+              <ol>
+                <li><b>定位：</b>網址列左側圖示 → 權限 → 位置，選擇允許；若無法調整，重設網站權限後重開。</li>
+                <li><b>PDF：</b>使用「同頁列印 / 存 PDF」後，選列印 → 另存為 PDF。</li>
+                <li><b>彈出式視窗：</b>若 Chrome 顯示已封鎖彈出式視窗，點「一律顯示」後再匯出。</li>
+              </ol>
+            </section>
+            <section class="troubleshooting-card">
+              <h4>定位校正原則</h4>
+              <ol>
+                <li>先以 Google 地址結果定位，再比對現場 GPS。</li>
+                <li>地址與 GPS 差距過大時，改用「點地圖設定中心」手動修正。</li>
+                <li>確認火場中心、入口與第一面後，再按「確認並鎖定案件中心」。</li>
+              </ol>
+            </section>
+            <section class="troubleshooting-card">
+              <h4>Google 地圖診斷</h4>
+              <ol>
+                <li>部署頁展開「定位診斷」，確認 API Key、Maps JavaScript、Places 與瀏覽器定位均為可用。</li>
+                <li>若顯示 Referer 或 API 權限錯誤，請確認 Google Cloud 已允許正式網域與目前測試網址。</li>
+                <li>正式版不再使用 OpenStreetMap；Google 地圖無法載入時會顯示明確錯誤，不會偷偷改用錯誤的行政區中心。</li>
+              </ol>
+            </section>
+          </div>
+        </div>
+      </details>
+    </section>
+
 
       <section id="adminSection" class="stack" hidden>
         <details class="accordion">
@@ -103,7 +145,9 @@
           <span>新增案件 / 貼上派遣令</span><span class="chevron">›</span>
         </summary>
         <form id="caseForm" class="accordion-body">
-          <div class="field"><label>案件地址</label><input id="caseAddress" required placeholder="例：新北市蘆洲區長榮路792號" /></div>
+          <div class="field"><label>案件地址</label><input id="caseAddress" required autocomplete="off" placeholder="例：新北市蘆洲區長榮路792號" />
+            <div class="hint">輸入 3 個字以上會顯示 Google 地址候選；請優先點選正確門牌。</div>
+            <div id="caseAddressCandidateList" class="location-candidate-list compact-candidates"></div></div>
           <div class="field"><label>派遣令內容（可貼上，系統會嘗試抓地址）</label><textarea id="dispatchText" rows="3" placeholder="可貼派遣令文字；若案件地址空白，會嘗試從這裡擷取地址"></textarea></div>
           <div class="two-col">
             <div class="field"><label>案件類型</label><select id="caseType"><option>建物火災</option><option>住宅火警</option><option>工廠火災</option><option>倉庫火災</option><option>車輛火災</option><option>其他火警</option></select></div>
@@ -139,11 +183,20 @@
         </div>
       </div>
 
-      <nav class="quick-nav">
-        <a href="#caseInfo">概要</a><a href="#arrivalSection">到場</a><a href="#sitrepSection">戰情</a><a href="#tacticalMapSection">部署</a><a href="#dashboardSection">人車</a><a href="#aiSection">戰術建議</a><a href="#assessmentSection">檢討</a><a href="#reportSection">進度報告</a>
-      </nav>
+      <div class="case-workspace">
+        <nav class="case-page-nav" id="casePageNav" aria-label="案件功能分頁">
+          <button type="button" class="case-nav-item active" data-case-page="caseInfo" aria-selected="true"><span class="case-nav-icon">▣</span><span>概要</span></button>
+          <button type="button" class="case-nav-item" data-case-page="arrivalSection"><span class="case-nav-icon">到</span><span>到場</span></button>
+          <button type="button" class="case-nav-item" data-case-page="sitrepSection"><span class="case-nav-icon">報</span><span>戰情</span></button>
+          <button type="button" class="case-nav-item" data-case-page="tacticalMapSection"><span class="case-nav-icon">圖</span><span>部署</span></button>
+          <button type="button" class="case-nav-item" data-case-page="aiSection"><span class="case-nav-icon">AI</span><span>建議</span></button>
+          <button type="button" class="case-nav-item" data-case-page="dashboardSection"><span class="case-nav-icon">人</span><span>人車</span></button>
+          <button type="button" class="case-nav-item" data-case-page="reportSection"><span class="case-nav-icon">文</span><span>報告</span></button>
+          <button type="button" class="case-nav-item" data-case-page="assessmentSection"><span class="case-nav-icon">檢</span><span>檢討</span></button>
+        </nav>
+        <div id="casePageContent" class="case-page-content">
 
-      <section id="caseInfo" class="stack">
+      <section id="caseInfo" class="stack case-page-panel" data-case-page-panel="caseInfo">
         <details class="accordion">
           <summary><span>案件概要（開案資料）</span><span class="chevron">›</span></summary>
           <div class="accordion-body">
@@ -167,7 +220,7 @@
         </details>
       </section>
 
-      <section id="arrivalSection" class="stack">
+      <section id="arrivalSection" class="stack case-page-panel" data-case-page-panel="arrivalSection" hidden>
         <details class="accordion" open>
           <summary><span>到場回報｜到建火人支初</span><span class="chevron">›</span></summary>
           <div class="accordion-body">
@@ -190,7 +243,7 @@
               <button type="button" class="arrival-status-card" data-arrival-card="contact"><input id="contactCheck" type="checkbox" class="sr-only" /><b>關係人</b><span>姓名 / 電話 / 特徵</span><em id="contactStatusText">未登錄</em></button>
               <button type="button" class="arrival-status-card" data-arrival-card="rit"><input id="ritCheck" type="checkbox" class="sr-only" /><b>RIT</b><span>緊急救援小組</span><em id="ritStatusText">未律定</em></button>
               <button type="button" class="arrival-status-card" data-arrival-card="hazard"><input id="hazardCheck" type="checkbox" class="sr-only" /><b>危險物</b><span>關係人 / 危害</span><em id="hazardStatusText">未詢問</em></button>
-              <button type="button" class="arrival-status-card" data-arrival-card="firstSide"><input id="firstSideCheck" type="checkbox" class="sr-only" /><b>第一面</b><span>指揮站 / 集結</span><em id="firstSideStatusText">未設定</em></button>
+              <button type="button" class="arrival-status-card" data-arrival-card="firstSide"><input id="firstSideCheck" type="checkbox" class="sr-only" /><b>指揮站</b><span>第一面 / 位置</span><em id="firstSideStatusText">未設定</em></button>
               <button type="button" class="arrival-status-card" data-arrival-card="par"><input id="parCheck" type="checkbox" class="sr-only" /><b>PAR</b><span>安全回報</span><em id="parStatusText">未要求</em></button>
               <button type="button" class="arrival-status-card" data-arrival-card="support"><input id="supportCheck" type="checkbox" class="sr-only" /><b>支援</b><span>消防 / 外單位</span><em id="supportStatusText">評估中</em></button>
               <button type="button" class="arrival-status-card" data-arrival-card="breakDoor"><input id="breakDoorCheck" type="checkbox" class="sr-only" /><b>破門</b><span>回報 / 時間</span><em id="breakDoorStatusText">未執行</em></button>
@@ -201,34 +254,71 @@
               <div class="arrival-detail-panel" data-arrival-panel="arrived" hidden>
                 <div class="field"><label>地址確認</label><div class="readonly-card" id="arrivalAddressDisplay">—</div></div>
                 <label class="check slim"><input id="addressConfirmCheck" class="arrival-detail-input" type="checkbox" /> 地址正確，已確認到達位置</label>
+                <div class="two-col compact-form">
+                  <div class="field"><label>建物用途</label><select id="detailPurpose"><option>住宅</option><option>工廠</option><option>倉庫</option><option>商業</option><option>複合用途</option><option>其他</option></select></div>
+                  <div class="field"><label>火煙狀況</label><select id="detailFireStatus"><option>未知</option><option>白煙</option><option>灰煙</option><option>黑煙</option><option>大量明火</option><option>延燒中</option></select></div>
+                </div>
                 <div class="field"><label>到達補充</label><textarea id="arrivalAddressNote" class="arrival-detail-input" rows="2" placeholder="例：現場地址與派遣令相符，入口位於○○路側"></textarea></div>
+                <details class="sub-accordion compact-note">
+                  <summary>補充說明</summary>
+                  <div class="field"><label>補充說明</label><textarea id="detailNotes" rows="2" placeholder="補充未列入上方欄位的到場資訊、關係人說法、特殊風險或回報備註"></textarea></div>
+                </details>
               </div>
               <div class="arrival-detail-panel" data-arrival-panel="command" hidden>
-                <div class="field"><label>現場狀況 / 指揮權轉移內容</label><textarea id="commandSituation" class="arrival-detail-input" rows="3" placeholder="例：初期指揮官回報○○分隊於第一面執行內攻，○○分隊佔據水源，雲梯車於第二面觀察"></textarea></div>
-                <div class="hint" id="commandAutoHint">系統會依目前人車部署自動輔助整理初期任務。</div>
+                <div class="choice-row arrival-state-row">
+                  <label class="choice-chip"><input id="commandStatePending" class="arrival-detail-input" type="radio" name="commandState" value="pending" /> 尚未完成指揮權轉移</label>
+                  <label class="choice-chip"><input id="commandStateTransferred" class="arrival-detail-input" type="radio" name="commandState" value="transferred" /> 已完成指揮權轉移</label>
+                </div>
+                <div id="commandDetailFields" hidden>
+                  <div class="field"><label>現場狀況 / 指揮權轉移內容</label><textarea id="commandSituation" class="arrival-detail-input" rows="3" placeholder="例：初期指揮官回報○○分隊於第一面執行內攻，○○分隊佔據水源，雲梯車於第二面觀察"></textarea></div>
+                  <div class="hint" id="commandAutoHint">系統會依目前人車部署自動輔助整理初期任務。</div>
+                </div>
               </div>
               <div class="arrival-detail-panel" data-arrival-panel="contact" hidden>
-                <div class="notice compact">可登錄多名關係人；危險物卡片仍保留危險物專用關係人欄位。</div>
-                <label class="check slim"><input id="contactFoundCheck" class="arrival-detail-input" type="checkbox" /> 已找到關係人</label>
-                <div id="contactRows" class="contact-rows"></div>
-                <button id="addContactBtn" type="button" class="btn small ghost">＋ 新增關係人</button>
+                <div class="notice compact">先確認是否已找到關係人；只有選擇已找到後才展開資料，避免到場頁面過長。</div>
+                <div class="choice-row arrival-state-row">
+                  <label class="choice-chip"><input id="contactStateNotFound" class="arrival-detail-input" type="radio" name="contactState" value="notfound" /> 尚未找到關係人</label>
+                  <label class="choice-chip"><input id="contactStateFound" class="arrival-detail-input" type="radio" name="contactState" value="found" /> 已找到關係人</label>
+                </div>
+                <div id="contactDetailFields" hidden>
+                  <div id="contactRows" class="contact-rows"></div>
+                  <button id="addContactBtn" type="button" class="btn small ghost">＋ 新增關係人</button>
+                </div>
               </div>
               <div class="arrival-detail-panel" data-arrival-panel="rit" hidden>
-                <div class="field"><label>RIT 單位</label><input id="ritUnit" class="arrival-detail-input" placeholder="例：鷺江分隊 / 蘆洲7" /></div>
-                <div class="field"><label>RIT 待命位置 / 裝備</label><textarea id="ritNote" class="arrival-detail-input" rows="2" placeholder="例：第一面指揮站旁待命，攜熱顯像儀、備用氣瓶、破壞器材"></textarea></div>
+                <div class="choice-row arrival-state-row">
+                  <label class="choice-chip"><input id="ritStateUnset" class="arrival-detail-input" type="radio" name="ritState" value="unassigned" /> 尚未指派 RIT 小組</label>
+                  <label class="choice-chip"><input id="ritStateAssigned" class="arrival-detail-input" type="radio" name="ritState" value="assigned" /> 已指派 RIT 小組</label>
+                </div>
+                <div id="ritDetailFields" hidden>
+                  <div class="field"><label>RIT 單位</label><input id="ritUnit" class="arrival-detail-input" placeholder="例：鷺江分隊 / 蘆洲7" /></div>
+                  <div class="field"><label>RIT 待命位置 / 裝備</label><textarea id="ritNote" class="arrival-detail-input" rows="2" placeholder="例：第一面指揮站旁待命，攜熱顯像儀、備用氣瓶、破壞器材"></textarea></div>
+                </div>
               </div>
               <div class="arrival-detail-panel" data-arrival-panel="hazard" hidden>
-                <div class="field"><label>危險物 / 危害資訊</label><textarea id="hazardItems" class="arrival-detail-input" rows="2" placeholder="例：桶裝瓦斯、化學品、氧氣鋼瓶、太陽能板、高壓電"></textarea></div>
-                <div class="two-col compact-form">
-                  <div class="field"><label>關係人姓名</label><input id="hazardContact" class="arrival-detail-input" placeholder="例：屋主王先生" /></div>
-                  <div class="field"><label>電話</label><input id="hazardPhone" class="arrival-detail-input" inputmode="tel" placeholder="例：09xx-xxx-xxx" /></div>
+                <div class="choice-row arrival-state-row">
+                  <label class="choice-chip"><input id="hazardStateNone" class="arrival-detail-input" type="radio" name="hazardState" value="none" /> 無危險物品</label>
+                  <label class="choice-chip"><input id="hazardStateHas" class="arrival-detail-input" type="radio" name="hazardState" value="has" /> 有危險物品</label>
                 </div>
-                <div class="field"><label>關係人穿著 / 特徵</label><input id="hazardAppearance" class="arrival-detail-input" placeholder="例：紅色上衣、黑褲，位於第一面封鎖線外" /></div>
+                <div id="hazardDetailFields" hidden>
+                  <div class="field"><label>危險物 / 危害資訊</label><textarea id="hazardItems" class="arrival-detail-input" rows="2" placeholder="例：桶裝瓦斯、化學品、氧氣鋼瓶、太陽能板、高壓電"></textarea></div>
+                  <div class="two-col compact-form">
+                    <div class="field"><label>關係人姓名</label><input id="hazardContact" class="arrival-detail-input" placeholder="例：屋主王先生" /></div>
+                    <div class="field"><label>電話</label><input id="hazardPhone" class="arrival-detail-input" inputmode="tel" placeholder="例：09xx-xxx-xxx" /></div>
+                  </div>
+                  <div class="field"><label>關係人穿著 / 特徵</label><input id="hazardAppearance" class="arrival-detail-input" placeholder="例：紅色上衣、黑褲，位於第一面封鎖線外" /></div>
+                </div>
               </div>
               <div class="arrival-detail-panel" data-arrival-panel="firstSide" hidden>
-                <div class="two-col compact-form">
-                  <div class="field"><label>第一面</label><select id="firstSideName" class="arrival-detail-input"><option>第一面</option><option>第二面</option><option>第三面</option><option>第四面</option><option>臨道路側</option><option>正門側</option><option>其他</option></select></div>
-                  <div class="field"><label>指揮站 / 集結位置</label><input id="firstSideNote" class="arrival-detail-input" placeholder="例：第一面路口旁，後續單位至此報到" /></div>
+                <div class="choice-row arrival-state-row">
+                  <label class="choice-chip"><input id="firstSideStateUnset" class="arrival-detail-input" type="radio" name="firstSideState" value="unset" /> 尚未律定第一面 / 指揮站</label>
+                  <label class="choice-chip"><input id="firstSideStateSet" class="arrival-detail-input" type="radio" name="firstSideState" value="set" /> 已律定第一面 / 指揮站</label>
+                </div>
+                <div id="firstSideDetailFields" hidden>
+                  <div class="two-col compact-form">
+                    <div class="field"><label>第一面</label><select id="firstSideName" class="arrival-detail-input"><option>第一面</option><option>第二面</option><option>第三面</option><option>第四面</option><option>臨道路側</option><option>正門側</option><option>其他</option></select></div>
+                    <div class="field"><label>指揮站 / 集結位置</label><input id="firstSideNote" class="arrival-detail-input" placeholder="例：第一面路口旁，後續單位至此報到" /></div>
+                  </div>
                 </div>
               </div>
               <div class="arrival-detail-panel" data-arrival-panel="par" hidden>
@@ -237,12 +327,23 @@
                 <input id="parDetails" class="arrival-detail-input" type="hidden" />
               </div>
               <div class="arrival-detail-panel" data-arrival-panel="support" hidden>
+                <div class="choice-row arrival-state-row">
+                  <label class="choice-chip"><input id="supportStateNone" class="arrival-detail-input" type="radio" name="supportState" value="none" /> 暫無新增支援需求</label>
+                  <label class="choice-chip"><input id="supportStateNeeded" class="arrival-detail-input" type="radio" name="supportState" value="needed" /> 需要支援</label>
+                </div>
+                <div id="supportDetailFields" hidden>
                 <div class="field"><label>需要支援</label><div class="chip-grid support-grid">
                   <label><input type="checkbox" value="水車" /> 水車</label><label><input type="checkbox" value="水庫車" /> 水庫車</label><label><input type="checkbox" value="雲梯車" /> 雲梯車</label><label><input type="checkbox" value="救護車" /> 救護車</label><label><input type="checkbox" value="台電" /> 台電</label><label><input type="checkbox" value="瓦斯" /> 瓦斯</label><label><input type="checkbox" value="警察" /> 警察</label><label><input type="checkbox" value="台水" /> 台水</label><label><input type="checkbox" value="毒災應變隊" /> 毒災應變隊</label><label><input type="checkbox" value="排煙車" /> 排煙車</label><label><input type="checkbox" value="照明車" /> 照明車</label><label><input type="checkbox" value="大隊支援" /> 大隊支援</label>
                 </div></div>
                 <div class="field"><label>支援補充</label><textarea id="supportDetails" class="arrival-detail-input" rows="2" placeholder="例：請台電斷電、瓦斯公司到場關閉管線，警察協助交通管制"></textarea></div>
+                </div>
               </div>
               <div class="arrival-detail-panel" data-arrival-panel="breakDoor" hidden>
+                <div class="choice-row arrival-state-row">
+                  <label class="choice-chip"><input id="breakDoorStateNone" class="arrival-detail-input" type="radio" name="breakDoorState" value="none" /> 不需要破門</label>
+                  <label class="choice-chip"><input id="breakDoorStateRequired" class="arrival-detail-input" type="radio" name="breakDoorState" value="required" /> 需要 / 已執行破門</label>
+                </div>
+                <div id="breakDoorDetailFields" hidden>
                 <label class="check slim"><input id="breakDoorCommanderReport" class="arrival-detail-input" type="checkbox" /> 破門前已回報現場指揮官</label>
                 <label class="check slim"><input id="breakDoorCenterReport" class="arrival-detail-input" type="checkbox" /> 破門資訊已回報指揮中心</label>
                 <div class="two-col compact-form">
@@ -250,25 +351,24 @@
                   <div class="field"><label>執行單位</label><input id="breakDoorUnit" class="arrival-detail-input" placeholder="例：蘆洲分隊" /></div>
                 </div>
                 <div class="field"><label>破門位置 / 原因 / 補充</label><textarea id="breakDoorNote" class="arrival-detail-input" rows="2" placeholder="例：第三面一樓後門破門，作為搜救入口"></textarea></div>
+                </div>
               </div>
               <div class="arrival-detail-panel" data-arrival-panel="cordon" hidden>
+                <div class="choice-row arrival-state-row">
+                  <label class="choice-chip"><input id="cordonStatePending" class="arrival-detail-input" type="radio" name="cordonState" value="pending" /> 尚未劃設警戒區</label>
+                  <label class="choice-chip"><input id="cordonStateSet" class="arrival-detail-input" type="radio" name="cordonState" value="set" /> 已劃設警戒區</label>
+                </div>
+                <div id="cordonDetailFields" hidden>
                 <label class="check slim"><input id="cordonAssignedCheck" class="arrival-detail-input" type="checkbox" /> 已指派人員劃設警戒區</label>
                 <div class="two-col compact-form">
                   <div class="field"><label>警戒單位 / 人員</label><input id="cordonUnit" class="arrival-detail-input" placeholder="例：警察 / ○○分隊" /></div>
                   <div class="field"><label>警戒範圍</label><input id="cordonArea" class="arrival-detail-input" placeholder="例：第一面道路口至巷口" /></div>
                 </div>
                 <div class="field"><label>警戒區補充</label><textarea id="cordonNote" class="arrival-detail-input" rows="2" placeholder="例：請警察協助管制車流與疏散圍觀民眾"></textarea></div>
+                </div>
               </div>
             </div>
 
-            <div class="two-col">
-              <div class="field"><label>建物用途</label><select id="detailPurpose"><option>住宅</option><option>工廠</option><option>倉庫</option><option>商業</option><option>複合用途</option><option>其他</option></select></div>
-              <div class="field"><label>火煙狀況</label><select id="detailFireStatus"><option>未知</option><option>白煙</option><option>灰煙</option><option>黑煙</option><option>大量明火</option><option>延燒中</option></select></div>
-            </div>
-            <details class="sub-accordion compact-note">
-              <summary>補充說明</summary>
-              <div class="field"><label>補充說明</label><textarea id="detailNotes" rows="2" placeholder="補充未列入上方欄位的到場資訊、關係人說法、特殊風險或回報備註"></textarea></div>
-            </details>
             <div class="field"><label>到建火人支初｜依上述資料產生可照念回報稿</label><textarea id="commandSpeech" rows="8" readonly></textarea></div>
             <div class="button-row">
               <button id="saveCaseInfoBtn" class="btn primary full">儲存到場回報</button>
@@ -280,7 +380,7 @@
 
 
 
-      <section id="sitrepSection" class="stack">
+      <section id="sitrepSection" class="stack case-page-panel" data-case-page-panel="sitrepSection" hidden>
         <details class="accordion important-accordion">
           <summary><span>戰情回報｜火勢狀況 / 傷患者</span><span class="chevron">›</span></summary>
           <div class="accordion-body">
@@ -307,15 +407,52 @@
         </details>
       </section>
 
-      <section id="tacticalMapSection" class="map-section">
+      <section id="tacticalMapSection" class="map-section case-page-panel" data-case-page-panel="tacticalMapSection" hidden>
         <div class="section-head compact">
           <div><div class="eyebrow">戰術地圖標示</div><h3>車輛 / 人員 / 危害標示 / 水線部署圖</h3></div>
           <button id="fitMapBtn" class="btn small ghost">回到200m</button>
         </div>
 
-        <details class="accordion tool-accordion">
+        <details id="deploymentMapDetails" class="accordion tool-accordion">
           <summary><span>車輛 / 人員 / 危害標示 / 水線部署圖</span><span class="chevron">›</span></summary>
           <div class="accordion-body">
+            <details id="incidentLocationDetails" class="sub-accordion location-control">
+              <summary>案件中心精準定位｜Google 地址 / 現場 GPS / 手動校正</summary>
+              <div class="location-control-body">
+                <div class="notice compact">建議先用 Google 地址搜尋取得候選位置，再以現場 GPS 與入口位置確認；案件中心確認後可鎖定，避免後續部署基準誤移。</div>
+                <details id="mapDiagnosticsDetails" class="sub-accordion map-diagnostics">
+                  <summary>定位診斷｜Google API、GPS 與網域限制</summary>
+                  <div id="mapDiagnosticsPanel" class="map-diagnostics-panel">尚未執行診斷。</div>
+                  <div class="button-row compact-actions">
+                    <button id="runMapDiagnosticsBtn" type="button" class="btn small primary">執行定位診斷</button>
+                    <button id="copyMapDiagnosticsBtn" type="button" class="btn small ghost">複製診斷結果</button>
+                  </div>
+                </details>
+                <div id="googlePlacesSearchHost" class="google-places-host" aria-label="Google 地址自動完成"></div>
+                <div class="field"><label>地址搜尋</label><input id="locationAddressInput" placeholder="例：新北市淡水區中正東路一段125號" /></div>
+                <div class="button-row compact-actions">
+                  <button id="googleAddressSearchBtn" type="button" class="btn small primary">Google 地址搜尋</button>
+                  <button id="useCurrentGpsBtn" type="button" class="btn small ghost">使用目前 GPS</button>
+                  <button id="setIncidentCenterBtn" type="button" class="btn small ghost">點地圖設定中心</button>
+                </div>
+                <div id="locationCandidateList" class="location-candidate-list"></div>
+                <div id="locationStatusPanel" class="location-status-panel"></div>
+                <div class="button-row compact-actions">
+                  <button id="confirmIncidentLocationBtn" type="button" class="btn small danger">確認並鎖定案件中心</button>
+                  <button id="unlockIncidentLocationBtn" type="button" class="btn small ghost">解除案件中心鎖定</button>
+                </div>
+              </div>
+            </details>
+            <div class="deployment-quick-panel">
+              <div class="panel-title">快速部署｜點選資源後再點地圖；支援平板拖放</div>
+              <div id="deploymentModeBar" class="deployment-mode-bar">
+                <button type="button" class="btn small primary" data-deploy-mode="select">選取 / 移動</button>
+                <button type="button" class="btn small ghost" data-deploy-mode="hose">水線連接</button>
+                <button type="button" class="btn small ghost" data-deploy-mode="hazard">危害標示</button>
+              </div>
+              <div id="mapResourcePalette" class="map-resource-palette"></div>
+              <div id="deploymentActionHint" class="hint">點選車輛或人員後，再點地圖即可部署；點水車的「拉水線」後再點另一台車、人員或地圖位置。</div>
+            </div>
             <div class="tool-cards">
               <div class="tool-card">
                 <h4>新增車輛</h4>
@@ -361,28 +498,44 @@
               </div>
             </div>
           </div>
-          <div id="map" class="map"></div>
+          <div id="mapShell" class="map-shell">
+            <div id="map" class="map google-map" aria-label="Google 戰術地圖"></div>
+            <div id="mapLocationWarning" class="map-location-warning" hidden>目前僅有行政區備援中心，並非精準火場位置。請使用 Google 地址候選、現場 GPS 或手動點選後鎖定案件中心。</div>
+            <div id="mapUnavailablePanel" class="map-unavailable-panel" hidden>
+              <b>Google 地圖目前無法載入</b>
+              <span id="mapUnavailableMessage">請執行定位診斷，確認 API Key、Billing、網域限制與 Maps JavaScript API。</span>
+              <button id="retryGoogleMapBtn" type="button" class="btn small primary">重新載入 Google 地圖</button>
+            </div>
+          </div>
         </details>
 
         <div id="buildingSection" class="stack">
-                <details class="accordion">
+                <details id="buildingOpsDetails" class="accordion">
                   <summary><span>建物內部作戰圖｜縱向剖面 / 水平俯視</span><span class="chevron">›</span></summary>
                   <div class="accordion-body">
                     <div class="notice">點選「同步樓層」後，左側會依建物樓層產生縱向剖面圖；右側可切換火災樓層並標示起火點、受困者、死亡者、入口、隔間與水線。此資料會併入報告與操作紀錄。</div>
+                    <div id="orientationHint" class="orientation-hint" hidden>
+                      <b>建議將手機轉為橫向</b><span>橫向可取得較大的繪圖區；直向仍可完整操作。</span>
+                      <button id="dismissOrientationHintBtn" type="button" class="btn small ghost">繼續直向</button>
+                    </div>
                     <div class="button-row segmented-action-row">
                       <button id="syncFloorsBtn" class="btn small ghost action-toggle-btn" type="button">同步樓層</button>
                       <button id="saveBuildingOpsBtn" class="btn small ghost action-toggle-btn" type="button">儲存建物作戰圖</button>
                     </div>
                     <div class="building-layout">
-                      <div class="building-panel">
+                      <div class="building-panel" id="verticalBuildingPanel">
                         <div class="panel-title">左：縱向剖面圖</div>
+                        <div class="button-row compact-actions floor-control-row">
+                          <button id="addUpperFloorBtn" class="btn small ghost" type="button">＋上方樓層</button>
+                          <button id="addBasementFloorBtn" class="btn small ghost" type="button">＋地下室</button>
+                        </div>
                         <div id="verticalSection" class="vertical-section"></div>
                       </div>
-                      <div class="building-panel">
+                      <div class="building-panel" id="planBuildingPanel">
                         <div class="panel-title">右：水平俯視圖</div>
                         <div class="two-col compact-grid">
                           <div class="field"><label>樓層</label><select id="floorPlanLevel"></select></div>
-                          <div class="field"><label>拖拉工具</label><div id="floorToolPalette" class="floor-tool-palette">
+                          <div class="field"><label>繪圖工具</label><div id="floorToolPalette" class="floor-tool-palette">
                             <button type="button" draggable="true" data-floor-tool="起火點">🔥 起火點</button>
                             <button type="button" draggable="true" data-floor-tool="待救者">🟢 待救者</button>
                             <button type="button" draggable="true" data-floor-tool="死亡者">🔴 死亡者</button>
@@ -392,15 +545,24 @@
                             <button type="button" draggable="true" data-floor-tool="危害物">☣️ 危害物</button>
                           </div></div>
                         </div>
+                        <div class="drawing-command-bar">
+                          <button id="floorUndoBtn" type="button" class="btn small ghost">↶ 復原</button>
+                          <button id="floorRedoBtn" type="button" class="btn small ghost">↷ 重做</button>
+                          <button id="floorEraserBtn" type="button" class="btn small ghost">⌫ 橡皮擦</button>
+                          <button id="floorSelectBtn" type="button" class="btn small ghost">↔ 選取 / 移動</button>
+                          <button id="copyPreviousFloorBtn" type="button" class="btn small ghost">複製相鄰樓層</button>
+                          <button id="lockFloorPlanBtn" type="button" class="btn small danger">鎖定圖面</button>
+                          <button id="clearFloorPlanBtn" type="button" class="btn small ghost">清除此樓層</button>
+                        </div>
                         <div id="floorPlanCanvas" class="floor-plan-canvas" aria-label="水平俯視圖"></div>
-                        <div class="hint">請直接把上方圖示拖拉到俯視圖；隔間以直線標示，點標示可修改備註或輸入 DELETE 刪除。</div>
+                        <div class="hint" id="floorToolHint">選擇工具後直接在俯視圖操作；隔間線與水線會自動吸附為水平、垂直或 45°。點選圖示／線段可修改或刪除，選取模式可移動，復原／重做可避免誤觸。</div>
                       </div>
                     </div>
                   </div>
                 </details>
               </div>
       </section>
-<section id="aiSection" class="stack">
+<section id="aiSection" class="stack case-page-panel" data-case-page-panel="aiSection" hidden>
         <details class="accordion">
           <summary><span>注意事項建議 / OpenAI 戰術建議</span><span class="chevron">›</span></summary>
           <div class="accordion-body">
@@ -414,30 +576,30 @@
         </details>
       </section>
 
-      <section id="dashboardSection" class="stack">
+      <section id="dashboardSection" class="stack case-page-panel" data-case-page-panel="dashboardSection" hidden>
         <div class="section-head compact"><div><div class="eyebrow">人車掌控</div><h3>戰力、任務、休息與水線狀態</h3></div></div>
         <div id="statusCards" class="h-scroll"></div>
-        <details class="accordion"><summary><span>單位人員狀態</span><span class="chevron">›</span></summary><div id="crewCards" class="accordion-body h-scroll"></div></details>
-        <details class="accordion"><summary><span>車輛狀態</span><span class="chevron">›</span></summary><div id="vehicleCards" class="accordion-body h-scroll"></div></details>
+        <details id="crewStatusDetails" class="accordion"><summary><span>單位人員狀態</span><span class="chevron">›</span></summary><div id="crewCards" class="accordion-body h-scroll"></div></details>
+        <details id="vehicleStatusDetails" class="accordion"><summary><span>車輛狀態</span><span class="chevron">›</span></summary><div id="vehicleCards" class="accordion-body h-scroll"></div></details>
       </section>
 
 
-      <section id="assessmentSection" class="stack">
+      <section id="assessmentSection" class="stack case-page-panel" data-case-page-panel="assessmentSection" hidden>
         <details class="accordion">
           <summary><span>檢討及評估優化報告（結案後才能使用）</span><span class="chevron">›</span></summary>
           <div class="accordion-body">
-            <div class="notice">本功能為結案後使用，避免火場進行中誤觸消耗 token。結案後會彙整人車水線、戰情回報、傷患者、作業時間、部署與 AI 建議，產生檢討及策進建議。</div>
+            <div class="notice">本功能為結案後使用，避免火場進行中誤觸消耗 token。結案後會彙整人車水線、戰情回報、傷患者、作業時間、部署與 AI 建議，另行產生檢討及策進建議，不會混入火場進度報告。</div>
             <div class="button-row">
               <button id="closeCaseBtn" class="btn small danger" type="button">標記結案</button>
               <button id="reopenCaseBtn" class="btn small ghost" type="button">重新開啟</button>
               <button id="aiAssessmentBtn" class="btn small primary" type="button">產生 AI 檢討評估</button>
             </div>
-            <textarea id="assessmentDraft" rows="10" placeholder="檢討及評估優化報告會顯示在這裡，也會併入最終進度報告"></textarea>
+            <textarea id="assessmentDraft" rows="10" placeholder="檢討及評估優化報告會顯示在這裡，並獨立保存為結案檢討資料"></textarea>
           </div>
         </details>
       </section>
 
-      <section id="reportSection" class="stack">
+      <section id="reportSection" class="stack case-page-panel" data-case-page-panel="reportSection" hidden>
         <details class="accordion" open><summary><span>進度報告產出</span><span class="chevron">›</span></summary>
           <div class="accordion-body">
             <div class="notice compact">產出給長官檢閱的正式火場進度報告。系統會彙整案件概要、到場回報、部署概況、各單位戰情、人車水線統計與建物作戰圖，並使用 OpenAI 輔助潤稿；檢討及後續評估另由「檢討及評估優化報告」產生。</div>
@@ -445,20 +607,31 @@
               <button id="generateReportBtn" class="btn small primary">AI 撰寫進度報告</button>
               <button id="editReportBtn" class="btn small ghost">進行編輯</button>
               <button id="confirmReportEditBtn" class="btn small ghost">確認編輯</button>
-              <button id="printReportBtn" class="btn small primary">匯出 PDF</button>
+              <button id="printReportBtn" class="btn small primary">預覽並匯出 PDF</button><button id="sameTabPrintBtn" class="btn small ghost" type="button">備援列印 / 存 PDF</button>
             </div>
             <textarea id="reportDraft" rows="10" readonly placeholder="火場進度報告會在這裡產生；點「進行編輯」後可修改，確認後會寫入操作紀錄。"></textarea>
             <div id="reportPreview" class="report-preview"></div>
           </div>
         </details>
       </section>
+        </div>
+      </div>
     </main>
+  </section>
+
+
+  <section id="appActionSheet" class="app-action-sheet" hidden aria-modal="true" role="dialog">
+    <div class="app-action-backdrop" data-close-action-sheet="1"></div>
+    <div class="app-action-panel">
+      <div class="app-action-handle"></div>
+      <div class="app-action-head"><h3 id="appActionTitle">快速操作</h3><button type="button" class="btn small ghost" data-close-action-sheet="1">關閉</button></div>
+      <div id="appActionBody"></div>
+    </div>
   </section>
 
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="./firebase/firebase-config.js"></script>
   <script src="./assets/app.js"></script>
 </body>
