@@ -212,6 +212,7 @@ let mapReady = false;
 let pendingTool = null;
 let buildingBoxCenterMarker = null;
 let buildingBoxCornerMarker = null;
+let buildingBoxRotationMarker = null;
 let googleMapsConfig = null;
 let googleMapsPromise = null;
 let googleMapsLibs = null;
@@ -222,6 +223,10 @@ let addressSuggestTimer = null;
 let gpsWatchId = null;
 let deploymentMode = 'select';
 let selectedMapResource = null;
+let pendingDeploymentVehicles = [];
+let mapUndoStack = [];
+let derivedSummaryTimer = null;
+let suppressMapUndo = false;
 let floorHistory = [];
 let floorRedoStack = [];
 let floorPlanLocked = false;
@@ -306,12 +311,13 @@ function initQuickChoiceSelects(){
   fillRangeSelect('trappedCountArrival',1,21,'1');
   if($('trappedCountArrival')?.lastElementChild) $('trappedCountArrival').lastElementChild.textContent='21 人以上';
   fillRangeSelect('crewCount',1,20,'4');
+  fillRangeSelect('deploymentCrewCount',0,20,'4');
+  if($('deploymentCrewCount')?.firstElementChild) $('deploymentCrewCount').firstElementChild.textContent='0 人／僅登錄車輛';
 }
 
 function init(){
   fillUnitFlat('profileBrigade','profileUnit','第三大隊');
-  fillUnitFlat('vehicleBrigade','vehicleUnit','第三大隊');
-  fillUnitFlat('crewBrigade','crewUnit','第三大隊');
+  fillUnitFlat('deploymentBrigade','deploymentUnit','第三大隊');
   fillUnitFlat('sitrepBrigade','sitrepUnit','第三大隊');
   fillTrappedSelect('summaryTrappedCountMode');
   fillTrappedSelect();
@@ -338,12 +344,7 @@ function bindEvents(){
   $('refreshBtn').addEventListener('click', renderCases);
   $('backHomeBtn').addEventListener('click', backHome);
   $('saveCaseInfoBtn').addEventListener('click', saveCaseInfo);
-  $('saveSummaryInfoBtn').addEventListener('click', saveSummaryInfo);
-  $('summaryAddVictimBtn').addEventListener('click', () => addVictimRow({}, 'summaryVictimRows'));
-  $('summaryTrapped').addEventListener('change', syncSummaryVictimDetails);
-  $('summaryTrappedCountMode').addEventListener('change', syncSummaryVictimDetails);
   $('caseFloors')?.addEventListener('change',()=>fillFloorLocationSelect('caseFireFloor',$('caseFloors').value||50,$('caseFireFloor').value));
-  $('summaryFloors')?.addEventListener('change',()=>fillFloorLocationSelect('summaryFireFloor',$('summaryFloors').value||50,$('summaryFireFloor').value));
   $('detailFloors')?.addEventListener('change',()=>{
     fillFloorLocationSelect('detailFireFloor',$('detailFloors').value||50,$('detailFireFloor').value);
     fillFloorLocationSelect('fireObservedFloor',$('detailFloors').value||50,$('fireObservedFloor').value);
@@ -386,14 +387,12 @@ function bindEvents(){
   document.addEventListener('click', handleGlobalActionClick);
   document.querySelectorAll('.support-grid input').forEach(ch => ch.addEventListener('change', () => { updateSupportStatus(); renderCommandGuide(); saveCaseInfo(false,false); }));
   $('fitMapBtn').addEventListener('click', fitMapToIncident);
-  $('setBuildingBoxCenterBtn')?.addEventListener('click', () => { pendingTool={type:'buildingBoxCenter'}; toast('請在地圖點選建物中心框中心點'); });
-  $('saveBuildingBoxBtn')?.addEventListener('click', saveBuildingBoxFromForm);
-  $('lockBuildingBoxBtn')?.addEventListener('click', () => setBuildingBoxLock(true));
-  $('unlockBuildingBoxBtn')?.addEventListener('click', () => setBuildingBoxLock(false));
-  $('addVehicleBtn').addEventListener('click', addVehicle);
-  $('addCrewBtn').addEventListener('click', addCrew);
-  $('startHoseBtn').addEventListener('click', startHoseTool);
-  $('hoseTargetType').addEventListener('change', renderToolOptions);
+  $('mapUndoBtn')?.addEventListener('click', undoLastMapAction);
+  $('mapBuildingUnlockBtn')?.addEventListener('click', () => setBuildingBoxLock(false));
+  $('mapBuildingLockBtn')?.addEventListener('click', () => setBuildingBoxLock(true));
+  $('deploymentVehicleCode')?.addEventListener('change', syncDeploymentVehicleManualField);
+  $('addPendingVehicleBtn')?.addEventListener('click', addPendingDeploymentVehicle);
+  $('addDeploymentGroupBtn')?.addEventListener('click', addDeploymentGroup);
   document.querySelectorAll('.hazard-btn').forEach(btn => btn.addEventListener('click', () => startHazardTool(btn.dataset.hazard)));
   $('generateReportBtn')?.addEventListener('click', () => generateAIReport(true));
   $('saveExtraBtn')?.addEventListener('click', saveExtraNotes);
@@ -461,6 +460,8 @@ async function handleGlobalActionClick(ev){
   if(action === 'deleteHazard') return deleteHazard(id);
   if(action === 'editHose') return editHoseFull(id);
   if(action === 'deleteHose') return deleteHose(id);
+  if(action === 'unlockBuildingBox') return setBuildingBoxLock(false);
+  if(action === 'lockBuildingBox') return setBuildingBoxLock(true);
 }
 
 function getCompanies(brigade){ return Object.keys(UNIT_TREE[brigade] || UNIT_TREE['第三大隊']); }
@@ -675,10 +676,13 @@ function enterApp(){
   const admin = isSuperAdmin();
   $('adminManageBtn') && ($('adminManageBtn').hidden = !admin);
   $('adminSection') && ($('adminSection').hidden = true);
-  $('vehicleBrigade').value = profile.brigade || '第三大隊'; $('vehicleBrigade').dispatchEvent(new Event('change'));
-  if(profile.unit){ $('vehicleUnit').value = profile.unit; }
-  $('crewBrigade').value = profile.brigade || '第三大隊'; $('crewBrigade').dispatchEvent(new Event('change'));
-  if(profile.unit){ $('crewUnit').value = profile.unit; }
+  if($('deploymentBrigade')){
+    $('deploymentBrigade').value = profile.brigade || '第三大隊';
+    $('deploymentBrigade').dispatchEvent(new Event('change'));
+    if(profile.unit && $('deploymentUnit')) $('deploymentUnit').value = profile.unit;
+  }
+  syncDeploymentVehicleManualField();
+  renderPendingDeploymentVehicles();
   $('sitrepBrigade') && ($('sitrepBrigade').value = profile.brigade || '第三大隊'); $('sitrepBrigade')?.dispatchEvent(new Event('change'));
   if(profile.unit && $('sitrepUnit')){ $('sitrepUnit').value = profile.unit; }
   setSitrepNow();
@@ -748,6 +752,7 @@ async function createCase(e){
     caseNo: nextCaseNo(),
     address,
     type: $('caseType').value,
+    initialSummary: $('caseSummary').value.trim(),
     summary: $('caseSummary').value.trim() || `${$('caseFloors').value||'?'}樓建築，${$('caseFireFloor').value||'起火樓層未明'}，受困狀況${$('caseTrapped').value}`,
     floors: Number($('caseFloors').value)||0,
     fireFloor: normalizeFloorValue($('caseFireFloor').value),
@@ -1053,12 +1058,12 @@ function chooseLocationCandidate(candidates,address){
 
 
 function backHome(){
-  cleanupSubscriptions(); currentCaseId=null; currentCase=null;
+  cleanupSubscriptions(); currentCaseId=null; currentCase=null; pendingDeploymentVehicles=[]; mapUndoStack=[]; updateMapUndoButton();
   $('detailPage').hidden=true; $('homePage').hidden=false;
   subscribeCases();
 }
 function openCase(id){
-  cleanupSubscriptions(); currentCaseId = id;
+  cleanupSubscriptions(); currentCaseId = id; pendingDeploymentVehicles=[]; mapUndoStack=[]; updateMapUndoButton(); renderPendingDeploymentVehicles();
   $('homePage').hidden=true; $('detailPage').hidden=false;
   switchCasePage('caseInfo', false);
   if(firebaseEnabled){ subscribeCaseRemote(id); }
@@ -1151,15 +1156,7 @@ function renderDetail(){
   setRadioValue('firstSideMode', currentCase.firstSideMode || (currentCase.firstSideSet?'front':''));
   $('firstSideCustom') && ($('firstSideCustom').value = currentCase.firstSideCustom || '');
   if($('extraNotes')) $('extraNotes').value = currentCase.extraNotes || '';
-  $('summaryFloors').value = currentCase.floors || '';
-  $('summaryFireFloor').value = normalizeFloorValue(currentCase.fireFloor || '');
-  $('summaryTrapped').value = currentCase.trapped || '未知';
-  $('summaryTrappedCountMode').value = currentCase.trappedCountMode || String(currentCase.trappedCount || 0);
-  if(!Array.from($('summaryTrappedCountMode').options).some(o=>o.value===$('summaryTrappedCountMode').value)) $('summaryTrappedCountMode').value = 'manual';
-  $('summaryText').value = currentCase.summary || '';
-  $('summaryVictimRows').innerHTML = '';
-  (currentCase.victims || []).forEach(v => addVictimRow(v, 'summaryVictimRows'));
-  syncSummaryVictimDetails();
+  renderOverviewContent();
   applySupportValues(currentCase.supports || []);
   $('breakDoorCheck') && ($('breakDoorCheck').checked = !!currentCase.breakDoor);
   setRadioValue('breakDoorState', currentCase.breakDoorState || (currentCase.breakDoor ? 'required' : ''));
@@ -1178,6 +1175,82 @@ function renderDetail(){
   renderLocationControl();
   renderSummaryCards(); renderArrivalStatusCards(); renderCommandGuide(); renderBuildingOps(); renderLocalTacticalAdvice(false); updateAiAdviceButton(); updateAssessmentAvailability(); renderLiveParts(); maybeAutoAiAdvice();
 }
+
+function timestampMs(value){
+  if(value?.toMillis) return value.toMillis();
+  if(value?.toDate) return value.toDate().getTime();
+  const n=Number(value||0); return Number.isFinite(n)?n:0;
+}
+function latestOperationalTimestamp(){
+  const times=[timestampMs(currentCase?.updatedAt),timestampMs(currentCase?.createdAt),timestampMs(currentCase?.summaryUpdatedAt)];
+  ['vehicles','crews','hoses','hazards','sitreps'].forEach(coll=>(live[coll]||[]).forEach(x=>times.push(timestampMs(x.updatedAt||x.createdAt||x.submittedAt||x.eventAt))));
+  const valid=times.filter(x=>Number.isFinite(x)&&x>0);
+  return valid.length?Math.max(...valid):Date.now();
+}
+function buildExecutiveSummaryText(c=currentCase){
+  if(!c) return '尚無案件資料。';
+  const first=[];
+  if(c.address) first.push(`本案位於${c.address}`);
+  if(c.type) first.push(`案件類型為${c.type}`);
+  const building=[];
+  if(c.buildingStructure) building.push(c.buildingStructure);
+  if(c.purpose) building.push(`${c.purpose}用途`);
+  if(c.floors) building.push(`地上${c.floors}樓`);
+  if(c.fireFloor) building.push(`起火樓層為${floorText(c.fireFloor)}`);
+  if(building.length) first.push(`現場為${building.join('、')}建物`);
+  const sentences=[];
+  if(first.length) sentences.push(`${first.join('，')}。`);
+  const situation=[];
+  if(c.fireStatus && !/未知|未明|尚未確認/.test(c.fireStatus)) situation.push(c.fireStatus.replace(/[。；]+$/,''));
+  if(c.trapped==='無') situation.push('目前確認無人受困');
+  else if(c.trapped==='有') situation.push(`目前確認有${Number(c.trappedCount)||0}人受困`);
+  if(c.hazardState==='none') situation.push('已確認無危險物品');
+  else if(c.hazardState==='has' && c.hazardItems) situation.push(`現場危險物品為${c.hazardItems}`);
+  if(situation.length) sentences.push(`${situation.join('；')}。`);
+  const command=[];
+  if(c.arrived) command.push('已到達現場');
+  if(c.commandTransfer) command.push('已完成指揮權轉移');
+  if(c.firstSideSet) command.push(c.firstSideMode==='custom'?`已律定${c.firstSideCustom||'指定位置'}為火場第一面`:'已以建物正面為火場第一面');
+  if(c.firstSideNote) command.push(`指揮站設於${c.firstSideNote}`);
+  if(command.length) sentences.push(`${command.join('，')}。`);
+  if(live.vehicles.length || live.crews.length || live.hoses.length){
+    const tasks=[...new Set(live.crews.map(x=>x.task).filter(Boolean))].slice(0,4);
+    sentences.push(`現場已登錄車輛${live.vehicles.length}台、人員${sum(live.crews,'count')}人及水線${live.hoses.length}條${tasks.length?`，主要任務包含${tasks.join('、')}`:''}。`);
+  }
+  if(c.ritSet) sentences.push(`已律定${c.ritUnit||'指定單位'}擔任RIT救援小組。`);
+  const latest=live.sitreps.slice().sort((a,b)=>(b.eventAt||b.submittedAt||0)-(a.eventAt||a.submittedAt||0))[0];
+  if(latest) sentences.push(`最新戰情：${latest.title||latest.category||'現場狀況更新'}${latest.detail?`，${latest.detail.slice(0,150)}`:''}。`);
+  return sentences.join('') || c.initialSummary || c.summary || '案件已建立，現場資料持續更新中。';
+}
+function renderOverviewContent(){
+  if(!currentCase) return;
+  const text=buildExecutiveSummaryText(currentCase);
+  const executive=$('overviewExecutiveText'); if(executive) executive.textContent=text;
+  const meta=$('overviewUpdatedMeta'); if(meta) meta.textContent=`最後彙整：${fmtTime(latestOperationalTimestamp())}`;
+  const deploy=$('overviewDeploymentSnapshot');
+  if(deploy) deploy.innerHTML=(live.vehicles.length||live.crews.length||live.hoses.length||live.hazards.length||currentCase.buildingBox)?deploymentSchematicHtml():'<div class="overview-empty">尚未建立外部部署；請至「部署」新增人車、水線與危害標示。</div>';
+  const building=$('overviewBuildingSnapshot');
+  if(building){
+    const html=floorPlanSchematicHtml();
+    building.innerHTML=html||'<div class="overview-empty">尚未建立建物內部作戰圖；請至「部署」開啟建物作戰圖繪製。</div>';
+  }
+}
+function scheduleDerivedSummaryPersist(){
+  if(!currentCase) return;
+  clearTimeout(derivedSummaryTimer);
+  derivedSummaryTimer=setTimeout(persistDerivedSummary,650);
+}
+async function persistDerivedSummary(){
+  if(!currentCase) return;
+  const summary=buildExecutiveSummaryText(currentCase);
+  if(!summary || summary===currentCase.summary) return;
+  currentCase.summary=summary;
+  currentCase.summaryUpdatedAt=Date.now();
+  if(firebaseEnabled){
+    try{ await db.collection('cases').doc(currentCaseId).set({summary,summaryUpdatedAt:Date.now()},{merge:true}); }
+    catch(err){ console.warn('derived summary persist failed',err); }
+  }else saveLocalCase();
+}
 function renderSummaryCards(){
   const c=currentCase; const wrap=$('summaryCards'); if(!wrap)return;
   wrap.innerHTML = `
@@ -1188,28 +1261,16 @@ function renderSummaryCards(){
     <button type="button" class="mini-card summary-link-card" data-summary-page="tacticalMapSection"><div class="metric">${live.hoses.length}</div><div class="metric-label">水線</div><div class="subline">連接與部署細節</div></button>
     <button type="button" class="mini-card summary-link-card" data-summary-page="sitrepSection"><div class="metric">${live.sitreps.length}</div><div class="metric-label">戰情</div><div class="subline">查看最新回報</div></button>`;
   wrap.querySelectorAll('[data-summary-page]').forEach(btn=>btn.addEventListener('click',()=>{switchCasePage(btn.dataset.summaryPage);if(btn.dataset.summaryStage)selectCommandStage(btn.dataset.summaryStage);}));
+  renderOverviewContent();
 }
 function renderLiveParts(){
   if(!currentCase) return;
-  renderSummaryCards(); renderToolOptions(); renderDeploymentPalette(); renderMap(); renderLocationControl(); renderDashboard(); renderRules(); renderSitreps(); renderLogs(); renderCommandGuide(); renderBuildingOps(); renderLocalTacticalAdvice(false); updateAiAdviceButton(); updateAssessmentAvailability(); renderParCrewChecklist(); generateReport(false);
+  renderSummaryCards(); renderToolOptions(); renderDeploymentPalette(); scheduleDerivedSummaryPersist(); renderMap(); renderLocationControl(); renderDashboard(); renderRules(); renderSitreps(); renderLogs(); renderCommandGuide(); renderBuildingOps(); renderLocalTacticalAdvice(false); updateAiAdviceButton(); updateAssessmentAvailability(); renderParCrewChecklist(); generateReport(false);
 }
 function renderToolOptions(){
-  const canHose = live.vehicles.filter(v => v.canHose);
-  $('hoseVehicle').innerHTML = canHose.length ? canHose.map(v=>`<option value="${v.id}">${escapeHtml(v.name)}｜${escapeHtml(v.unit)}</option>`).join('') : '<option value="">尚無可接水線車輛</option>';
-  const crewOwners = live.crews.map(p=>`<option value="${escapeHtml(p.unit + p.leader)}">${escapeHtml(p.unit)}${escapeHtml(p.leader)}｜${p.count}人</option>`).join('');
-  const unitOwners = flatUnits(profile?.brigade || '第三大隊').map(u=>`<option value="${escapeHtml(u)}">${escapeHtml(u)}｜單位/分隊</option>`).join('');
-  $('hoseOwner').innerHTML = (crewOwners + unitOwners) || `<option value="${escapeHtml(profile?.unit||'現場') }">${escapeHtml(profile?.unit||'現場')}</option>`;
-  const targetType = $('hoseTargetType')?.value || 'map';
-  if(targetType === 'vehicle'){
-    $('hoseTarget').disabled = false;
-    $('hoseTarget').innerHTML = live.vehicles.map(v=>`<option value="${v.id}">${escapeHtml(v.name)}｜${escapeHtml(v.unit)}</option>`).join('') || '<option value="">尚無車輛</option>';
-  } else if(targetType === 'crew'){
-    $('hoseTarget').disabled = false;
-    $('hoseTarget').innerHTML = live.crews.map(p=>`<option value="${p.id}">${escapeHtml(p.unit)}${escapeHtml(p.leader)}｜${p.count}人</option>`).join('') || '<option value="">尚無人員編組</option>';
-  } else {
-    $('hoseTarget').disabled = true;
-    $('hoseTarget').innerHTML = '<option value="">請點地圖目的地</option>';
-  }
+  renderPendingDeploymentVehicles();
+  updateMapUndoButton();
+  syncBuildingBoxForm();
 }
 function setDeploymentMode(mode='select'){
   deploymentMode=mode;
@@ -1220,12 +1281,12 @@ function setDeploymentMode(mode='select'){
   selectedMapResource=null;
   if(mode!=='hose' && pendingTool?.type==='hoseConnect') pendingTool=null;
   const hint=$('deploymentActionHint');
-  if(hint) hint.textContent=mode==='hose'?'水線模式：先點可接水線車輛，再點另一台車、人員編組或地圖位置。':mode==='hazard'?'危害模式：點下方危害圖示，再點地圖放置。':'選取模式：點資源後再點地圖，或直接拖曳地圖上的標示。';
+  if(hint) hint.textContent=mode==='hose'?'水線模式：先點可供水車輛，再點另一台車、人員編組，或建物第一、二、三、四面。':mode==='hazard'?'危害模式：點下方危害圖示，再點地圖放置。':'選取模式：點資源後再點地圖，或直接拖曳地圖上的標示。';
   renderDeploymentPalette();
 }
 function renderDeploymentPalette(){
   const wrap=$('mapResourcePalette'); if(!wrap) return;
-  const vehicleHtml=live.vehicles.map(v=>`<article class="resource-chip ${selectedMapResource?.coll==='vehicles'&&selectedMapResource?.id===v.id?'active':''}" draggable="true" data-resource-coll="vehicles" data-resource-id="${v.id}" data-resource-label="${escapeHtml(v.name)}"><b>${vehEmoji(v.type)} ${escapeHtml(v.name)}</b><span>${escapeHtml(v.unit)}｜${escapeHtml(v.task||v.status||'待命')}</span><div class="resource-chip-actions">${v.canHose?`<button type="button" data-resource-action="quickHose" data-resource-id="${v.id}">拉水線</button>`:''}<button type="button" data-map-action="editVehicle" data-id="${v.id}">修改</button></div></article>`).join('');
+  const vehicleHtml=live.vehicles.map(v=>`<article class="resource-chip ${selectedMapResource?.coll==='vehicles'&&selectedMapResource?.id===v.id?'active':''}" draggable="true" data-resource-coll="vehicles" data-resource-id="${v.id}" data-resource-label="${escapeHtml(v.name)}"><b>${vehEmoji(v.type)} ${escapeHtml(vehicleDisplayName(v))}</b><span>${v.staged?'右側待命｜':''}${escapeHtml(v.unit)}｜${escapeHtml(v.task||v.status||'待命')}</span><div class="resource-chip-actions">${v.canHose?`<button type="button" data-resource-action="quickHose" data-resource-id="${v.id}">拉水線</button>`:''}<button type="button" data-map-action="editVehicle" data-id="${v.id}">修改</button></div></article>`).join('');
   const crewHtml=live.crews.map(c=>`<article class="resource-chip ${selectedMapResource?.coll==='crews'&&selectedMapResource?.id===c.id?'active':''}" draggable="true" data-resource-coll="crews" data-resource-id="${c.id}" data-resource-label="${escapeHtml(c.unit+c.leader)}"><b>👥 ${escapeHtml(c.unit)}${escapeHtml(c.leader)}</b><span>${c.count||0}人｜${escapeHtml(c.task||c.status||'待命')}</span><div class="resource-chip-actions"><button type="button" data-map-action="editCrew" data-id="${c.id}">修改</button><button type="button" data-map-action="restCrew" data-mode="原地休息" data-id="${c.id}">休息</button></div></article>`).join('');
   const hazards=['起火點','指揮站','前進指揮所','休息區','瓦斯','高壓電','危險物'].map(t=>`<button type="button" class="resource-chip quick-symbol" data-resource-action="newHazard" data-hazard-type="${t}"><b>${hazEmoji(t)} ${t}</b><span>點選後再點地圖</span></button>`).join('');
   wrap.innerHTML=(vehicleHtml+crewHtml+hazards)||'<div class="resource-empty">尚無人車資料；可先使用下方表單新增。</div>';
@@ -1262,7 +1323,7 @@ function beginQuickHose(vehicleId){
   setDeploymentMode('hose');
   pendingTool={type:'hoseConnect',vehicleId:v.id,vehicleName:v.name,unit:v.unit,owner:v.unit||profile?.unit||'',port:firstAvailableHosePort(v.id),task:'水線作業',kind:'進攻水線',targetType:'map',targetId:''};
   selectedMapResource={coll:'vehicles',id:v.id};
-  toast(`已選擇 ${v.name} ${pendingTool.port}；請點目標車輛、人員或地圖位置。`,4800);
+  toast(`已選擇 ${vehicleDisplayName(v)} ${pendingTool.port}；請點另一台車、人員編組，或建物第一、二、三、四面。`,4800);
   renderDeploymentPalette();
 }
 function completeQuickHoseTarget(targetType,item){
@@ -1273,10 +1334,36 @@ function completeQuickHoseTarget(targetType,item){
   pendingTool=null; selectedMapResource=null;
   if(reconnect){
     const targetName=targetType==='vehicle'?`${item.name}｜${item.unit}`:`${item.unit}${item.leader}｜${item.count}人`;
-    updateItem('hoses',tool.hoseId,{targetType,targetId:item.id,targetName,lat:null,lng:null}).then(()=>addLog('hose',`重新指定水線終點：${targetName}`)).then(()=>{renderDeploymentPalette();renderMap();});
+    updateMapItemWithUndo('hoses',tool.hoseId,{targetType,targetId:item.id,targetName,lat:null,lng:null},`重新指定水線終點至 ${targetName}`).then(()=>addLog('hose',`重新指定水線終點：${targetName}`)).then(()=>{renderDeploymentPalette();renderMap();});
   }else addHoseToTarget(tool).then(()=>{ renderDeploymentPalette(); renderMap(); });
   return true;
 }
+function completeQuickHoseFace(face){
+  if(!face || !pendingTool || !['hoseConnect','hoseReconnect'].includes(pendingTool.type)) return false;
+  const tool={...pendingTool,targetType:'buildingFace',targetId:face.id,targetName:face.name};
+  const reconnect=pendingTool.type==='hoseReconnect';
+  pendingTool=null; selectedMapResource=null;
+  if(reconnect){
+    updateMapItemWithUndo('hoses',tool.hoseId,{targetType:'buildingFace',targetId:face.id,targetName:face.name,lat:null,lng:null},`重新指定水線終點至 ${face.name}`)
+      .then(()=>addLog('hose',`重新指定水線終點：${face.name}`)).then(()=>{renderDeploymentPalette();renderMap();});
+  }else addHoseToTarget(tool).then(()=>{renderDeploymentPalette();renderMap();});
+  return true;
+}
+async function movePendingResourceTo(ll,label='指定位置'){
+  if(!pendingTool || pendingTool.type!=='moveExisting') return false;
+  const tool={...pendingTool};
+  const item=(live[tool.coll]||[]).find(x=>x.id===tool.id);
+  pendingTool=null; selectedMapResource=null;
+  if(!item) return false;
+  const before={lat:item.lat,lng:item.lng};
+  await updateItem(tool.coll,tool.id,{lat:Number(ll.lat),lng:Number(ll.lng),staged:false});
+  pushMapUndo(`復原移動：${item.name||item.unit||item.type||''}`,async()=>updateItem(tool.coll,tool.id,before));
+  await addLog('map',`部署至${label}：${item.name||item.unit||item.type||''}`);
+  toast(`已部署至${label}`);
+  renderDeploymentPalette(); renderMap();
+  return true;
+}
+
 
 async function saveCaseInfo(showToast=true, logChange=true){
   if(!currentCase) return;
@@ -1349,6 +1436,9 @@ async function saveCaseInfo(showToast=true, logChange=true){
     patch.locationMeta={...(currentCase.locationMeta||{}),queryAddress:editedAddress,formattedAddress:'',placeId:'',confirmed:false,locked:false,unverified:true,source:'address-edited',updatedAt:Date.now(),updatedBy:radioCallSign()};
   }
   Object.assign(currentCase, patch);
+  patch.summary=buildExecutiveSummaryText(currentCase);
+  patch.summaryUpdatedAt=Date.now();
+  currentCase.summary=patch.summary;
   if(firebaseEnabled) await db.collection('cases').doc(currentCaseId).set(patch,{merge:true});
   else { saveLocalCase(); renderDetail(); }
   if(logChange) await addLog('arrival','更新到場回報 / 到建火人支初資訊');
@@ -1356,16 +1446,7 @@ async function saveCaseInfo(showToast=true, logChange=true){
   renderArrivalStatusCards(); renderCommandGuide();
   if(showToast) toast('已儲存到場回報');
 }
-async function saveSummaryInfo(){
-  if(!currentCase) return;
-  const patch = { floors:Number($('summaryFloors').value)||0, fireFloor:normalizeFloorValue($('summaryFireFloor').value), trapped:$('summaryTrapped').value, trappedCount:getSummaryTrappedCount(), trappedCountMode:$('summaryTrappedCountMode').value, victims:readVictims('#summaryVictimRows .victim-row'), summary:$('summaryText').value.trim(), updatedAt:Date.now() };
-  Object.assign(currentCase, patch);
-  if(firebaseEnabled) await db.collection('cases').doc(currentCaseId).set(patch,{merge:true});
-  else { saveLocalCase(); renderDetail(); }
-  await addLog('case','更新案件概要（開案資料）');
-  renderSummaryCards(); renderCommandGuide(); generateReport(false);
-  toast('已儲存案件概要');
-}
+async function saveSummaryInfo(){ toast('案件概要由流程 SOP、戰情與部署資料自動更新，請至對應功能頁修改。',4200); }
 function readSupports(){ return Array.from(document.querySelectorAll('.support-grid input:checked')).map(x=>x.value); }
 function applySupportValues(values=[]){ document.querySelectorAll('.support-grid input').forEach(x=>{ x.checked = values.includes(x.value); }); }
 
@@ -1556,7 +1637,7 @@ async function runMapDiagnostics(){
     add('地圖底圖',mapReady?'good':mapLoadError?'danger':'warning',mapReady?'Google Maps 已顯示':mapLoadError||'尚未開啟部署頁或地圖尚未初始化');
   }catch(err){ add('定位診斷','danger',err.message||String(err)); }
   const label={good:'正常',warning:'注意',danger:'失敗'};
-  lastMapDiagnostics=[`FireCommand v24 定位診斷｜${new Date().toLocaleString('zh-TW',{hour12:false})}`,...rows.map(r=>`${r.name}：${label[r.status]}｜${r.detail}`)].join('\n');
+  lastMapDiagnostics=[`FireCommand v25 定位診斷｜${new Date().toLocaleString('zh-TW',{hour12:false})}`,...rows.map(r=>`${r.name}：${label[r.status]}｜${r.detail}`)].join('\n');
   if(panel) panel.innerHTML=rows.map(r=>`<div class="diagnostic-row ${r.status}"><span>${escapeHtml(r.name)}</span><b>${label[r.status]}</b><div class="diagnostic-detail">${escapeHtml(r.detail)}</div></div>`).join('');
   return rows;
 }
@@ -1622,6 +1703,7 @@ function clearMapOverlays(){
   incidentCircle=null;
   buildingBoxCenterMarker=null;
   buildingBoxCornerMarker=null;
+  buildingBoxRotationMarker=null;
 }
 function addMapOverlay(o){ if(o) mapOverlays.push(o); return o; }
 function escapeXml(s=''){ return String(s).replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&apos;'}[c])); }
@@ -1635,6 +1717,7 @@ function googleMarkerStyle(className='hazard'){
   if(className.includes('person')) return {bg:'#111827',fg:'#fff'};
   if(className.includes('hose')) return {bg:'#245fc6',fg:'#fff'};
   if(className.includes('building-center')) return {bg:'#1d1a17',fg:'#fff'};
+  if(className.includes('building-rotate')) return {bg:'#245fc6',fg:'#fff'};
   if(className.includes('building-handle')) return {bg:'#a43a30',fg:'#fff'};
   if(className.includes('face')) return {bg:'#fffdf8',fg:'#1d1a17'};
   return {bg:'#fffdf8',fg:'#111827'};
@@ -1671,7 +1754,10 @@ function renderMap(){
   if(fallbackLocation && !locationMeta.locked && (map.getZoom()||0)>14) map.setZoom(13);
   const incidentMarker=makeGoogleMarker({position:center,text:locationMeta.locked?'📍 案件中心｜已鎖定':fallbackLocation?'⚠ 備援中心｜非火場位置':'📍 案件中心｜待確認',className:'hazard',draggable:!locationMeta.locked,zIndex:1000,
     onDragEnd:async ll=>setIncidentLocation({lat:ll.lat,lng:ll.lng,source:'manual',formattedAddress:currentCase.address},false),
-    onClick:marker=>openMapInfo(marker,`<b>案件中心</b><div class="meta">來源：${escapeHtml(locationSourceLabel(locationMeta.source||'legacy'))}<br>狀態：${escapeHtml(locationQualityLabel(locationMeta))}</div>`)});
+    onClick:marker=>{
+      if(pendingTool?.type==='moveExisting'){ movePendingResourceTo(center,'案件中心'); return; }
+      openMapInfo(marker,`<b>案件中心</b><div class="meta">來源：${escapeHtml(locationSourceLabel(locationMeta.source||'legacy'))}<br>狀態：${escapeHtml(locationQualityLabel(locationMeta))}<br>人車可直接部署至此位置；水線請優先連接建物四面。</div>`);
+    }});
   renderBuildingBoxOnMap();
 
   live.hoses.forEach(h=>{
@@ -1679,22 +1765,23 @@ function renderMap(){
     if(!from||!to) return;
     const path=[{lat:Number(from[0]),lng:Number(from[1])},{lat:Number(to[0]),lng:Number(to[1])}];
     const poly=addMapOverlay(new google.maps.Polyline({map,path,strokeColor:'#245fc6',strokeWeight:6,strokeOpacity:.88,clickable:true,zIndex:20}));
-    const info=`<b>${escapeHtml(h.vehicleName||'水線來源')} ${escapeHtml(h.port||'')}</b><div class="meta">歸屬：${escapeHtml(h.owner||h.unit||'')}<br>目的地：${escapeHtml(h.targetName||'地圖點')}<br>性質：${escapeHtml(h.kind||'水線')}<br>任務：${escapeHtml(h.task||'')}</div><div class="popup-actions"><button data-map-action="editHose" data-id="${h.id}">修改</button><button data-map-action="deleteHose" data-id="${h.id}">刪除</button></div>`;
+    const hoseSourceName=vehicleDisplayName({name:h.vehicleName,vehicleName:h.vehicleName,unit:h.unit});
+    const info=`<b>${escapeHtml(hoseSourceName)} ${escapeHtml(h.port||'')}</b><div class="meta">歸屬：${escapeHtml(h.owner||h.unit||'')}<br>目的地：${escapeHtml(h.targetName||'地圖點')}<br>性質：${escapeHtml(h.kind||'水線')}<br>任務：${escapeHtml(h.task||'')}</div><div class="popup-actions"><button data-map-action="editHose" data-id="${h.id}">修改</button><button data-map-action="deleteHose" data-id="${h.id}">刪除</button></div>`;
     poly.addListener('click',ev=>{ mapInfoWindow.setPosition(ev.latLng); mapInfoWindow.setContent(`<div class="google-info-card">${info}</div>`); mapInfoWindow.open({map,shouldFocus:false}); });
     const mid={lat:(path[0].lat+path[1].lat)/2,lng:(path[0].lng+path[1].lng)/2};
-    makeGoogleMarker({position:mid,text:`💧 ${h.owner||h.unit||'水線'}｜${h.kind||''}`,className:'hose-label',onClick:m=>openMapInfo(m,info),zIndex:40});
+    makeGoogleMarker({position:mid,text:`💧 ${hoseSourceName} ${h.port||''}｜${h.kind||'水線'}`,className:'hose-label',onClick:m=>openMapInfo(m,info),zIndex:40});
     if(h.targetType==='map' && h.lat && h.lng){
       makeGoogleMarker({position:{lat:Number(h.lat),lng:Number(h.lng)},text:'💧 水線終點',className:'hose-label',draggable:true,zIndex:45,
-        onDragEnd:async ll=>{ await updateItem('hoses',h.id,{lat:ll.lat,lng:ll.lng,targetName:'地圖點 / 手動調整'}); await addLog('hose',`移動水線終點：${h.owner||h.unit||''}`); },
+        onDragEnd:async ll=>{ await updateMapItemWithUndo('hoses',h.id,{lat:ll.lat,lng:ll.lng,targetName:'地圖點 / 手動調整'},`水線終點：${hoseSourceName}`); await addLog('hose',`移動水線終點：${hoseSourceName}`); },
         onClick:m=>openMapInfo(m,info)});
     }
   });
   live.vehicles.forEach(v=>{
-    const marker=makeGoogleMarker({position:{lat:Number(v.lat),lng:Number(v.lng)},text:`${vehEmoji(v.type)} ${v.name}`,className:`veh ${vehClass(v.type)}`,draggable:true,zIndex:100,
-      onDragEnd:async ll=>{ await updateItem('vehicles',v.id,{lat:ll.lat,lng:ll.lng}); await addLog('vehicle',`${v.name} 部署位置更新`); },
+    const marker=makeGoogleMarker({position:{lat:Number(v.lat),lng:Number(v.lng)},text:`${vehEmoji(v.type)} ${vehicleDisplayName(v)}`,className:`veh ${vehClass(v.type)}`,draggable:true,zIndex:100,
+      onDragEnd:async ll=>{ await updateMapItemWithUndo('vehicles',v.id,{lat:ll.lat,lng:ll.lng,staged:false},`移動${vehicleDisplayName(v)}`); await addLog('vehicle',`${vehicleDisplayName(v)} 部署位置更新`); },
       onClick:m=>{
         if(completeQuickHoseTarget('vehicle',v)) return;
-        openMapInfo(m,`<b>${escapeHtml(v.name)}</b><div class="meta">${escapeHtml(v.unit)}｜${escapeHtml(v.type)}<br>任務：${escapeHtml(v.task)}<br>${v.canHose?'水線接口：1～4線':'不可接水線'}</div><div class="popup-actions">${v.canHose?`<button data-resource-action="quickHose" data-resource-id="${v.id}">拉水線</button>`:''}<button data-map-action="editVehicle" data-id="${v.id}">修改</button><button data-map-action="deleteVehicle" data-id="${v.id}">刪除</button></div>`);
+        openMapInfo(m,`<b>${escapeHtml(vehicleDisplayName(v))}</b><div class="meta">${escapeHtml(v.unit)}｜${escapeHtml(v.type)}<br>任務：${escapeHtml(v.task)}<br>${v.canHose?'水線接口：1～4線':'不可接水線'}</div><div class="popup-actions">${v.canHose?`<button data-resource-action="quickHose" data-resource-id="${v.id}">拉水線</button>`:''}<button data-map-action="editVehicle" data-id="${v.id}">修改</button><button data-map-action="deleteVehicle" data-id="${v.id}">刪除</button></div>`);
       }});
   });
   live.crews.forEach(p=>{
@@ -1707,7 +1794,7 @@ function renderMap(){
   });
   live.hazards.forEach(h=>{
     makeGoogleMarker({position:{lat:Number(h.lat),lng:Number(h.lng)},text:`${hazEmoji(h.type)} ${h.type}`,className:'hazard',draggable:true,zIndex:120,
-      onDragEnd:async ll=>{ await updateItem('hazards',h.id,{lat:ll.lat,lng:ll.lng}); await addLog('hazard',`${h.type} 標示位置更新`); },
+      onDragEnd:async ll=>{ await updateMapItemWithUndo('hazards',h.id,{lat:ll.lat,lng:ll.lng},`移動${h.type}`); await addLog('hazard',`${h.type} 標示位置更新`); },
       onClick:m=>openMapInfo(m,`<b>${escapeHtml(h.type)}</b><div class="popup-actions"><button data-map-action="editHazard" data-id="${h.id}">修改</button><button data-map-action="deleteHazard" data-id="${h.id}">刪除</button></div>`)});
   });
   renderDeploymentPalette();
@@ -1718,6 +1805,7 @@ function getHosePoints(h){
   let target = null;
   if(h.targetType === 'vehicle') target = live.vehicles.find(x=>x.id===h.targetId);
   if(h.targetType === 'crew') target = live.crews.find(x=>x.id===h.targetId);
+  if(h.targetType === 'buildingFace') target = buildingFaceById(h.targetId);
   const to = target ? [Number(target.lat), Number(target.lng)] : (h.lat && h.lng ? [Number(h.lat), Number(h.lng)] : null);
   return { from, to };
 }
@@ -1731,13 +1819,19 @@ async function handleMapClick(e){
   const ll=e?.latLng?{lat:e.latLng.lat(),lng:e.latLng.lng()}:e;
   if(!ll || !pendingTool) return;
   if(pendingTool.type==='hazard') await addHazardAt(pendingTool.hazardType,ll.lat,ll.lng);
-  else if(pendingTool.type==='hose' || pendingTool.type==='hoseConnect') await addHoseAt(pendingTool,ll.lat,ll.lng);
-  else if(pendingTool.type==='hoseReconnect'){ await updateItem('hoses',pendingTool.hoseId,{targetType:'map',targetId:null,targetName:'地圖點 / 手動指定',lat:ll.lat,lng:ll.lng}); await addLog('hose','重新指定水線終點至地圖位置'); }
+  else if(pendingTool.type==='hose' || pendingTool.type==='hoseConnect'){
+    toast('請直接點選另一台車、人員編組，或建物第一、二、三、四面作為水線終點。',4800);
+    return;
+  }
+  else if(pendingTool.type==='hoseReconnect'){
+    toast('請直接點選新的車輛、人員編組，或建物第一、二、三、四面。',4800);
+    return;
+  }
   else if(pendingTool.type==='buildingBoxCenter') await saveBuildingBox({lat:ll.lat,lng:ll.lng},'設定建物中心框中心點');
   else if(pendingTool.type==='incidentCenter') await setIncidentLocation({lat:ll.lat,lng:ll.lng,source:'manual',formattedAddress:currentCase?.address||''},false);
   else if(pendingTool.type==='moveExisting'){
-    const item=(live[pendingTool.coll]||[]).find(x=>x.id===pendingTool.id);
-    if(item){ await updateItem(pendingTool.coll,pendingTool.id,{lat:ll.lat,lng:ll.lng}); await addLog('map',`部署位置更新：${item.name||item.unit||item.type||''}`); toast('已更新部署位置'); }
+    await movePendingResourceTo(ll,'地圖指定位置');
+    return;
   }
   pendingTool=null; selectedMapResource=null; renderDeploymentPalette();
 }
@@ -1751,7 +1845,9 @@ function bindMapDropTarget(){
       const data=JSON.parse(ev.dataTransfer.getData('application/json')||'{}');
       if(!data.coll||!data.id) return;
       const ll=await latLngFromMapClientPoint(ev.clientX,ev.clientY);
-      await updateItem(data.coll,data.id,{lat:ll.lat,lng:ll.lng});
+      const item=(live[data.coll]||[]).find(x=>x.id===data.id);
+      if(!item) return;
+      await updateMapItemWithUndo(data.coll,data.id,{lat:ll.lat,lng:ll.lng,staged:false},`拖放部署 ${data.label||data.id}`);
       await addLog('map',`拖放部署：${data.label||data.id}`);
     }catch(err){ console.warn('map drop failed',err); }
   });
@@ -1775,10 +1871,72 @@ function latLngFromMapClientPoint(clientX,clientY){
     new ProjectionOverlay().setMap(map);
   });
 }
+
+function updateMapUndoButton(){
+  const btn=$('mapUndoBtn'); if(!btn) return;
+  const last=mapUndoStack[mapUndoStack.length-1];
+  btn.disabled=!last;
+  btn.textContent=last?`↶ ${last.label}`:'↶ 回復上一步';
+}
+function pushMapUndo(label,undo){
+  if(suppressMapUndo || typeof undo!=='function') return;
+  mapUndoStack.push({label:String(label||'回復上一步'),undo});
+  if(mapUndoStack.length>20) mapUndoStack.shift();
+  updateMapUndoButton();
+}
+async function undoLastMapAction(){
+  const action=mapUndoStack.pop(); updateMapUndoButton();
+  if(!action){ toast('目前沒有可回復的地圖操作'); return; }
+  try{
+    suppressMapUndo=true;
+    await action.undo();
+    await addLog('map',action.label);
+    toast(action.label,3200);
+  }catch(err){
+    console.error('map undo failed',err);
+    toast(`回復失敗：${err.message||err}`,4200);
+  }finally{
+    suppressMapUndo=false;
+    renderMap(); renderDeploymentPalette(); renderOverviewContent();
+  }
+}
+function clonePlain(value){ return JSON.parse(JSON.stringify(value||{})); }
+async function restoreMapRecords(records=[]){
+  for(const record of records){
+    if(!record?.coll||!record?.id) continue;
+    const data=clonePlain(record.data);
+    if(firebaseEnabled) await db.collection('cases').doc(currentCaseId).collection(record.coll).doc(record.id).set(data);
+    else{
+      const arr=live[record.coll]||[];
+      const idx=arr.findIndex(x=>x.id===record.id);
+      if(idx>=0) arr[idx]={id:record.id,...data}; else arr.push({id:record.id,...data});
+    }
+  }
+  if(!firebaseEnabled){ saveLocalCase(); renderLiveParts(); }
+}
+async function updateMapItemWithUndo(coll,id,patch,label){
+  const item=(live[coll]||[]).find(x=>x.id===id); if(!item) return;
+  const before={}; Object.keys(patch||{}).forEach(k=>before[k]=item[k]);
+  await updateItem(coll,id,patch);
+  pushMapUndo(`復原${label||'地圖操作'}`,async()=>updateItem(coll,id,before));
+}
 async function addItem(coll, data){
   data.createdAt = data.createdAt || Date.now();
-  if(firebaseEnabled){ await db.collection('cases').doc(currentCaseId).collection(coll).add(data); }
-  else { live[coll].push({ id:uid(coll), ...data }); saveLocalCase(); renderLiveParts(); }
+  if(firebaseEnabled){
+    const ref=await db.collection('cases').doc(currentCaseId).collection(coll).add(data);
+    return ref.id;
+  }
+  const id=uid(coll);
+  live[coll].push({ id, ...data });
+  saveLocalCase(); renderLiveParts();
+  return id;
+}
+async function deleteMapRecordSilent(coll,id){
+  if(firebaseEnabled) await db.collection('cases').doc(currentCaseId).collection(coll).doc(id).delete();
+  else{
+    const arr=live[coll]||[]; const idx=arr.findIndex(x=>x.id===id); if(idx>=0) arr.splice(idx,1);
+    saveLocalCase(); renderLiveParts();
+  }
 }
 async function updateItem(coll, id, patch){
   patch.updatedAt = Date.now();
@@ -1817,10 +1975,14 @@ async function editVehicle(id){
 }
 async function deleteVehicle(id){
   const v=live.vehicles.find(x=>x.id===id); if(!v) return;
-  const linked=live.hoses.filter(h=>h.vehicleId===id||h.targetId===id).length;
-  if(!confirm(`確認刪除 ${v.name}？${linked?`\n注意：相關水線 ${linked} 條也會刪除。`:''}`)) return;
-  for(const h of live.hoses.filter(h=>h.vehicleId===id||h.targetId===id)) await deleteItem('hoses',h.id,`相關水線 ${h.port||''}`);
-  await deleteItem('vehicles',id,v.name);
+  const linked=live.hoses.filter(h=>h.vehicleId===id||h.targetId===id);
+  const name=vehicleDisplayName(v);
+  if(!confirm(`確認刪除 ${name}？${linked.length?`
+注意：相關水線 ${linked.length} 條也會刪除。`:''}`)) return;
+  const records=[{coll:'vehicles',id:v.id,data:clonePlain(v)},...linked.map(h=>({coll:'hoses',id:h.id,data:clonePlain(h)}))];
+  for(const h of linked) await deleteItem('hoses',h.id,`相關水線 ${h.port||''}`);
+  await deleteItem('vehicles',id,name);
+  pushMapUndo(`復原刪除 ${name}`,async()=>restoreMapRecords(records));
 }
 async function editCrew(id){
   const p=live.crews.find(x=>x.id===id); if(!p) return;
@@ -1832,10 +1994,13 @@ async function editCrew(id){
 }
 async function deleteCrew(id){
   const p=live.crews.find(x=>x.id===id); if(!p) return;
-  const linked=live.hoses.filter(h=>h.targetType==='crew'&&h.targetId===id).length;
-  if(!confirm(`確認刪除 ${p.unit}${p.leader}？${linked?`\n相關水線 ${linked} 條會保留在原部署位置。`:''}`)) return;
-  for(const h of live.hoses.filter(h=>h.targetType==='crew'&&h.targetId===id)) await updateItem('hoses',h.id,{targetType:'map',targetId:null,lat:p.lat,lng:p.lng,targetName:`${p.unit}${p.leader} 原部署位置`});
+  const linked=live.hoses.filter(h=>h.targetType==='crew'&&h.targetId===id);
+  if(!confirm(`確認刪除 ${p.unit}${p.leader}？${linked.length?`
+相關水線 ${linked.length} 條會保留在原部署位置。`:''}`)) return;
+  const records=[{coll:'crews',id:p.id,data:clonePlain(p)},...linked.map(h=>({coll:'hoses',id:h.id,data:clonePlain(h)}))];
+  for(const h of linked) await updateItem('hoses',h.id,{targetType:'map',targetId:null,lat:p.lat,lng:p.lng,targetName:`${p.unit}${p.leader} 原部署位置`});
   await deleteItem('crews',id,`${p.unit}${p.leader}`);
+  pushMapUndo(`復原刪除 ${p.unit}${p.leader}`,async()=>restoreMapRecords(records));
 }
 async function editHazard(id){
   const h=live.hazards.find(x=>x.id===id); if(!h) return;
@@ -1847,20 +2012,106 @@ async function editHazard(id){
 async function deleteHazard(id){
   const h=live.hazards.find(x=>x.id===id); if(!h) return;
   if(!confirm(`確認刪除標示「${h.type}」？`)) return;
+  const record={coll:'hazards',id:h.id,data:clonePlain(h)};
   await deleteItem('hazards',id,h.type);
+  pushMapUndo(`復原刪除標示 ${h.type}`,async()=>restoreMapRecords([record]));
 }
 async function editHoseFull(id){
   const h=live.hoses.find(x=>x.id===id); if(!h) return;
   const kinds=['進攻水線','供水線','防護水線','搜救掩護水線','中繼水線'].map(x=>`<option ${h.kind===x?'selected':''}>${x}</option>`).join('');
   openActionSheet(`水線｜${h.vehicleName||''} ${h.port||''}`,`<div class="field"><label>水線歸屬</label><input id="sheetHoseOwner" value="${escapeHtml(h.owner||h.unit||'')}" /></div><div class="field"><label>水線性質</label><select id="sheetHoseKind">${kinds}</select></div><div class="field"><label>任務</label><input id="sheetHoseTask" value="${escapeHtml(h.task||'')}" /></div><div class="button-row"><button id="saveHoseSheetBtn" class="btn primary">儲存</button><button id="reconnectHoseSheetBtn" class="btn ghost">重新指定終點</button><button id="deleteHoseSheetBtn" class="btn ghost">刪除水線</button></div>`);
   $('saveHoseSheetBtn').onclick=async()=>{ const patch={owner:$('sheetHoseOwner').value.trim()||h.owner||h.unit,kind:$('sheetHoseKind').value,task:$('sheetHoseTask').value.trim()||h.task}; await updateItem('hoses',id,patch); await addLog('hose',`修改水線：${h.vehicleName||''}${h.port||''}`); closeActionSheet(); };
-  $('reconnectHoseSheetBtn').onclick=()=>{ closeActionSheet(); pendingTool={type:'hoseReconnect',hoseId:h.id,vehicleId:h.vehicleId,vehicleName:h.vehicleName,unit:h.unit,owner:h.owner,port:h.port,task:h.task,kind:h.kind}; setDeploymentMode('hose'); toast('請點新的車輛、人員或地圖位置，重新指定水線終點。',4800); };
+  $('reconnectHoseSheetBtn').onclick=()=>{ closeActionSheet(); pendingTool={type:'hoseReconnect',hoseId:h.id,vehicleId:h.vehicleId,vehicleName:h.vehicleName,unit:h.unit,owner:h.owner,port:h.port,task:h.task,kind:h.kind}; setDeploymentMode('hose'); toast('請點新的車輛、人員編組，或建物第一、二、三、四面，重新指定水線終點。',4800); };
   $('deleteHoseSheetBtn').onclick=()=>{ closeActionSheet(); deleteHose(id); };
 }
 async function deleteHose(id){
   const h=live.hoses.find(x=>x.id===id); if(!h) return;
-  if(!confirm(`確認刪除水線「${h.vehicleName||''} ${h.port||''}」？`)) return;
-  await deleteItem('hoses',id,`${h.vehicleName||''}${h.port||''}`);
+  const label=`${vehicleDisplayName({name:h.vehicleName,unit:h.unit})} ${h.port||''}`.trim();
+  if(!confirm(`確認刪除水線「${label}」？`)) return;
+  const record={coll:'hoses',id:h.id,data:clonePlain(h)};
+  await deleteItem('hoses',id,label);
+  pushMapUndo(`復原刪除水線 ${label}`,async()=>restoreMapRecords([record]));
+}
+
+function syncDeploymentVehicleManualField(){
+  const manual=$('deploymentVehicleCode')?.value==='manual';
+  const field=$('deploymentVehicleManualField'); if(field) field.hidden=!manual;
+  if(manual) $('deploymentVehicleManual')?.focus();
+}
+function normalizeVehicleCodeValue(value=''){
+  return String(value||'').trim().replace(/\s+/g,'');
+}
+function vehicleDisplayName(item={}){
+  const name=String(item.name||item.vehicleName||'').trim();
+  const unit=String(item.unit||'').trim();
+  if(!name) return unit||'未命名車輛';
+  if(unit && /^\d/.test(name)) return `${unit}${name}`;
+  if(unit && !name.includes(unit) && /^\D*\d{1,3}$/.test(name)) return `${unit}${name.replace(/^\D*/, '')}`;
+  return name;
+}
+function formatUnitVehicleName(unit,code){
+  const clean=normalizeVehicleCodeValue(code);
+  if(!clean) return '';
+  if(unit && clean.startsWith(unit)) return clean;
+  if(/^\d/.test(clean)) return `${unit}${clean}`;
+  if(unit && !clean.includes(unit)) return `${unit}${clean}`;
+  return clean;
+}
+function renderPendingDeploymentVehicles(){
+  const wrap=$('pendingDeploymentVehicles'); if(!wrap) return;
+  if(!pendingDeploymentVehicles.length){ wrap.innerHTML='<div class="empty">尚未加入車輛；可只登錄人員編組。</div>'; return; }
+  wrap.innerHTML=pendingDeploymentVehicles.map((v,i)=>`<div class="pending-vehicle-chip"><span>${escapeHtml(v.code)}｜${escapeHtml(vehicleType(v.code).label)}</span><button type="button" data-remove-pending-vehicle="${i}" aria-label="移除車輛">×</button></div>`).join('');
+  wrap.querySelectorAll('[data-remove-pending-vehicle]').forEach(btn=>btn.addEventListener('click',()=>{ pendingDeploymentVehicles.splice(Number(btn.dataset.removePendingVehicle),1); renderPendingDeploymentVehicles(); }));
+}
+function addPendingDeploymentVehicle(){
+  const sel=$('deploymentVehicleCode'); if(!sel) return;
+  const code=sel.value==='manual'?normalizeVehicleCodeValue($('deploymentVehicleManual')?.value):sel.value;
+  if(!code){ toast('請輸入借用或臨時車輛代號'); return; }
+  if(pendingDeploymentVehicles.some(v=>v.code===code)){ toast('此車輛代號已加入'); return; }
+  pendingDeploymentVehicles.push({code});
+  if($('deploymentVehicleManual')) $('deploymentVehicleManual').value='';
+  renderPendingDeploymentVehicles();
+  toast(`已加入車輛代號 ${code}`);
+}
+function stagingPosition(index=0,column=0){
+  const box=getBuildingBox();
+  const eastMeters=(Number(box.widthM)||40)/2+55+(column*22);
+  const northMeters=42-(index%12)*17;
+  return {lat:Number(box.lat)+metersToLatDelta(northMeters),lng:Number(box.lng)+metersToLngDelta(eastMeters,box.lat)};
+}
+async function addDeploymentGroup(){
+  if(!currentCase) return;
+  const brigade=$('deploymentBrigade')?.value||profile?.brigade||'第三大隊';
+  const unit=$('deploymentUnit')?.value||profile?.unit||'現場';
+  const leader=$('deploymentLeader')?.value||'6';
+  const count=Number($('deploymentCrewCount')?.value||0);
+  const status=$('deploymentStatus')?.value||'待命';
+  const task=$('deploymentTask')?.value.trim()||status;
+  if(count<=0 && !pendingDeploymentVehicles.length){ toast('請至少登錄人員或一台車輛'); return; }
+  const groupId=uid('group');
+  const baseIndex=live.vehicles.length;
+  const createdRecords=[];
+  if(count>0){
+    const pos=stagingPosition(baseIndex,1);
+    const crewId=await addItem('crews',{brigade,unit,leader,count,status,task,groupId,dispatchCount:status==='作業中'?1:0,startAt:Date.now(),lat:pos.lat,lng:pos.lng,staged:true});
+    createdRecords.push({coll:'crews',id:crewId});
+  }
+  for(let i=0;i<pendingDeploymentVehicles.length;i++){
+    const code=pendingDeploymentVehicles[i].code;
+    const name=formatUnitVehicleName(unit,code);
+    const type=vehicleType(code);
+    const pos=stagingPosition(baseIndex+i,0);
+    const vehicleId=await addItem('vehicles',{brigade,unit,name,vehicleCode:code,type:type.label,canHose:type.canHose,task,status:'待命',groupId,lat:pos.lat,lng:pos.lng,staged:true});
+    createdRecords.push({coll:'vehicles',id:vehicleId});
+  }
+  if(createdRecords.length){
+    pushMapUndo(`復原新增 ${unit} 人車`,async()=>{ for(const r of createdRecords.slice().reverse()) await deleteMapRecordSilent(r.coll,r.id); });
+  }
+  await addLog('deployment',`新增分隊／人車：${unit}${count>0?`${leader}｜${count}人｜${task}`:''}${pendingDeploymentVehicles.length?`｜車輛${pendingDeploymentVehicles.map(v=>formatUnitVehicleName(unit,v.code)).join('、')}`:''}`);
+  pendingDeploymentVehicles=[];
+  renderPendingDeploymentVehicles();
+  if($('deploymentTask')) $('deploymentTask').value='';
+  toast(`${unit}人員與車輛已加入地圖右側待命區`,3800);
 }
 async function addVehicle(){
   if(!currentCase) return;
@@ -1911,15 +2162,25 @@ async function addHoseAt(tool, lat, lng){
 }
 async function addHoseToTarget(tool){
   const v = live.vehicles.find(x=>x.id===tool.vehicleId);
-  const target = tool.targetType === 'vehicle' ? live.vehicles.find(x=>x.id===tool.targetId) : live.crews.find(x=>x.id===tool.targetId);
+  let target=null,targetName='';
+  if(tool.targetType==='vehicle'){
+    target=live.vehicles.find(x=>x.id===tool.targetId);
+    targetName=target?`${vehicleDisplayName(target)}｜${target.unit}`:'';
+  }else if(tool.targetType==='crew'){
+    target=live.crews.find(x=>x.id===tool.targetId);
+    targetName=target?`${target.unit}${target.leader}｜${target.count}人`:'';
+  }else if(tool.targetType==='buildingFace'){
+    target=buildingFaceById(tool.targetId);
+    targetName=target?.name||tool.targetName||'火場建物';
+  }
   if(!target){ toast('請先選擇水線目的地'); return; }
-  const targetName = tool.targetType === 'vehicle' ? `${target.name}｜${target.unit}` : `${target.unit}${target.leader}｜${target.count}人`;
-  await addItem('hoses', { vehicleId:tool.vehicleId, vehicleName:v?.name||tool.vehicleName, unit:v?.unit||tool.unit, owner:tool.owner, port:tool.port, task:tool.task, kind:tool.kind || '進攻水線', status:'使用中', targetType:tool.targetType, targetId:target.id, targetName, from:v?[v.lat,v.lng]:null });
-  await addLog('hose', `建立連結水線：${tool.owner || tool.unit}｜${tool.vehicleName} → ${targetName}`);
-  toast('水線 / 連結已建立');
+  const hoseId=await addItem('hoses',{vehicleId:tool.vehicleId,vehicleName:vehicleDisplayName(v||tool),unit:v?.unit||tool.unit,owner:tool.owner||v?.unit||'',port:tool.port,task:tool.task,kind:tool.kind||'進攻水線',status:'使用中',targetType:tool.targetType,targetId:tool.targetId,targetName,from:v?[v.lat,v.lng]:null});
+  pushMapUndo(`復原建立水線 ${vehicleDisplayName(v||tool)} ${tool.port||''}`,async()=>deleteMapRecordSilent('hoses',hoseId));
+  await addLog('hose',`建立連結水線：${vehicleDisplayName(v||tool)} ${tool.port||''} → ${targetName}`);
+  toast(`水線已連接至${targetName}`);
 }
 function startHazardTool(type){ pendingTool = { type:'hazard', hazardType:type }; toast(`請在地圖點選「${type}」位置`); }
-async function addHazardAt(type, lat, lng){ await addItem('hazards', { type, lat, lng }); await addLog('hazard', `新增標示：${type}`); toast(`${type} 已標示`); }
+async function addHazardAt(type, lat, lng){ const id=await addItem('hazards', { type, lat, lng }); pushMapUndo(`復原新增標示 ${type}`,async()=>deleteMapRecordSilent('hazards',id)); await addLog('hazard', `新增標示：${type}`); toast(`${type} 已標示`); }
 function vehicleType(name){
   const n=(String(name).match(/\d/)||['1'])[0];
   const map={1:['水車',true],2:['直線雲梯車',false],3:['曲折雲梯車',false],4:['指揮/後勤車',false],5:['化學車',true],6:['水庫車',true],7:['救助車',false],8:['照明/排煙車',false],9:['救護車',false]};
@@ -1934,64 +2195,98 @@ function hazEmoji(t=''){ return {起火點:'🔥',瓦斯:'🔥',高壓電:'⚡',
 function getBuildingBox(){
   const lat = Number(currentCase?.buildingBox?.lat || currentCase?.lat || DEFAULT_CENTER.lat);
   const lng = Number(currentCase?.buildingBox?.lng || currentCase?.lng || DEFAULT_CENTER.lng);
-  return Object.assign({lat,lng,widthM:40,heightM:28,locked:false,firstSide:'第一面'}, currentCase?.buildingBox || {});
+  return Object.assign({lat,lng,widthM:40,heightM:28,locked:false,rotationDeg:0}, currentCase?.buildingBox || {});
 }
 function metersToLatDelta(m){ return Number(m) / 111320; }
 function metersToLngDelta(m, lat){ return Number(m) / (111320 * Math.max(.2, Math.cos(Number(lat) * Math.PI/180))); }
-function boxBounds(box){
-  const h = metersToLatDelta((box.heightM||28)/2);
-  const w = metersToLngDelta((box.widthM||40)/2, box.lat);
-  return [[box.lat-h, box.lng-w], [box.lat+h, box.lng+w]];
+function normalizeRotationDeg(value=0){ const n=Number(value)||0; return ((n%360)+360)%360; }
+function rotateLocalPoint(x,y,deg=0){
+  const r=normalizeRotationDeg(deg)*Math.PI/180,c=Math.cos(r),sn=Math.sin(r);
+  return {x:x*c-y*sn,y:x*sn+y*c};
+}
+function localPointToLatLng(box,x,y){
+  const pt=rotateLocalPoint(x,y,box.rotationDeg||0);
+  return {lat:Number(box.lat)+metersToLatDelta(pt.y),lng:Number(box.lng)+metersToLngDelta(pt.x,box.lat)};
+}
+function latLngToLocalPoint(box,lat,lng){
+  const x=(Number(lng)-Number(box.lng))*111320*Math.max(.2,Math.cos(Number(box.lat)*Math.PI/180));
+  const y=(Number(lat)-Number(box.lat))*111320;
+  const r=-normalizeRotationDeg(box.rotationDeg||0)*Math.PI/180,c=Math.cos(r),sn=Math.sin(r);
+  return {x:x*c-y*sn,y:x*sn+y*c};
+}
+function buildingBoxCorners(box){
+  const w=(Number(box.widthM)||40)/2,h=(Number(box.heightM)||28)/2;
+  return [localPointToLatLng(box,-w,h),localPointToLatLng(box,w,h),localPointToLatLng(box,w,-h),localPointToLatLng(box,-w,-h)];
 }
 function buildingBoxSidePoints(box){
-  const b = boxBounds(box); const south=b[0][0], west=b[0][1], north=b[1][0], east=b[1][1];
-  return [{name:'第一面',lat:box.lat,lng:west},{name:'第二面',lat:north,lng:box.lng},{name:'第三面',lat:box.lat,lng:east},{name:'第四面',lat:south,lng:box.lng}];
+  const w=(Number(box.widthM)||40)/2,h=(Number(box.heightM)||28)/2;
+  const defs=[
+    {id:'face1',name:'第一面',x:0,y:-h},
+    {id:'face2',name:'第二面',x:w,y:0},
+    {id:'face3',name:'第三面',x:0,y:h},
+    {id:'face4',name:'第四面',x:-w,y:0}
+  ];
+  return defs.map(d=>({...d,...localPointToLatLng(box,d.x,d.y)}));
 }
+function buildingFaceById(id){ return buildingBoxSidePoints(getBuildingBox()).find(x=>x.id===id); }
 function renderBuildingBoxOnMap(){
   if(!map || !currentCase || !window.google?.maps) return;
   const box=getBuildingBox();
-  const boundsArr=boxBounds(box);
-  const bounds={south:boundsArr[0][0],west:boundsArr[0][1],north:boundsArr[1][0],east:boundsArr[1][1]};
-  const rect=addMapOverlay(new google.maps.Rectangle({map,bounds,strokeColor:box.locked?'#1d1a17':'#a43a30',strokeWeight:2,strokeOpacity:1,fillColor:'#b5281d',fillOpacity:.04,clickable:true,editable:false,draggable:false}));
-  rect.addListener('click',ev=>{
+  const corners=buildingBoxCorners(box);
+  const polygon=addMapOverlay(new google.maps.Polygon({map,paths:corners,strokeColor:box.locked?'#1d1a17':'#a43a30',strokeWeight:3,strokeOpacity:1,fillColor:'#b5281d',fillOpacity:.05,clickable:true,editable:false,draggable:false,zIndex:12}));
+  polygon.addListener('click',ev=>{
+    if(pendingTool?.type==='moveExisting'){
+      movePendingResourceTo({lat:Number(box.lat),lng:Number(box.lng)},'建物中心');
+      return;
+    }
     mapInfoWindow.setPosition(ev.latLng);
-    mapInfoWindow.setContent(`<div class="google-info-card"><b>建物中心框</b><div class="meta">${Math.round(box.widthM)}m × ${Math.round(box.heightM)}m<br>${box.locked?'已鎖定':'未鎖定，可調整'}<br>第一面：${escapeHtml(box.firstSide||'第一面')}</div></div>`);
+    mapInfoWindow.setContent(`<div class="google-info-card"><b>建物中心框</b><div class="meta">${Math.round(box.widthM)}m × ${Math.round(box.heightM)}m<br>旋轉：${Math.round(normalizeRotationDeg(box.rotationDeg))}°<br>${box.locked?'已鎖定':'未鎖定，可拖曳中心、大小與旋轉控制點'}</div><div class="popup-actions"><button data-map-action="${box.locked?'unlockBuildingBox':'lockBuildingBox'}">${box.locked?'解除鎖定':'鎖定建物框'}</button></div></div>`);
     mapInfoWindow.open({map,shouldFocus:false});
   });
   buildingBoxSidePoints(box).forEach(pt=>{
-    makeGoogleMarker({position:{lat:pt.lat,lng:pt.lng},text:pt.name,className:pt.name===(box.firstSide||'第一面')?'face active':'face',zIndex:80});
+    makeGoogleMarker({position:{lat:pt.lat,lng:pt.lng},text:pt.name,className:'face active',zIndex:80,onClick:m=>{
+      if(completeQuickHoseFace(pt)) return;
+      if(pendingTool?.type==='moveExisting'){ movePendingResourceTo({lat:pt.lat,lng:pt.lng},pt.name); return; }
+      openMapInfo(m,`<b>${pt.name}</b><div class="meta">可作為水線終點或人車部署基準。</div>`);
+    }});
   });
   if(!box.locked){
     buildingBoxCenterMarker=makeGoogleMarker({position:{lat:box.lat,lng:box.lng},text:'▣ 建物中心',className:'building-center',draggable:true,zIndex:90,onDragEnd:ll=>saveBuildingBox({lat:ll.lat,lng:ll.lng},'拖曳更新建物中心框')});
-    buildingBoxCornerMarker=makeGoogleMarker({position:{lat:bounds.north,lng:bounds.east},text:'↘ 拉大小',className:'building-handle',draggable:true,zIndex:91,onDragEnd:ll=>{
-      const widthM=Math.max(8,Math.abs(ll.lng-box.lng)*2*111320*Math.max(.2,Math.cos(box.lat*Math.PI/180)));
-      const heightM=Math.max(8,Math.abs(ll.lat-box.lat)*2*111320);
-      saveBuildingBox({widthM:Math.round(widthM),heightM:Math.round(heightM)},'拖曳調整建物中心框大小');
+    const corner=corners[1];
+    buildingBoxCornerMarker=makeGoogleMarker({position:corner,text:'↘ 拉大小',className:'building-handle',draggable:true,zIndex:91,onDragEnd:ll=>{
+      const local=latLngToLocalPoint(box,ll.lat,ll.lng);
+      saveBuildingBox({widthM:Math.max(8,Math.round(Math.abs(local.x)*2)),heightM:Math.max(8,Math.round(Math.abs(local.y)*2))},'拖曳調整建物中心框大小');
+    }});
+    const rotateHandle=localPointToLatLng(box,0,-((Number(box.heightM)||28)/2+22));
+    buildingBoxRotationMarker=makeGoogleMarker({position:rotateHandle,text:'⟳ 旋轉',className:'building-rotate',draggable:true,zIndex:92,onDragEnd:ll=>{
+      const dx=(Number(ll.lng)-Number(box.lng))*111320*Math.max(.2,Math.cos(Number(box.lat)*Math.PI/180));
+      const dy=(Number(ll.lat)-Number(box.lat))*111320;
+      const deg=normalizeRotationDeg(Math.atan2(dx,-dy)*180/Math.PI);
+      saveBuildingBox({rotationDeg:Math.round(deg)},`旋轉建物中心框至 ${Math.round(deg)}°`);
     }});
   }
 }
 function syncBuildingBoxForm(){
   const box = getBuildingBox();
-  if($('boxWidthM')) $('boxWidthM').value = Math.round(box.widthM || 40);
-  if($('boxHeightM')) $('boxHeightM').value = Math.round(box.heightM || 28);
-  if($('boxFirstSide')) $('boxFirstSide').value = box.firstSide || '第一面';
-  if($('buildingBoxStatus')) $('buildingBoxStatus').textContent = box.locked ? '已鎖定，案件中心框不會變動' : '未鎖定，可點地圖或拖曳調整';
+  if($('buildingBoxStatus')) $('buildingBoxStatus').textContent = box.locked ? '已鎖定，案件中心框不會變動' : `未鎖定，可拖曳中心、大小與旋轉控制點（${Math.round(normalizeRotationDeg(box.rotationDeg))}°）`;
+  const unlock=$('mapBuildingUnlockBtn'), lock=$('mapBuildingLockBtn');
+  if(unlock) unlock.hidden=!box.locked;
+  if(lock) lock.hidden=!!box.locked;
 }
-async function saveBuildingBox(patch={}, message='更新建物中心框'){
+async function saveBuildingBox(patch={}, message='更新建物中心框',options={}){
   if(!currentCase) return;
-  const next = Object.assign(getBuildingBox(), patch, {updatedAt:Date.now()});
+  const before={...getBuildingBox()};
+  const next = Object.assign(before, patch, {rotationDeg:normalizeRotationDeg(patch.rotationDeg??before.rotationDeg),updatedAt:Date.now()});
   currentCase.buildingBox = next;
   if(firebaseEnabled) await db.collection('cases').doc(currentCaseId).set({buildingBox:next, updatedAt:Date.now()},{merge:true});
   else saveLocalCase();
-  syncBuildingBoxForm(); renderMap(); renderCommandGuide();
+  if(!options.skipUndo && !suppressMapUndo){
+    pushMapUndo(`復原：${message}`,async()=>saveBuildingBox(before,'復原建物中心框',{skipUndo:true}));
+  }
+  syncBuildingBoxForm(); renderMap(); renderCommandGuide(); renderOverviewContent();
   await addLog('map', message);
 }
-function saveBuildingBoxFromForm(){
-  const widthM = Number($('boxWidthM')?.value)||40;
-  const heightM = Number($('boxHeightM')?.value)||28;
-  const firstSide = $('boxFirstSide')?.value || '第一面';
-  saveBuildingBox({widthM, heightM, firstSide}, `更新建物中心框：${Math.round(widthM)}m × ${Math.round(heightM)}m，${firstSide}為第一面`);
-}
+function saveBuildingBoxFromForm(){ toast('請直接在地圖拖曳建物框中心、大小或旋轉控制點。',3600); }
 function setBuildingBoxLock(locked){ saveBuildingBox({locked}, locked?'鎖定建物中心框':'解鎖建物中心框'); }
 function distanceMeters(a,b){
   const R=6371000, p1=a.lat*Math.PI/180, p2=b.lat*Math.PI/180, dp=(b.lat-a.lat)*Math.PI/180, dl=(b.lng-a.lng)*Math.PI/180;
@@ -2004,17 +2299,23 @@ async function handleCrewDragEnd(p, ll){
     const target = nearest.item;
     if(confirm(`是否由 ${p.unit}${p.leader} 接替 ${target.unit}${target.leader} 執行「${target.task||'作業任務'}」？`)){
       const oldTask = target.task || '作業任務';
+      const records=[
+        {coll:'crews',id:p.id,data:clonePlain(p)},
+        {coll:'crews',id:target.id,data:clonePlain(target)},
+        ...live.hoses.filter(h=>h.targetType==='crew' && h.targetId===target.id).map(h=>({coll:'hoses',id:h.id,data:clonePlain(h)}))
+      ];
       for(const h of live.hoses.filter(h=>h.targetType==='crew' && h.targetId===target.id)){
         await updateItem('hoses', h.id, {targetId:p.id, targetName:`${p.unit}${p.leader||''}｜${p.count||0}人`, owner:h.owner || `${p.unit}${p.leader||''}`});
       }
-      await updateItem('crews', p.id, {lat:target.lat,lng:target.lng,status:'作業中',task:oldTask,startAt:Date.now(),dispatchCount:(p.dispatchCount||0)+1});
-      await updateItem('crews', target.id, {lat:ll.lat,lng:ll.lng,status:'休息',task:'輪替休息',endAt:Date.now()});
+      await updateItem('crews', p.id, {lat:target.lat,lng:target.lng,status:'作業中',task:oldTask,startAt:Date.now(),dispatchCount:(p.dispatchCount||0)+1,staged:false});
+      await updateItem('crews', target.id, {lat:ll.lat,lng:ll.lng,status:'休息',task:'輪替休息',endAt:Date.now(),staged:false});
+      pushMapUndo(`復原 ${p.unit}${p.leader} 接替任務`,async()=>restoreMapRecords(records));
       await addLog('crew', `${p.unit}${p.leader} 接替 ${target.unit}${target.leader} 執行「${oldTask}」，相關水線改由接替單位承接，${target.unit}${target.leader} 改為休息`);
       toast('已完成任務輪替');
       return;
     }
   }
-  await updateItem('crews', p.id, {lat:ll.lat,lng:ll.lng});
+  await updateMapItemWithUndo('crews',p.id,{lat:ll.lat,lng:ll.lng,staged:false},`移動 ${p.unit}${p.leader}`);
   await addLog('crew', `${p.unit}${p.leader} 人員位置更新`);
 }
 
@@ -2190,7 +2491,7 @@ function renderRules(){
   if(!live.hazards.some(h=>h.type==='指揮站')) a.push(['blue','尚未在地圖標示指揮站位置。']);
   if(live.hazards.some(h=>h.type==='瓦斯')) a.push(['red','已標示瓦斯危害，請確認瓦斯單位與管線關閉。']);
   const ruleEl = $('ruleAlerts'); if(ruleEl) ruleEl.innerHTML = (a.length?a:[['green','目前沒有重大未完成提示。']]).map(([cls,msg])=>`<div class="tag ${cls}">${escapeHtml(msg)}</div>`).join('');
-  const aiEl = $('aiAdviceText'); if(aiEl && !currentCase?.aiLastAdvice) aiEl.value = localTacticalAdviceText();
+  if(!currentCase?.aiLastAdvice) setAiAdviceText(localTacticalAdviceText());
 }
 function renderLogs(){ const el=$('logList'); if(!el) return; el.innerHTML = live.logs.length ? live.logs.slice().reverse().map(l=>`<div class="log"><div class="log-time">${fmtTime(l.createdAt)}｜${escapeHtml(l.type)}｜${escapeHtml(l.operator||'')}</div><div>${escapeHtml(l.message)}</div></div>`).join('') : '<div class="empty">尚無時間軸紀錄。</div>'; }
 async function addLog(type, message){ if(firebaseEnabled) await addLogRemote(currentCaseId,type,message); else { live.logs.push({id:uid('log'),type,message,createdAt:Date.now(),operator:profile.callName}); saveLocalCase(); renderLogs(); } }
@@ -2486,10 +2787,15 @@ function deploymentSchematicHtml(){
     const a=Number(lat), b=Number(lng); if(Number.isFinite(a)&&Number.isFinite(b)) points.push({lat:a,lng:b,kind,label:String(label||''),id});
   };
   add(c.lat,c.lng,'incident','案件中心','incident');
-  live.vehicles.forEach(v=>add(v.lat,v.lng,'vehicle',v.name||v.unit||'車輛',v.id));
+  live.vehicles.forEach(v=>add(v.lat,v.lng,'vehicle',vehicleDisplayName(v),v.id));
   live.crews.forEach(x=>add(x.lat,x.lng,'crew',`${x.unit||''}${x.leader||''}`,x.id));
   live.hazards.forEach(h=>add(h.lat,h.lng,'hazard',h.type||'危害',h.id));
   live.hoses.forEach(h=>{ if(h.targetType==='map' && h.lat && h.lng) add(h.lat,h.lng,'hoseEnd',h.targetName||'水線終點',`hose_${h.id}`); });
+  const box=c.buildingBox?getBuildingBox():null;
+  const corners=box?buildingBoxCorners(box):[];
+  const faces=box?buildingBoxSidePoints(box):[];
+  corners.forEach((pt,i)=>add(pt.lat,pt.lng,'hidden','',`box_corner_${i}`));
+  faces.forEach(pt=>add(pt.lat,pt.lng,'buildingFace',pt.name,pt.id));
   if(!points.length) return '<div class="report-list-item">尚無戰術部署圖資料。</div>';
   let minLat=Math.min(...points.map(x=>x.lat)), maxLat=Math.max(...points.map(x=>x.lat));
   let minLng=Math.min(...points.map(x=>x.lng)), maxLng=Math.max(...points.map(x=>x.lng));
@@ -2504,17 +2810,21 @@ function deploymentSchematicHtml(){
   const hoseLines=live.hoses.map(h=>{
     const a=pointMap.get(h.vehicleId);
     let b=null;
-    if(h.targetType==='vehicle'||h.targetType==='crew') b=pointMap.get(h.targetId);
+    if(h.targetType==='vehicle'||h.targetType==='crew'||h.targetType==='buildingFace') b=pointMap.get(h.targetId);
     else b=pointMap.get(`hose_${h.id}`);
     if(!a||!b) return '';
-    return `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" class="scheme-hose"/><text x="${((a.x+b.x)/2).toFixed(1)}" y="${((a.y+b.y)/2-6).toFixed(1)}" class="scheme-hose-label">${escapeHtml(h.owner||h.kind||'水線')}</text>`;
+    const source=vehicleDisplayName({name:h.vehicleName,unit:h.unit});
+    const label=`${source}${h.port?` ${h.port}`:''}`;
+    return `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" class="scheme-hose"/><text x="${((a.x+b.x)/2).toFixed(1)}" y="${((a.y+b.y)/2-6).toFixed(1)}" class="scheme-hose-label">${escapeHtml(label)}</text>`;
   }).join('');
   const building=(()=>{
-    const box=c.buildingBox; if(!box?.lat||!box?.lng) return '';
-    const center=xy(box.lat,box.lng); const w=Math.max(85,Math.min(260,Number(box.widthM||40)*3.2)); const h=Math.max(60,Math.min(190,Number(box.heightM||28)*3.2));
-    return `<rect x="${(center.x-w/2).toFixed(1)}" y="${(center.y-h/2).toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="10" class="scheme-building"/><text x="${center.x.toFixed(1)}" y="${(center.y+4).toFixed(1)}" class="scheme-building-label">建物／${escapeHtml(box.firstSide||'第一面')}</text>`;
+    if(!box||!corners.length) return '';
+    const polygon=corners.map(pt=>{const p=xy(pt.lat,pt.lng);return `${p.x.toFixed(1)},${p.y.toFixed(1)}`;}).join(' ');
+    const center=xy(box.lat,box.lng);
+    const labels=faces.map(face=>{const p=xy(face.lat,face.lng);return `<text x="${p.x.toFixed(1)}" y="${(p.y-8).toFixed(1)}" class="scheme-face-label">${escapeHtml(face.name)}</text>`;}).join('');
+    return `<polygon points="${polygon}" class="scheme-building"/><text x="${center.x.toFixed(1)}" y="${(center.y+4).toFixed(1)}" class="scheme-building-label">火場建物｜${Math.round(normalizeRotationDeg(box.rotationDeg||0))}°</text>${labels}`;
   })();
-  const nodes=points.map(p=>{
+  const nodes=points.filter(p=>!['hidden','buildingFace'].includes(p.kind)).map(p=>{
     const {x,y}=xy(p.lat,p.lng);
     const cls=`scheme-node ${p.kind}`;
     const icon=p.kind==='vehicle'?'🚒':p.kind==='crew'?'人':p.kind==='hazard'?'⚠':p.kind==='incident'?'指':'●';
@@ -2522,6 +2832,7 @@ function deploymentSchematicHtml(){
   }).join('');
   return `<div class="report-schematic-card"><div class="report-schematic-head"><strong>外部戰術部署示意圖</strong><span>非導航底圖，依系統座標相對呈現</span></div><svg class="report-schematic" viewBox="0 0 ${W} ${H}" role="img" aria-label="火場外部戰術部署示意圖"><rect width="${W}" height="${H}" class="scheme-bg"/><path d="M0 ${H*.5} H${W} M${W*.5} 0 V${H}" class="scheme-axis"/>${building}${hoseLines}${nodes}</svg></div>`;
 }
+
 function floorPlanSchematicHtml(){
   const ops=getBuildingOps();
   const levels=floorsArray();
@@ -3316,22 +3627,68 @@ function buildingReportLines(){
   if(hasFloor||hasPlan) parts.push('建物縱向剖面與水平俯視圖已依現場紀錄完成彙整');
   return [`${parts.join('；')}。詳細位置與圖示以本節附圖為準。`];
 }
+
+function sanitizeAdviceText(text=''){
+  return String(text||'')
+    .replace(/```[\s\S]*?```/g,'')
+    .replace(/\*\*/g,'')
+    .replace(/^#{1,6}\s*/gm,'')
+    .replace(/^\*\s+/gm,'- ')
+    .replace(/\n{3,}/g,'\n\n')
+    .trim();
+}
+function adviceHtml(text=''){
+  const lines=sanitizeAdviceText(text).split('\n').map(x=>x.trim()).filter(Boolean);
+  if(!lines.length) return '<p class="advice-paragraph">目前尚無建議。</p>';
+  let html='', list=[];
+  const flush=()=>{ if(list.length){ html+=`<ul class="advice-list">${list.map(x=>`<li>${escapeHtml(x)}</li>`).join('')}</ul>`; list=[]; } };
+  lines.forEach(line=>{
+    const bracket=line.match(/^【([^】]+)】\s*(.*)$/);
+    const numbered=line.match(/^(?:\d+[、.．]|[一二三四五六七八九十]+、)\s*(.+)$/);
+    if(bracket){ flush(); html+=`<section class="advice-section"><h3>${escapeHtml(bracket[1])}</h3>${bracket[2]?`<p>${escapeHtml(bracket[2])}</p>`:''}</section>`; return; }
+    if(numbered){ flush(); html+=`<h3 class="advice-heading">${escapeHtml(numbered[1])}</h3>`; return; }
+    if(/^[-•]\s*/.test(line)){ list.push(line.replace(/^[-•]\s*/,'')); return; }
+    flush(); html+=`<p class="advice-paragraph">${escapeHtml(line)}</p>`;
+  });
+  flush();
+  return html;
+}
+function setAiAdviceText(text=''){
+  const clean=sanitizeAdviceText(text);
+  if($('aiAdviceText')) $('aiAdviceText').value=clean;
+  if($('aiAdviceDisplay')) $('aiAdviceDisplay').innerHTML=adviceHtml(clean);
+  return clean;
+}
 function localTacticalAdviceText(){
   if(!currentCase) return '';
   const c = currentCase;
-  const tips = [];
-  tips.push(`【態勢摘要】${c.floors||'?'}樓${c.purpose||''}建物，起火樓層：${floorText(c.fireFloor,'未明')}，火煙：${c.fireStatus||'未明'}，受困：${c.trapped||'未知'} ${c.trappedCount||0}人。`);
-  if(c.trapped==='有' || Number(c.trappedCount)>0) tips.push('【人命優先】優先確認受困位置，派遣二人以上搜救小組，並以水線掩護搜救任務。');
-  if(!c.ritSet) tips.push('【RIT】尚未律定 RIT，請指定待命位置、裝備與聯絡頻道。');
-  if(/黑煙|大量明火|延燒/.test(c.fireStatus||'')) tips.push('【安全】火煙強烈，內攻前請確認通風、溫度、氣量與退路，必要時先行防護與降溫。');
-  if(!live.hoses.length) tips.push('【水線】尚無水線紀錄；請確認進攻水線、供水線與防護水線歸屬。');
-  if(!c.hazardChecked) tips.push('【危害】尚未完成危險物詢問，請幕僚尋找關係人確認瓦斯、化學品、電力、太陽能板等。');
-  tips.push(`【目前戰力】車輛 ${live.vehicles.length} 台；人員 ${sum(live.crews,'count')} 人；水線 ${live.hoses.length} 條；標示 ${live.hazards.length} 處。`);
-  return tips.join('\n');
+  const sections=[];
+  const situation=[];
+  const building=[c.floors?`${c.floors}樓`:null,c.purpose?`${c.purpose}用途`:null].filter(Boolean).join('');
+  if(building) situation.push(`現場為${building}建物。`);
+  if(c.fireFloor) situation.push(`起火樓層為${floorText(c.fireFloor)}。`);
+  if(c.fireStatus && !/未知|未明/.test(c.fireStatus)) situation.push(`目前火煙狀況：${c.fireStatus.replace(/[。；]+$/,'')}。`);
+  if(c.trapped==='有') situation.push(`已確認有${Number(c.trappedCount)||0}人受困。`);
+  else if(c.trapped==='無') situation.push('已確認無人受困。');
+  sections.push(`【態勢摘要】${situation.join('')||'現場資料持續確認中。'}`);
+  const immediate=[];
+  if(!c.hazardChecked) immediate.push('儘速由關係人或場所管理人確認瓦斯、化學品、電力、太陽能板及其他危害。');
+  if(!c.ritSet) immediate.push('律定RIT救援小組、待命位置、裝備與聯絡頻道。');
+  if(!live.hoses.length) immediate.push('確認進攻水線、供水線與防護水線是否已建立。');
+  sections.push(`【立即確認】${immediate.join('')||'持續監控火勢、人員與部署變化。'}`);
+  const safety=[];
+  if(/黑煙|大量|火舌|明火|延燒/.test(c.fireStatus||'')) safety.push('火煙條件強烈，內攻前應確認溫度、氣量、退路、通風及建物結構變化。');
+  safety.push('持續執行PAR與個人責任回報，並維持無線電分流。');
+  sections.push(`【安全風險】${safety.join('')}`);
+  const rescue=c.trapped==='有'?'以人命搜救為優先，確認受困位置、搜救路徑與水線掩護。':'持續由關係人與各面偵查確認是否有人受困。';
+  sections.push(`【人命搜救】${rescue}`);
+  sections.push(`【水源水線】目前登錄水線${live.hoses.length}條；應確認來源車輛、供水穩定、接口、任務及終點均清楚可追溯。`);
+  sections.push(`【支援與回報】現場已登錄車輛${live.vehicles.length}台、人員${sum(live.crews,'count')}人；重要變化應立即向北海回報，並同步更新戰情與部署圖。`);
+  return sections.join('\n\n');
 }
 function renderLocalTacticalAdvice(showToast=false){
   const text = localTacticalAdviceText();
-  $('aiAdviceText') && ($('aiAdviceText').value = text);
+  setAiAdviceText(text);
   $('aiAdviceStatus') && ($('aiAdviceStatus').textContent = '已依目前資料產生注意事項建議。');
   if(showToast) toast('已產生本機規則建議');
   return text;
@@ -3349,9 +3706,9 @@ async function requestAiAdvice(options={}){
     const res = await fetch('/api/ai-advice', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
     const data = await res.json();
     if(!res.ok) throw new Error(data.error || 'AI 呼叫失敗');
-    $('aiAdviceText').value = data.advice || '';
+    const cleanedAdvice=setAiAdviceText(data.advice || '');
     $('aiAdviceStatus').textContent = `AI 建議已更新：${fmtTime(Date.now())}`; updateAiAdviceButton();
-    const patch = { aiLastAt: Date.now(), aiLastAdvice: data.advice || '', updatedAt:Date.now() };
+    const patch = { aiLastAt: Date.now(), aiLastAdvice: cleanedAdvice, updatedAt:Date.now() };
     Object.assign(currentCase, patch);
     if(firebaseEnabled) await db.collection('cases').doc(currentCaseId).set(patch,{merge:true}); else saveLocalCase();
     await addLog('ai','產生 OpenAI 戰術建議');
@@ -3375,7 +3732,7 @@ function updateAiAdviceButton(){
 function maybeAutoAiAdvice(){
   if(!currentCase || currentCase._autoAiChecked) return;
   currentCase._autoAiChecked = true;
-  if(currentCase.aiLastAdvice){ $('aiAdviceText') && ($('aiAdviceText').value = currentCase.aiLastAdvice); updateAiAdviceButton(); return; }
+  if(currentCase.aiLastAdvice){ setAiAdviceText(currentCase.aiLastAdvice); updateAiAdviceButton(); return; }
   renderLocalTacticalAdvice(false);
   requestAiAdvice({silent:true});
 }

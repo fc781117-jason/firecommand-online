@@ -4,8 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#15120e" />
-  <title>FireCommand 火場指揮系統 v24</title>
-  <link rel="stylesheet" href="./assets/styles.css?v=24" />
+  <title>FireCommand 火場指揮系統 v25</title>
+  <link rel="stylesheet" href="./assets/styles.css?v=25" />
 </head>
 <body>
   <div id="toast" class="toast" hidden></div>
@@ -200,25 +200,25 @@
         <div id="casePageContent" class="case-page-content">
 
       <section id="caseInfo" class="stack case-page-panel" data-case-page-panel="caseInfo">
-        <details class="accordion">
-          <summary><span>案件概要（開案資料）</span><span class="chevron">›</span></summary>
-          <div class="accordion-body">
+        <details class="accordion" open>
+          <summary><span>案件概要｜即時彙整</span><span class="chevron">›</span></summary>
+          <div class="accordion-body overview-readonly">
+            <div class="notice compact overview-lock-note">本頁僅供掌握現況，不提供直接修改。開案資料由建立案件時輸入；後續變化由「流程 SOP」、「戰情」及「部署」資料自動更新，避免重複填寫或誤觸。</div>
             <div id="summaryCards" class="h-scroll"></div>
-            <div class="two-col">
-              <div class="field"><label>建物樓層</label><select id="summaryFloors" aria-label="建物樓層"></select></div>
-              <div class="field"><label>起火樓層</label><select id="summaryFireFloor" aria-label="起火樓層"></select></div>
+            <section class="overview-brief-card">
+              <div class="overview-brief-head"><div><div class="eyebrow">長官快速掌握</div><h3>即時案件概要</h3></div><span id="overviewUpdatedMeta" class="overview-updated-meta">自動更新</span></div>
+              <p id="overviewExecutiveText" class="overview-executive-text">案件資料彙整中。</p>
+            </section>
+            <div class="overview-visual-grid">
+              <section class="overview-visual-card">
+                <div class="overview-visual-head"><div><div class="eyebrow">外部部署</div><h4>戰術部署快照</h4></div><button type="button" class="btn small ghost" data-case-page-jump="tacticalMapSection">前往部署修改</button></div>
+                <div id="overviewDeploymentSnapshot" class="overview-schematic-host"></div>
+              </section>
+              <section class="overview-visual-card">
+                <div class="overview-visual-head"><div><div class="eyebrow">建物內部</div><h4>作戰圖快照</h4></div><button type="button" class="btn small ghost" data-case-page-jump="tacticalMapSection">前往建物圖修改</button></div>
+                <div id="overviewBuildingSnapshot" class="overview-schematic-host"></div>
+              </section>
             </div>
-            <div class="two-col">
-              <div class="field"><label>是否有人受困</label><select id="summaryTrapped"><option>未知</option><option>無</option><option>有</option></select></div>
-              <div class="field"><label>受困人數</label><select id="summaryTrappedCountMode"></select></div>
-            </div>
-            <details id="summaryVictimDetails" class="sub-accordion">
-              <summary>受困人員細節（性別、年齡、備註）</summary>
-              <div id="summaryVictimRows" class="victim-rows"></div>
-              <button id="summaryAddVictimBtn" type="button" class="btn small ghost">＋ 新增受困人員</button>
-            </details>
-            <div class="field"><label>案件概要</label><textarea id="summaryText" rows="2" placeholder="例：6樓建築，3樓冒黑煙，疑似有人受困"></textarea></div>
-            <button id="saveSummaryInfoBtn" class="btn primary full">儲存案件概要修改</button>
           </div>
         </details>
       </section>
@@ -489,40 +489,26 @@
                 <button type="button" class="btn small primary" data-deploy-mode="select">選取 / 移動</button>
                 <button type="button" class="btn small ghost" data-deploy-mode="hose">水線連接</button>
                 <button type="button" class="btn small ghost" data-deploy-mode="hazard">危害標示</button>
+                <button id="mapUndoBtn" type="button" class="btn small ghost" disabled>↶ 回復上一步</button>
+                <button id="mapBuildingUnlockBtn" type="button" class="btn small ghost">調整建物框</button>
+                <button id="mapBuildingLockBtn" type="button" class="btn small ghost">鎖定建物框</button>
               </div>
               <div id="mapResourcePalette" class="map-resource-palette"></div>
-              <div id="deploymentActionHint" class="hint">點選車輛或人員後，再點地圖即可部署；點水車的「拉水線」後再點另一台車、人員或地圖位置。</div>
+              <div id="deploymentActionHint" class="deployment-hose-instruction">水線建立：先點選可供水車輛的「拉水線」，再點另一台車、人員編組，或直接點建物第一、二、三、四面完成連接。</div>
             </div>
-            <div class="tool-cards">
-              <div class="tool-card">
-                <h4>新增車輛</h4>
-                <div class="two-col compact-grid"><div class="field"><label>大隊</label><select id="vehicleBrigade"></select></div><div class="field"><label>單位</label><select id="vehicleUnit"></select></div></div>
-                <div class="two-col"><div class="field"><label>車號</label><input id="vehicleName" placeholder="例：蘆洲11" /></div><div class="field"><label>任務</label><input id="vehicleTask" placeholder="例：第一線攻擊" /></div></div>
-                <button id="addVehicleBtn" class="btn small primary full">加入車輛</button>
-              </div>
-              <div class="tool-card">
-                <h4>新增人員</h4>
-                <div class="two-col compact-grid"><div class="field"><label>大隊</label><select id="crewBrigade"></select></div><div class="field"><label>單位</label><select id="crewUnit"></select></div></div>
-                <div class="field"><label>帶隊官號</label><select id="crewLeader"><option>6</option><option>7</option><option>8</option><option>9</option></select></div>
-                <div class="two-col"><div class="field"><label>人數</label><select id="crewCount" aria-label="編組人數"></select></div><div class="field"><label>狀態</label><select id="crewStatus"><option>作業中</option><option>待命</option><option>休息</option><option>RIT</option><option>撤出</option></select></div></div>
-                <div class="field"><label>任務</label><input id="crewTask" placeholder="例：人命搜救 / RIT待命" /></div>
-                <button id="addCrewBtn" class="btn small primary full">加入人員</button>
-              </div>
-              <div class="tool-card">
-                <h4>水線 / 供水連結</h4>
-                <div class="field"><label>來源車輛</label><select id="hoseVehicle"></select></div>
-                <div class="two-col"><div class="field"><label>接口</label><select id="hosePort"><option>1線</option><option>2線</option><option>3線</option><option>4線</option></select></div><div class="field"><label>水線歸屬</label><select id="hoseOwner"></select></div></div><div class="field"><label>水線性質</label><select id="hoseKind"><option>進攻水線</option><option>供水線</option><option>防護水線</option><option>搜救掩護水線</option><option>中繼水線</option></select></div>
-                <div class="two-col"><div class="field"><label>目的地類型</label><select id="hoseTargetType"><option value="map">地圖點 / 建築物</option><option value="vehicle">連結車輛</option><option value="crew">連結人員編組 / 分隊</option></select></div><div class="field"><label>目的地</label><select id="hoseTarget"></select></div></div>
-                <div class="field"><label>任務</label><input id="hoseTask" placeholder="例：室內攻擊 / 佔據消防栓" /></div>
-                <button id="startHoseBtn" class="btn small danger full">建立 / 點地圖建立水線</button>
-              </div>
-              <div class="tool-card building-box-card">
-                <h4>建物中心框 / 四面設定</h4>
-                <div class="notice compact">用方框框住火場建物或作戰範圍；解鎖時可點地圖設定中心，或拖曳框內中心點與右上角控制點調整範圍。</div>
-                <div class="two-col compact-grid"><div class="field"><label>寬度 m</label><select id="boxWidthM" aria-label="建物框寬度"><option>20</option><option>30</option><option selected>40</option><option>50</option><option>60</option><option>80</option><option>100</option></select></div><div class="field"><label>高度 m</label><select id="boxHeightM" aria-label="建物框高度"><option>16</option><option>20</option><option selected>28</option><option>40</option><option>50</option><option>60</option><option>80</option></select></div></div>
-                <div class="field"><label>哪一面為第一面</label><select id="boxFirstSide"><option>第一面</option><option>第二面</option><option>第三面</option><option>第四面</option></select></div>
-                <div class="hint" id="buildingBoxStatus">未鎖定，可點地圖或拖曳調整</div>
-                <div class="button-row compact-actions"><button id="setBuildingBoxCenterBtn" type="button" class="btn small ghost">點地圖設中心</button><button id="saveBuildingBoxBtn" type="button" class="btn small primary">更新框</button><button id="lockBuildingBoxBtn" type="button" class="btn small danger">鎖定</button><button id="unlockBuildingBoxBtn" type="button" class="btn small ghost">解鎖</button></div>
+            <div class="tool-cards deployment-form-cards">
+              <div class="tool-card deployment-group-card">
+                <h4>新增分隊 / 人員 / 車輛</h4>
+                <div class="notice compact">先選擇大隊與單位，再登錄帶隊官、人數、狀態與任務；車輛會沿用同一單位，不需重複填寫。新增後，車輛會自動排列在地圖右側待命區，可直接拖曳部署。</div>
+                <div class="two-col compact-grid"><div class="field"><label>大隊</label><select id="deploymentBrigade"></select></div><div class="field"><label>單位</label><select id="deploymentUnit"></select></div></div>
+                <div class="three-col compact-grid"><div class="field"><label>帶隊官號</label><select id="deploymentLeader"><option>6</option><option>7</option><option>8</option><option>9</option></select></div><div class="field"><label>人數</label><select id="deploymentCrewCount" aria-label="編組人數"></select></div><div class="field"><label>狀態</label><select id="deploymentStatus"><option>作業中</option><option>待命</option><option>休息</option><option>RIT</option><option>撤出</option></select></div></div>
+                <div class="field"><label>任務</label><input id="deploymentTask" placeholder="例：第一面人命搜救 / RIT 待命 / 佔據水源" /></div>
+                <div class="deployment-vehicle-builder">
+                  <div class="two-col compact-grid"><div class="field"><label>車輛代號</label><select id="deploymentVehicleCode"><option value="manual">手動輸入／借用車輛</option><option value="11" selected>11｜水車</option><option value="12">12｜水車</option><option value="16">16｜水車</option><option value="17">17｜水車</option><option value="21">21｜直線雲梯車</option><option value="31">31｜曲折雲梯車</option><option value="41">41｜指揮／後勤車</option><option value="51">51｜化學車</option><option value="61">61｜水庫車</option><option value="71">71｜救助車</option><option value="81">81｜照明／排煙車</option><option value="91">91｜救護車</option></select></div><div class="field" id="deploymentVehicleManualField" hidden><label>手動車號</label><input id="deploymentVehicleManual" placeholder="例：借用12／淡水備用車" /></div></div>
+                  <button id="addPendingVehicleBtn" type="button" class="btn small ghost full">＋ 加入此分隊車輛</button>
+                  <div id="pendingDeploymentVehicles" class="pending-vehicle-list"><div class="empty">尚未加入車輛；可只登錄人員編組。</div></div>
+                </div>
+                <button id="addDeploymentGroupBtn" type="button" class="btn primary full">新增分隊 / 人員 / 車輛</button>
               </div>
               <div class="tool-card">
                 <h4>危害 / 區域標示</h4>
@@ -612,7 +598,8 @@
               <button id="aiAdviceBtn" type="button" class="btn small primary">產生 / 更新 AI 建議</button>
             </div>
             <div id="aiAdviceStatus" class="hint">系統會依目前資料自動彙整建議。</div>
-            <textarea id="aiAdviceText" rows="8" placeholder="注意事項建議會顯示在這裡"></textarea>
+            <textarea id="aiAdviceText" hidden aria-hidden="true"></textarea>
+            <div id="aiAdviceDisplay" class="ai-advice-display" aria-live="polite"><p>注意事項建議會顯示在這裡。</p></div>
           </div>
         </details>
       </section>
@@ -674,6 +661,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
   <script src="./firebase/firebase-config.js"></script>
-  <script src="./assets/app.js?v=24"></script>
+  <script src="./assets/app.js?v=25"></script>
 </body>
 </html>
