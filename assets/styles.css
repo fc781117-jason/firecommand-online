@@ -193,3 +193,20 @@ body.action-sheet-open{overflow:hidden}
 .summary-link-card{appearance:none;text-align:left;color:var(--text);font:inherit;cursor:pointer}.summary-link-card:hover,.summary-link-card:focus-visible{border-color:#9f2f23;transform:translateY(-1px)}
 .speech-card{border:1px solid var(--line);border-radius:16px;background:#fffdf8;padding:10px;margin:12px 0}.speech-card textarea{background:#f7f1e8}.speech-card .field{margin-bottom:7px}
 @media(min-width:900px){.building-panel-head{position:sticky;top:122px;z-index:12;padding:8px 0;background:rgba(255,253,248,.96);backdrop-filter:blur(10px)}}
+
+/* v24 – rapid selection fields and formal report layout */
+select{min-height:46px;font-weight:800;background-color:#fff}
+.arrival-detail-panel select,.form-card select,.map-section select{min-height:48px;font-size:15px}
+.report-body{display:block}
+.report-paragraph{margin:0 0 10px;line-height:1.9;text-align:justify;color:#263b37}
+.report-subheading{margin:16px 0 7px;font-size:1rem;line-height:1.5;color:#11453f;font-weight:1000}
+.report-bullets{margin:6px 0 12px;padding-left:1.35rem;display:grid;gap:6px;color:#263b37;line-height:1.75}
+.report-list-item{background:transparent;border:0;border-radius:0;padding:2px 0;line-height:1.8}
+.report-section{padding-top:2px}
+.report-section h2{border-left:5px solid #0f7f73;padding-left:10px;margin-bottom:12px;line-height:1.45}
+.report-schematic-head{margin-bottom:8px}
+@media(max-width:760px){
+  select{min-height:50px;font-size:16px}
+  .report-paragraph{text-align:left;line-height:1.8}
+  .report-section h2{font-size:1.1rem}
+}

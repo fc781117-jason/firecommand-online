@@ -250,6 +250,64 @@ function show(id){
 function roleLabel(role){ return ({battalion:'大隊指揮/管理',commander:'現場指揮官',sector:'分區指揮/中隊幕僚',safety:'安全官',recorder:'紀錄官',unit:'單位帶隊官',viewer:'檢視者',admin:'最高管理員'})[role] || role || '未設定'; }
 function radioCallSign(){ return String(profile?.fireCallSign || profile?.callName || '現場指揮').trim(); }
 
+function normalizeFloorValue(value){
+  const raw=String(value??'').trim();
+  if(!raw || raw==='未登錄' || raw==='未知' || raw==='尚未確認') return '';
+  if(/^B\d+$/i.test(raw)) return raw.toUpperCase();
+  if(/^\d+$/.test(raw)) return `${Number(raw)}樓`;
+  if(/^\d+F$/i.test(raw)) return `${Number(raw.replace(/F/i,''))}樓`;
+  if(/^\d+樓$/.test(raw)) return raw;
+  return raw;
+}
+function floorText(value, fallback='未登錄'){
+  return normalizeFloorValue(value) || fallback;
+}
+function fillRangeSelect(id,start,end,defaultValue=''){
+  const sel=$(id); if(!sel) return;
+  const keep=String(sel.value||defaultValue||'');
+  sel.innerHTML=Array.from({length:end-start+1},(_,i)=>{const n=start+i;return `<option value="${n}">${n} 人</option>`;}).join('');
+  sel.value=Array.from(sel.options).some(o=>o.value===keep)?keep:String(defaultValue||start);
+}
+function fillFloorCountSelect(id, value=''){
+  const sel=$(id); if(!sel) return;
+  const keep=String(value||sel.value||'');
+  sel.innerHTML='<option value="">尚未確認</option>'+Array.from({length:50},(_,i)=>`<option value="${i+1}">${i+1} 樓</option>`).join('');
+  sel.value=Array.from(sel.options).some(o=>o.value===keep)?keep:'';
+}
+function floorLocationOptions(maxFloor=50){
+  const top=Math.max(1,Math.min(50,Number(maxFloor)||50));
+  const values=['','B5','B4','B3','B2','B1',...Array.from({length:top},(_,i)=>`${i+1}樓`),'屋頂','夾層','外部','多樓層'];
+  return values.map(v=>`<option value="${v}">${v||'尚未確認'}</option>`).join('');
+}
+function fillFloorLocationSelect(id,maxFloor=50,value=''){
+  const sel=$(id); if(!sel) return;
+  const normalized=normalizeFloorValue(value||sel.value||'');
+  sel.innerHTML=floorLocationOptions(maxFloor);
+  if(normalized && !Array.from(sel.options).some(o=>o.value===normalized)) sel.insertAdjacentHTML('beforeend',`<option value="${escapeHtml(normalized)}">${escapeHtml(normalized)}</option>`);
+  sel.value=normalized;
+}
+function splitObservedLocation(value){
+  const raw=String(value||'').trim();
+  const side=(raw.match(/(第一面|第二面|第三面|第四面|建物內部|屋頂)$/)||[])[1]||'';
+  const floor=normalizeFloorValue(side?raw.slice(0,-side.length):raw);
+  return {floor,side};
+}
+function syncFloorChoiceOptions(values={}){
+  fillFloorCountSelect('caseFloors', values.caseFloors);
+  fillFloorCountSelect('summaryFloors', values.summaryFloors);
+  fillFloorCountSelect('detailFloors', values.detailFloors);
+  fillFloorLocationSelect('caseFireFloor', values.caseFloors||$('caseFloors')?.value||50, values.caseFireFloor);
+  fillFloorLocationSelect('summaryFireFloor', values.summaryFloors||$('summaryFloors')?.value||50, values.summaryFireFloor);
+  fillFloorLocationSelect('detailFireFloor', values.detailFloors||$('detailFloors')?.value||50, values.detailFireFloor);
+  fillFloorLocationSelect('fireObservedFloor', values.detailFloors||$('detailFloors')?.value||50, values.fireObservedFloor);
+}
+function initQuickChoiceSelects(){
+  syncFloorChoiceOptions();
+  fillRangeSelect('trappedCountArrival',1,21,'1');
+  if($('trappedCountArrival')?.lastElementChild) $('trappedCountArrival').lastElementChild.textContent='21 人以上';
+  fillRangeSelect('crewCount',1,20,'4');
+}
+
 function init(){
   fillUnitFlat('profileBrigade','profileUnit','第三大隊');
   fillUnitFlat('vehicleBrigade','vehicleUnit','第三大隊');
@@ -257,6 +315,7 @@ function init(){
   fillUnitFlat('sitrepBrigade','sitrepUnit','第三大隊');
   fillTrappedSelect('summaryTrappedCountMode');
   fillTrappedSelect();
+  initQuickChoiceSelects();
   bindEvents();
   injectKeyboardVoiceHelpers();
   updateOrientationHint();
@@ -283,8 +342,13 @@ function bindEvents(){
   $('summaryAddVictimBtn').addEventListener('click', () => addVictimRow({}, 'summaryVictimRows'));
   $('summaryTrapped').addEventListener('change', syncSummaryVictimDetails);
   $('summaryTrappedCountMode').addEventListener('change', syncSummaryVictimDetails);
+  $('caseFloors')?.addEventListener('change',()=>fillFloorLocationSelect('caseFireFloor',$('caseFloors').value||50,$('caseFireFloor').value));
+  $('summaryFloors')?.addEventListener('change',()=>fillFloorLocationSelect('summaryFireFloor',$('summaryFloors').value||50,$('summaryFireFloor').value));
+  $('detailFloors')?.addEventListener('change',()=>{
+    fillFloorLocationSelect('detailFireFloor',$('detailFloors').value||50,$('detailFireFloor').value);
+    fillFloorLocationSelect('fireObservedFloor',$('detailFloors').value||50,$('fireObservedFloor').value);
+  });
   $('copyCommandSpeechBtn').addEventListener('click', copyCommandSpeech);
-  $('copyInitialArrivalSpeechBtn')?.addEventListener('click', copyInitialArrivalSpeech);
   $('copyReportBtn')?.addEventListener('click', copyReportDraft);
   $('editReportBtn')?.addEventListener('click', enableReportEdit);
   $('confirmReportEditBtn')?.addEventListener('click', confirmReportEdit);
@@ -361,7 +425,7 @@ function bindEvents(){
   $('localRuleAdviceBtn')?.addEventListener('click', () => renderLocalTacticalAdvice(true));
   $('addContactBtn')?.addEventListener('click', () => { addContactRow(); renderArrivalStatusCards(); });
   document.querySelectorAll('.arrival-detail-input').forEach(el => el.addEventListener('change', () => { renderArrivalStatusCards(); renderCommandGuide(); saveCaseInfo(false,false); }));
-  ['detailPurpose','detailFireStatus','detailNotes','buildingStructure','detailFloors','detailFireFloor','fireObservedFloor','fireSmokeColor','fireSmokeVolume','fireFlameState','fireObservation','trappedCountArrival','arrivalAddressInput','firstSideCustom'].forEach(id => $(id)?.addEventListener('change', () => { syncSopDerivedFields(); renderCommandGuide(); saveCaseInfo(false,false); }));
+  ['detailPurpose','detailFireStatus','detailNotes','buildingStructure','detailFloors','detailFireFloor','fireObservedFloor','fireObservedSide','fireSmokeColor','fireSmokeVolume','fireFlameState','fireObservation','trappedCountArrival','arrivalAddressInput','firstSideCustom'].forEach(id => $(id)?.addEventListener('change', () => { syncSopDerivedFields(); renderCommandGuide(); saveCaseInfo(false,false); }));
   bindExclusiveDetails(['deploymentMapDetails','buildingOpsDetails']);
   bindExclusiveDetails(['crewStatusDetails','vehicleStatusDetails']);
 }
@@ -667,8 +731,8 @@ function renderCases(){
       <div class="tag-row">
         <span class="tag blue">${escapeHtml(c.type||'火警')}</span>
         <span class="tag">${escapeHtml(c.floors||'?')}樓建築</span>
-        <span class="tag">起火：${escapeHtml(c.fireFloor||'未登錄')}</span>
-        <span class="tag ${c.trapped==='有'?'red':'green'}">受困：${escapeHtml(c.trapped||'未知')} ${c.trappedCount||0}人</span>
+        <span class="tag">起火：${escapeHtml(floorText(c.fireFloor))}</span>
+        <span class="tag ${c.trapped==='有'?'red':c.trapped==='無'?'green':'amber'}">受困：${escapeHtml(c.trapped==='有'?`有 ${c.trappedCount||0}人`:c.trapped==='無'?'無':'尚未確認')}</span>
       </div>
     </article>`).join('');
   wrap.querySelectorAll('.case-card').forEach(card => { card.style.cursor='pointer'; card.addEventListener('click', ev => { if(ev.target.closest('button')) return; openCase(card.querySelector('[data-open-case]')?.dataset.openCase); }); });
@@ -686,7 +750,7 @@ async function createCase(e){
     type: $('caseType').value,
     summary: $('caseSummary').value.trim() || `${$('caseFloors').value||'?'}樓建築，${$('caseFireFloor').value||'起火樓層未明'}，受困狀況${$('caseTrapped').value}`,
     floors: Number($('caseFloors').value)||0,
-    fireFloor: $('caseFireFloor').value.trim(),
+    fireFloor: normalizeFloorValue($('caseFireFloor').value),
     trapped: $('caseTrapped').value,
     trappedCount: getTrappedCount(),
     trappedCountMode: $('caseTrappedCountMode').value,
@@ -1068,15 +1132,18 @@ function renderDetail(){
   syncBuildingBoxForm();
   $('arrivalAddressDisplay') && ($('arrivalAddressDisplay').textContent = currentCase.address || '尚未登錄地址');
   $('arrivalAddressInput') && ($('arrivalAddressInput').value = currentCase.address || '');
+  const observedLocation=splitObservedLocation(currentCase.fireObservedFloor || currentCase.fireFloor || '');
+  syncFloorChoiceOptions({caseFloors:'',caseFireFloor:'',summaryFloors:currentCase.floors||'',summaryFireFloor:currentCase.fireFloor||'',detailFloors:currentCase.floors||'',detailFireFloor:currentCase.fireFloor||'',fireObservedFloor:observedLocation.floor||currentCase.fireFloor||''});
   $('detailPurpose').value = currentCase.purpose || '';
   $('buildingStructure') && ($('buildingStructure').value = currentCase.buildingStructure || '');
   $('detailFloors') && ($('detailFloors').value = currentCase.floors || '');
-  $('detailFireFloor') && ($('detailFireFloor').value = currentCase.fireFloor || '');
-  $('fireObservedFloor') && ($('fireObservedFloor').value = currentCase.fireObservedFloor || currentCase.fireFloor || '');
+  $('detailFireFloor') && ($('detailFireFloor').value = normalizeFloorValue(currentCase.fireFloor || ''));
+  $('fireObservedFloor') && ($('fireObservedFloor').value = observedLocation.floor || normalizeFloorValue(currentCase.fireFloor || ''));
+  $('fireObservedSide') && ($('fireObservedSide').value = currentCase.fireObservedSide || observedLocation.side || '');
   $('fireSmokeColor') && ($('fireSmokeColor').value = currentCase.fireSmokeColor || '');
   $('fireSmokeVolume') && ($('fireSmokeVolume').value = currentCase.fireSmokeVolume || '');
   $('fireFlameState') && ($('fireFlameState').value = currentCase.fireFlameState || '');
-  $('fireObservation') && ($('fireObservation').value = currentCase.fireObservation || currentCase.fireStatus || '');
+  $('fireObservation') && ($('fireObservation').value = currentCase.fireObservation || '');
   $('detailFireStatus').value = currentCase.fireStatus || '';
   $('detailNotes').value = currentCase.notes || '';
   setRadioValue('trappedState', currentCase.trapped==='有'?'has':currentCase.trapped==='無'?'none':'unknown');
@@ -1085,7 +1152,7 @@ function renderDetail(){
   $('firstSideCustom') && ($('firstSideCustom').value = currentCase.firstSideCustom || '');
   if($('extraNotes')) $('extraNotes').value = currentCase.extraNotes || '';
   $('summaryFloors').value = currentCase.floors || '';
-  $('summaryFireFloor').value = currentCase.fireFloor || '';
+  $('summaryFireFloor').value = normalizeFloorValue(currentCase.fireFloor || '');
   $('summaryTrapped').value = currentCase.trapped || '未知';
   $('summaryTrappedCountMode').value = currentCase.trappedCountMode || String(currentCase.trappedCount || 0);
   if(!Array.from($('summaryTrappedCountMode').options).some(o=>o.value===$('summaryTrappedCountMode').value)) $('summaryTrappedCountMode').value = 'manual';
@@ -1114,8 +1181,8 @@ function renderDetail(){
 function renderSummaryCards(){
   const c=currentCase; const wrap=$('summaryCards'); if(!wrap)return;
   wrap.innerHTML = `
-    <button type="button" class="mini-card summary-link-card" data-summary-page="arrivalSection" data-summary-stage="建"><div class="metric">${c.floors||'?'}</div><div class="metric-label">建物樓層</div><div class="subline">起火：${escapeHtml(c.fireFloor||'未登錄')}｜點選查看</div></button>
-    <button type="button" class="mini-card summary-link-card" data-summary-page="arrivalSection" data-summary-stage="人"><div class="metric">${c.trapped==='有'?'有':c.trapped==='無'?'無':'?'}</div><div class="metric-label">受困狀況</div><div class="subline">${c.trappedCount||0} 人｜點選查看</div></button>
+    <button type="button" class="mini-card summary-link-card" data-summary-page="arrivalSection" data-summary-stage="建"><div class="metric">${c.floors||'?'}</div><div class="metric-label">建物樓層</div><div class="subline">起火：${escapeHtml(floorText(c.fireFloor))}｜點選查看</div></button>
+    <button type="button" class="mini-card summary-link-card" data-summary-page="arrivalSection" data-summary-stage="人"><div class="metric">${c.trapped==='有'?'有':c.trapped==='無'?'無':'?'}</div><div class="metric-label">受困狀況</div><div class="subline">${c.trapped==='有'?`${c.trappedCount||0} 人`:c.trapped==='無'?'確認無人受困':'尚未確認'}｜點選查看</div></button>
     <button type="button" class="mini-card summary-link-card" data-summary-page="dashboardSection"><div class="metric">${live.vehicles.length}</div><div class="metric-label">車輛</div><div class="subline">部署與任務細節</div></button>
     <button type="button" class="mini-card summary-link-card" data-summary-page="dashboardSection"><div class="metric">${sum(live.crews,'count')}</div><div class="metric-label">人員</div><div class="subline">作業／待命／休息</div></button>
     <button type="button" class="mini-card summary-link-card" data-summary-page="tacticalMapSection"><div class="metric">${live.hoses.length}</div><div class="metric-label">水線</div><div class="subline">連接與部署細節</div></button>
@@ -1261,8 +1328,9 @@ async function saveCaseInfo(showToast=true, logChange=true){
     purpose:$('detailPurpose')?.value || '',
     buildingStructure:$('buildingStructure')?.value || '',
     floors:Number($('detailFloors')?.value)||Number(currentCase.floors)||0,
-    fireFloor:$('detailFireFloor')?.value.trim() || currentCase.fireFloor || '',
-    fireObservedFloor:$('fireObservedFloor')?.value.trim() || '',
+    fireFloor:normalizeFloorValue($('detailFireFloor')?.value) || normalizeFloorValue(currentCase.fireFloor) || '',
+    fireObservedFloor:normalizeFloorValue($('fireObservedFloor')?.value) || '',
+    fireObservedSide:$('fireObservedSide')?.value || '',
     fireSmokeColor:$('fireSmokeColor')?.value || '',
     fireSmokeVolume:$('fireSmokeVolume')?.value || '',
     fireFlameState:$('fireFlameState')?.value || '',
@@ -1290,7 +1358,7 @@ async function saveCaseInfo(showToast=true, logChange=true){
 }
 async function saveSummaryInfo(){
   if(!currentCase) return;
-  const patch = { floors:Number($('summaryFloors').value)||0, fireFloor:$('summaryFireFloor').value.trim(), trapped:$('summaryTrapped').value, trappedCount:getSummaryTrappedCount(), trappedCountMode:$('summaryTrappedCountMode').value, victims:readVictims('#summaryVictimRows .victim-row'), summary:$('summaryText').value.trim(), updatedAt:Date.now() };
+  const patch = { floors:Number($('summaryFloors').value)||0, fireFloor:normalizeFloorValue($('summaryFireFloor').value), trapped:$('summaryTrapped').value, trappedCount:getSummaryTrappedCount(), trappedCountMode:$('summaryTrappedCountMode').value, victims:readVictims('#summaryVictimRows .victim-row'), summary:$('summaryText').value.trim(), updatedAt:Date.now() };
   Object.assign(currentCase, patch);
   if(firebaseEnabled) await db.collection('cases').doc(currentCaseId).set(patch,{merge:true});
   else { saveLocalCase(); renderDetail(); }
@@ -1488,7 +1556,7 @@ async function runMapDiagnostics(){
     add('地圖底圖',mapReady?'good':mapLoadError?'danger':'warning',mapReady?'Google Maps 已顯示':mapLoadError||'尚未開啟部署頁或地圖尚未初始化');
   }catch(err){ add('定位診斷','danger',err.message||String(err)); }
   const label={good:'正常',warning:'注意',danger:'失敗'};
-  lastMapDiagnostics=[`FireCommand v23 定位診斷｜${new Date().toLocaleString('zh-TW',{hour12:false})}`,...rows.map(r=>`${r.name}：${label[r.status]}｜${r.detail}`)].join('\n');
+  lastMapDiagnostics=[`FireCommand v24 定位診斷｜${new Date().toLocaleString('zh-TW',{hour12:false})}`,...rows.map(r=>`${r.name}：${label[r.status]}｜${r.detail}`)].join('\n');
   if(panel) panel.innerHTML=rows.map(r=>`<div class="diagnostic-row ${r.status}"><span>${escapeHtml(r.name)}</span><b>${label[r.status]}</b><div class="diagnostic-detail">${escapeHtml(r.detail)}</div></div>`).join('');
   return rows;
 }
@@ -2196,13 +2264,26 @@ function assessmentLocalText(){
 function keyOperationalSummaryLines(){
   const c=currentCase || {};
   const lines=[];
-  const firstSitrep = live.sitreps.slice().sort((a,b)=>(a.eventAt||0)-(b.eventAt||0))[0];
-  const latestSitrep = live.sitreps.slice().sort((a,b)=>(b.eventAt||0)-(a.eventAt||0))[0];
-  lines.push(`本案地址為${c.address||'未登錄'}，案件類型為${c.type||'未登錄'}，建物用途${c.purpose||'未登錄'}，樓高${c.floors||'未登錄'}樓，起火樓層${c.fireFloor||'未登錄'}。`);
-  lines.push(`目前火煙狀況：${c.fireStatus||'未登錄'}；受困狀況：${c.trapped||'未知'}，受困人數${c.trappedCount||0}人。`);
-  if(c.arrived || c.commandTransfer || c.firstSideSet){ lines.push(`到場處置：${c.arrived?'已到達':'到達未確認'}，${c.commandTransfer?'已完成指揮權轉移':'指揮權轉移未完成'}，${c.firstSideSet?`已設定${c.firstSideName||'第一面'}並規劃指揮/集結位置`:'第一面尚待確認'}。`); }
-  if(firstSitrep){ lines.push(`初期戰情：${fmtTime(firstSitrep.eventAt)}，${firstSitrep.unit||''}回報「${firstSitrep.category||'戰情'}｜${firstSitrep.title||''}」。`); }
-  if(latestSitrep && latestSitrep!==firstSitrep){ lines.push(`最新戰情：${fmtTime(latestSitrep.eventAt)}，${latestSitrep.unit||''}回報「${latestSitrep.category||'戰情'}｜${latestSitrep.title||''}」。`); }
+  const buildingParts=[];
+  if(c.type) buildingParts.push(`案件類型為${c.type}`);
+  if(c.purpose) buildingParts.push(`現場為${c.purpose}用途建物`);
+  if(c.floors) buildingParts.push(`地上${c.floors}樓`);
+  if(c.fireFloor) buildingParts.push(`起火樓層為${floorText(c.fireFloor)}`);
+  lines.push(`本案地址為${c.address||'未登錄'}${buildingParts.length?`，${buildingParts.join('，')}`:''}。`);
+  const situation=[];
+  if(c.fireStatus) situation.push(`目前火煙狀況為${c.fireStatus.replace(/[。；]+$/,'')}`);
+  if(c.trapped==='無') situation.push('已確認無人受困');
+  else if(c.trapped==='有') situation.push(`已確認有${Number(c.trappedCount)||0}人受困`);
+  if(situation.length) lines.push(`${situation.join('；')}。`);
+  const arrival=[];
+  if(c.arrived) arrival.push('已到達現場');
+  if(c.commandTransfer) arrival.push('已完成指揮權轉移');
+  if(c.firstSideSet) arrival.push(c.firstSideMode==='custom'?`已律定${c.firstSideCustom||'指定位置'}為火場第一面`:'已以建物正面為火場第一面');
+  if(arrival.length) lines.push(`到場處置方面，${arrival.join('，')}。`);
+  const firstSitrep=live.sitreps.slice().sort((a,b)=>(a.eventAt||0)-(b.eventAt||0))[0];
+  const latestSitrep=live.sitreps.slice().sort((a,b)=>(b.eventAt||0)-(a.eventAt||0))[0];
+  if(firstSitrep) lines.push(`初期戰情於${fmtTime(firstSitrep.eventAt)}由${firstSitrep.unit||'現場單位'}回報：${firstSitrep.title||firstSitrep.category||'戰情資料'}。`);
+  if(latestSitrep && latestSitrep!==firstSitrep) lines.push(`最新戰情於${fmtTime(latestSitrep.eventAt)}由${latestSitrep.unit||'現場單位'}回報：${latestSitrep.title||latestSitrep.category||'戰情資料'}。`);
   return lines;
 }
 function sitrepSummaryLines(){
@@ -2217,9 +2298,21 @@ function sitrepSummaryLines(){
     ...latest.map(r=>`- ${fmtTime(r.eventAt)}｜${r.unit||''}｜${r.category||'戰情'}｜${r.title||''}${r.detail?`：${r.detail.slice(0,120)}`:''}${r.submittedAt && Math.abs((r.submittedAt||0)-(r.eventAt||0))>60000?`（補述上傳：${fmtTime(r.submittedAt)}）`:''}`)
   ];
 }
+function formalAdviceLines(){
+  const source=String(currentCase?.aiLastAdvice || localTacticalAdviceText()).split('\n').map(x=>x.trim()).filter(Boolean).slice(0,18);
+  const out=[];
+  source.forEach(line=>{
+    const m=line.match(/^【([^】]+)】\s*(.*)$/);
+    if(m){ out.push(`（${m[1]}）`); if(m[2]) out.push(m[2].replace(/^[-*#\s]+/,'')); }
+    else out.push(line.replace(/^[-*#\s]+/,''));
+  });
+  return out.length?out:['目前尚無新增注意事項；仍應依現場實況持續檢核人命搜救、水源水線、RIT、PAR及撤退路線。'];
+}
 function reportDraftBase(){
   const c=currentCase || {};
-  const crews = sum(live.crews,'count');
+  const crews=sum(live.crews,'count');
+  const deploymentLines=deploymentStatsLines();
+  const sitrepLines=sitrepSummaryLines();
   return sanitizeReportText([
     `【FireCommand 火場進度報告】`,
     `案件編號：${c.caseNo || ''}`,
@@ -2229,20 +2322,21 @@ function reportDraftBase(){
     `保密註記：本報告含勤務資訊，僅供勤務指揮、內部彙整與交接使用，禁止外流。`,
     '',
     '一、火場概要與目前發展',
-    ...keyOperationalSummaryLines().map(x=>`- ${x}`),
+    ...keyOperationalSummaryLines(),
     '',
     '二、目前部署與戰力概況',
-    `- 車輛：${live.vehicles.length} 台；人員：${crews} 人；水線：${live.hoses.length} 條；危害/區域標示：${live.hazards.length} 處。`,
-    ...deploymentStatsLines().map(x=>`- ${x}`),
+    '（一）戰力統計',
+    `現場目前登錄車輛${live.vehicles.length}台、人員${crews}人、水線${live.hoses.length}條及危害或區域標示${live.hazards.length}處。`,
+    ...(deploymentLines.length?['（二）任務與部署概況',...deploymentLines]:[]),
     '',
     '三、各單位戰情及傷患者回報彙整',
-    ...sitrepSummaryLines().map(x=>`- ${x}`),
+    ...sitrepLines,
     '',
     '四、建物內部作戰圖與戰術部署摘要',
-    ...buildingReportLines().map(x=>`- ${x}`),
+    ...buildingReportLines(),
     '',
     '五、目前注意事項與建議',
-    ...String(currentCase.aiLastAdvice || localTacticalAdviceText()).split('\n').slice(0,18)
+    ...formalAdviceLines()
   ].join('\n'));
 }
 function sanitizeReportText(text){
@@ -2258,7 +2352,11 @@ function sanitizeReportText(text){
     if(/^(四、時間序列摘要|五、後續優化方向)/.test(line.trim())) continue;
     out.push(line);
   }
-  return out.join('\n').replace(/\n{3,}/g,'\n\n').trim();
+  return out.join('\n')
+    .replace(/\*\*/g,'')
+    .replace(/^#{1,6}\s*/gm,'')
+    .replace(/^\*\s+/gm,'- ')
+    .replace(/\n{3,}/g,'\n\n').trim();
 }
 function generateReport(scroll=false){
   if(!currentCase) return '';
@@ -2275,7 +2373,7 @@ async function generateAIReport(scroll=false){
   $('reportDraft').value = 'OpenAI 正在彙整並潤稿進度報告，請稍候...\n\n' + local;
   renderReportPreview($('reportDraft').value);
   try{
-    const payload = { mode:'report', caseData: currentCase, vehicles: live.vehicles, crews: live.crews, hoses: live.hoses, hazards: live.hazards, sitreps: live.sitreps, buildingOps: getBuildingOps(), localRules: localTacticalAdviceText(), baseReport: local, reportInstruction:'請產出正式給長官檢閱的火場進度報告；僅保留一、火場概要與目前發展 二、目前部署與戰力概況 三、各單位戰情及傷患者回報彙整 四、建物內部作戰圖與戰術部署摘要 五、目前注意事項與建議。不得列出操作歷程、時間軸清單、檢討與後續評估章節，格式需正式、精簡、可直接匯出 PDF。' };
+    const payload = { mode:'report', caseData: currentCase, vehicles: live.vehicles, crews: live.crews, hoses: live.hoses, hazards: live.hazards, sitreps: live.sitreps, buildingOps: getBuildingOps(), localRules: localTacticalAdviceText(), baseReport: local, reportInstruction:'請產出正式給長官檢閱的火場進度報告；僅保留一、火場概要與目前發展 二、目前部署與戰力概況 三、各單位戰情及傷患者回報彙整 四、建物內部作戰圖與戰術部署摘要 五、目前注意事項與建議。請使用正式標題、次標題與完整段落；必要時才使用一般條列。不得使用 Markdown 星號、井字號或粗體符號，不得把每一句包成獨立方框。第四節不得逐項列出入口、隔間、水線等繪圖工具紀錄，僅做整體說明，詳細位置由附圖呈現。不得列出操作歷程、時間軸清單、檢討與後續評估章節。' };
     const res = await fetch('/api/ai-advice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const data = await res.json();
     if(!res.ok) throw new Error(data.error || 'AI 報告產生失敗');
@@ -2312,9 +2410,9 @@ function buildFullSpeech(){
     if(c.firstSideNote) text+=`，指揮站設於${c.firstSideNote}`;
     lines.push(`一、到：${text}。`);
   }
-  const building=[]; if(c.buildingStructure) building.push(c.buildingStructure); if(c.purpose) building.push(`${c.purpose}用途建物`); if(c.floors) building.push(`樓高${c.floors}樓`); if(c.fireFloor) building.push(`起火樓層為${c.fireFloor}`);
+  const building=[]; if(c.buildingStructure) building.push(c.buildingStructure); if(c.purpose) building.push(`${c.purpose}用途建物`); if(c.floors) building.push(`樓高${c.floors}樓`); if(c.fireFloor) building.push(`起火樓層為${floorText(c.fireFloor)}`);
   if(building.length) lines.push(`二、建：現場為${building.join('，')}。`);
-  if(c.fireObservation||c.fireStatus) lines.push(`三、火：目前${c.fireObservation||c.fireStatus}。`);
+  if(c.fireStatus) lines.push(`三、火：目前${c.fireStatus.replace(/[。；]+$/,'')}。`);
   const people=[];
   if(c.contactState==='found') people.push((c.contacts||[]).length?'已找到關係人':'已找到關係人');
   if(c.trapped==='無') people.push('確認無人受困'); else if(c.trapped==='有') people.push(`確認有${Number(c.trappedCount)||0}人受困`);
@@ -2353,21 +2451,30 @@ function parseReportText(text){
       current = { title: '補充內容', items: [] };
       sections.push(current);
     }
-    current.items.push(line.replace(/^-\s?/, ''));
+    current.items.push(line);
   }
   return { meta, sections };
 }
 function structuredSectionHtml(section){
-  const items = section.items || [];
-  const body = items.map(item=>`<div class="report-list-item">${escapeHtml(item)}</div>`).join('');
-  return `<section class="report-section"><h2>${escapeHtml(section.title)}</h2><div class="report-list">${body || '<div class="report-list-item">尚無資料</div>'}</div></section>`;
+  const items=section.items||[];
+  let html=''; let list=[];
+  const flush=()=>{if(list.length){html+=`<ul class="report-bullets">${list.map(x=>`<li>${escapeHtml(x)}</li>`).join('')}</ul>`;list=[];}};
+  items.forEach(item=>{
+    const clean=String(item||'').trim(); if(!clean) return;
+    if(/^[-•]\s*/.test(clean)){ list.push(clean.replace(/^[-•]\s*/,'')); return; }
+    flush();
+    if(/^（[^）]+）/.test(clean)) html+=`<h3 class="report-subheading">${escapeHtml(clean)}</h3>`;
+    else html+=`<p class="report-paragraph">${escapeHtml(clean)}</p>`;
+  });
+  flush();
+  return `<section class="report-section"><h2>${escapeHtml(section.title)}</h2><div class="report-body">${html||'<p class="report-paragraph">尚無資料。</p>'}</div></section>`;
 }
 function buildReportSummaryTable(){
   const c = currentCase || {}; const meta=c.locationMeta || {};
   return `<table class="report-plain-table"><tbody>
     <tr><th>案件類型</th><td>${escapeHtml(c.type||'未登錄')}</td><th>建物用途</th><td>${escapeHtml(c.purpose||'未登錄')}</td></tr>
-    <tr><th>建物樓層</th><td>${escapeHtml(String(c.floors||'未登錄'))}</td><th>起火樓層</th><td>${escapeHtml(c.fireFloor||'未登錄')}</td></tr>
-    <tr><th>受困狀況</th><td>${escapeHtml(`${c.trapped||'未知'} / ${c.trappedCount||0}人`)}</td><th>火煙狀況</th><td>${escapeHtml(c.fireStatus||'未登錄')}</td></tr>
+    <tr><th>建物樓層</th><td>${escapeHtml(String(c.floors||'未登錄'))}</td><th>起火樓層</th><td>${escapeHtml(floorText(c.fireFloor))}</td></tr>
+    <tr><th>受困狀況</th><td>${escapeHtml(c.trapped==='有'?`有 / ${c.trappedCount||0}人`:c.trapped==='無'?'確認無人受困':'尚未確認')}</td><th>火煙狀況</th><td>${escapeHtml(c.fireStatus||'尚未確認')}</td></tr>
     <tr><th>到場回報</th><td>${escapeHtml(c.arrived?'已到達':'未確認')}</td><th>指揮權</th><td>${escapeHtml(c.commandTransfer?'已轉移':'未確認')}</td></tr>
     <tr><th>案件中心定位</th><td>${escapeHtml(locationSourceLabel(meta.source||'legacy'))}｜${escapeHtml(locationQualityLabel(meta))}</td><th>案件中心座標</th><td>${Number(c.lat||0).toFixed(6)}, ${Number(c.lng||0).toFixed(6)}</td></tr>
   </tbody></table>`;
@@ -2422,8 +2529,8 @@ function floorPlanSchematicHtml(){
   const markers=(ops.planMarkers||[]).filter(m=>Number(m.floor)===selected);
   if(!markers.length) return '';
   const W=900,H=480;
-  const lineHtml=markers.filter(m=>m.x2!==undefined).map(m=>`<line x1="${(m.x/100*W).toFixed(1)}" y1="${(m.y/100*H).toFixed(1)}" x2="${(m.x2/100*W).toFixed(1)}" y2="${(m.y2/100*H).toFixed(1)}" class="floor-scheme-line ${markerClass(m.type)}"/><text x="${(((m.x+m.x2)/200)*W).toFixed(1)}" y="${((((m.y+m.y2)/200)*H)-5).toFixed(1)}" class="floor-scheme-label">${escapeHtml(m.note||m.type)}</text>`).join('');
-  const pointHtml=markers.filter(m=>m.x2===undefined).map(m=>`<g><circle cx="${(m.x/100*W).toFixed(1)}" cy="${(m.y/100*H).toFixed(1)}" r="18" class="floor-scheme-point ${markerClass(m.type)}"/><text x="${(m.x/100*W).toFixed(1)}" y="${(m.y/100*H+5).toFixed(1)}" class="floor-scheme-icon">${escapeHtml(markerIcon(m.type))}</text><text x="${(m.x/100*W).toFixed(1)}" y="${(m.y/100*H+39).toFixed(1)}" class="floor-scheme-label">${escapeHtml(m.note||m.label||m.type)}</text></g>`).join('');
+  const lineHtml=markers.filter(m=>m.x2!==undefined).map(m=>`<line x1="${(m.x/100*W).toFixed(1)}" y1="${(m.y/100*H).toFixed(1)}" x2="${(m.x2/100*W).toFixed(1)}" y2="${(m.y2/100*H).toFixed(1)}" class="floor-scheme-line ${markerClass(m.type)}"/><text x="${(((m.x+m.x2)/200)*W).toFixed(1)}" y="${((((m.y+m.y2)/200)*H)-5).toFixed(1)}" class="floor-scheme-label">${m.note?escapeHtml(m.note):''}</text>`).join('');
+  const pointHtml=markers.filter(m=>m.x2===undefined).map(m=>`<g><circle cx="${(m.x/100*W).toFixed(1)}" cy="${(m.y/100*H).toFixed(1)}" r="18" class="floor-scheme-point ${markerClass(m.type)}"/><text x="${(m.x/100*W).toFixed(1)}" y="${(m.y/100*H+5).toFixed(1)}" class="floor-scheme-icon">${escapeHtml(markerIcon(m.type))}</text><text x="${(m.x/100*W).toFixed(1)}" y="${(m.y/100*H+39).toFixed(1)}" class="floor-scheme-label">${m.note?escapeHtml(m.note):''}</text></g>`).join('');
   return `<div class="report-schematic-card"><div class="report-schematic-head"><strong>${escapeHtml(floorLabel(selected))} 建物內部作戰示意圖</strong><span>依現場繪圖資料正式化呈現</span></div><svg class="report-schematic floor" viewBox="0 0 ${W} ${H}" role="img" aria-label="建物內部作戰示意圖"><rect width="${W}" height="${H}" class="scheme-bg"/><defs><pattern id="floorGrid" width="45" height="45" patternUnits="userSpaceOnUse"><path d="M45 0H0V45" class="scheme-grid"/></pattern></defs><rect width="${W}" height="${H}" fill="url(#floorGrid)"/>${lineHtml}${pointHtml}</svg></div>`;
 }
 function reportHtmlFromText(text){
@@ -2455,8 +2562,6 @@ function renderReportPreview(text){
   el.innerHTML = `<div class="report-paper formal" data-watermark="${escapeHtml(watermarkRepeated())}">${reportHtmlFromText(cleaned)}</div>`;
 }
 function copyReportDraft(){ const text = ($('reportDraft')?.value || generateReport(false)); navigator.clipboard?.writeText(text); toast('已複製進度報告'); addLog('export','複製火場進度報告'); }
-function initialArrivalSpeech(){ return `北海北海，${radioCallSign()}抵達現場，開始進行指揮權轉移，稍後再向北海續報。`; }
-function copyInitialArrivalSpeech(){ const text=initialArrivalSpeech();navigator.clipboard?.writeText(text);$('arrivalInitialSpeech')&&($('arrivalInitialSpeech').value=text);toast('已複製首次到達稿');addLog('export','複製首次到達回報稿'); }
 function copyCommandSpeech(){ const text = buildFullSpeech(); navigator.clipboard?.writeText(text); $('commandSpeech').value=text; toast('已複製續報稿'); addLog('export','複製到建火人支初續報稿'); }
 function printReport(){ printReportSameTab(); }
 function printReportSameTab(){
@@ -2669,7 +2774,7 @@ function renderArrivalStatusCards(){
   const trappedState=getRadioValue('trappedState');
   const mapping = {
     arrived: [$('arrivedCheck'), $('addressConfirmCheck')?.checked ? '地址已確認' : '待確認地址'],
-    building: [null, buildingDone ? `${$('detailPurpose').value}｜${$('detailFloors').value}樓｜${$('detailFireFloor').value}` : '尚缺必要資料'],
+    building: [null, buildingDone ? `${$('detailPurpose').value}｜${$('detailFloors').value}樓｜${floorText($('detailFireFloor').value)}` : '尚缺必要資料'],
     fire: [null, fireDone ? buildFireStatusFromSop() : '尚缺火煙資料'],
     trapped: [null, trappedState==='none'?'確認無人受困':trappedState==='has'?`受困 ${Number($('trappedCountArrival')?.value)||0} 人`:'尚未確認'],
     deployment: [null, (live.crews.length||live.vehicles.length||live.hoses.length)?`${live.vehicles.length}車｜${sum(live.crews,'count')}人｜${live.hoses.length}線`:'尚未部署'],
@@ -2714,7 +2819,6 @@ function updateCommandAutoHint(){
 
 function renderCommandGuide(){
   if(!currentCase || !$('commandAdvice')) return;
-  $('arrivalInitialSpeech') && ($('arrivalInitialSpeech').value=initialArrivalSpeech());
   if(!activeStage){
     $('commandAdvice').classList.add('collapsed');
     $('commandAdvice').innerHTML = '';
@@ -2738,12 +2842,12 @@ function commandBlocks(stage,c){
     '建': {
       confirm:['建物用途、樓高、起火樓層','樓梯、出入口、鐵窗、陽台、消防設備',`關係人：${contactLine}`],
       action:['詢問關係人或管理員','必要時調閱搶救圖或平面圖','將建物資訊納入部署與回報'],
-      speech:`現場為${c.purpose||'未登錄'}用途建物，樓高${c.floors||'未登錄'}樓，起火樓層為${c.fireFloor||'未登錄'}，場所特性與危險物狀況持續確認。`
+      speech:`現場為${c.purpose||'未登錄'}用途建物，樓高${c.floors||'未登錄'}樓，起火樓層為${floorText(c.fireFloor)}。`
     },
     '火': {
       confirm:['火煙位置、顏色與強度','是否延燒或有飛火風險','四面 360 查看狀況'],
       action:['回報火煙與延燒風險','標示起火點與延燒方向','必要時調整水線與通風排煙'],
-      speech:`目前${c.fireFloor||'起火樓層未明'}火煙狀況為${c.fireStatus||'未登錄'}，後續完成第一、二、三、四面 360 查看後續報。`
+      speech:c.fireStatus?`目前${c.fireStatus}。`:'尚未完成火煙狀況確認。'
     },
     '人': {
       confirm:['是否有人受困、受困人數與位置','搜救小組是否已派遣','RIT 與 PAR 是否已落實'],
@@ -2987,9 +3091,9 @@ function renderFloorPlan(){
       const len = Math.sqrt(dx*dx + dy*dy);
       const angle = Math.atan2(dy, dx) * 180 / Math.PI;
       const handles=selected&&!floorPlanLocked?`<button type="button" class="floor-line-handle start" style="left:${m.x}%;top:${m.y}%" data-line-endpoint="start" data-marker-id="${m.id}" aria-label="調整線段起點"></button><button type="button" class="floor-line-handle end" style="left:${m.x2}%;top:${m.y2}%" data-line-endpoint="end" data-marker-id="${m.id}" aria-label="調整線段終點"></button>`:'';
-      return `<button type="button" class="floor-line ${markerClass(m.type)}${selected}" style="left:${m.x}%;top:${m.y}%;width:${len}%;transform:rotate(${angle}deg)" data-marker-id="${m.id}" title="${escapeHtml(m.note||m.type)}"><span>${escapeHtml(m.note||m.type)}</span></button>${handles}`;
+      return `<button type="button" class="floor-line ${markerClass(m.type)}${selected}" style="left:${m.x}%;top:${m.y}%;width:${len}%;transform:rotate(${angle}deg)" data-marker-id="${m.id}" title="${m.note?escapeHtml(m.note):''}"><span>${m.note?escapeHtml(m.note):''}</span></button>${handles}`;
     }
-    return `<button type="button" class="floor-marker ${markerClass(m.type)}${selected}" style="left:${m.x}%;top:${m.y}%" data-marker-id="${m.id}" title="${escapeHtml(m.note||m.type)}">${markerIcon(m.type)}<span>${escapeHtml(m.label||m.type)}</span></button>`;
+    return `<button type="button" class="floor-marker ${markerClass(m.type)}${selected}" style="left:${m.x}%;top:${m.y}%" data-marker-id="${m.id}" title="${m.note?escapeHtml(m.note):''}">${markerIcon(m.type)}<span>${escapeHtml(m.label||m.type)}</span></button>`;
   }).join('');
   canvas.querySelectorAll('[data-marker-id]:not([data-line-endpoint])').forEach(btn => {
     btn.addEventListener('click', ev => {
@@ -3142,8 +3246,24 @@ function focusKeyboardVoiceTarget(id){
 }
 
 function buildFireStatusFromSop(){
-  const custom=$('fireObservation')?.value.trim(); if(custom) return custom;
-  return [$('fireObservedFloor')?.value.trim(),$('fireSmokeVolume')?.value,$('fireSmokeColor')?.value,$('fireFlameState')?.value].filter(Boolean).join('，');
+  const floor=normalizeFloorValue($('fireObservedFloor')?.value);
+  const side=$('fireObservedSide')?.value || '';
+  const location=`${floor}${side}`;
+  const color=$('fireSmokeColor')?.value || '';
+  const volume=$('fireSmokeVolume')?.value || '';
+  const flame=$('fireFlameState')?.value || '';
+  const custom=$('fireObservation')?.value.trim() || '';
+  const clauses=[];
+  if(color==='無明顯煙') clauses.push(`${location||'現場'}未見明顯煙`);
+  else if(color || volume) clauses.push(`${location||'現場'}有${volume}${color||'煙霧'}竄出`);
+  else if(location && flame) clauses.push(location);
+  if(flame==='未見火舌') clauses.push('未見火舌');
+  else if(flame==='可見火舌') clauses.push('並且可見火舌');
+  else if(flame==='大量明火') clauses.push('可見大量明火');
+  else if(flame==='全面燃燒') clauses.push('目前呈全面燃燒');
+  let text=clauses.join('，');
+  if(custom) text += `${text?'；':''}${custom.replace(/[。；]+$/,'')}`;
+  return text;
 }
 function firstSidePhrase(){
   const mode=getRadioValue('firstSideMode');
@@ -3186,17 +3306,21 @@ async function saveBuildingOps(){
 }
 
 function buildingReportLines(){
-  const ops = getBuildingOps();
-  const floors = (ops.floorActions||[]).filter(x=>x.action && x.action !== '未標示').map(x=>`- ${floorLabel(x.floor)}：${x.action}${x.note?`｜${x.note}`:''}`);
-  const markers = (ops.planMarkers||[]).map(m=>`- ${floorLabel(m.floor)} ${m.type}：${m.note||m.label||''}`);
-  return floors.concat(markers).length ? floors.concat(markers) : ['尚無建物內部作戰圖標示。'];
+  const ops=getBuildingOps();
+  const hasFloor=(ops.floorActions||[]).some(x=>x.action && x.action!=='未標示');
+  const hasPlan=(ops.planMarkers||[]).length>0;
+  const hasExternal=live.vehicles.length||live.crews.length||live.hoses.length||live.hazards.length;
+  if(!hasFloor && !hasPlan && !hasExternal) return ['目前尚未建立建物內部作戰圖或外部戰術部署圖。'];
+  const parts=[];
+  if(hasExternal) parts.push(`外部戰術部署已登錄車輛${live.vehicles.length}台、人員${sum(live.crews,'count')}人、水線${live.hoses.length}條及危害標示${live.hazards.length}處`);
+  if(hasFloor||hasPlan) parts.push('建物縱向剖面與水平俯視圖已依現場紀錄完成彙整');
+  return [`${parts.join('；')}。詳細位置與圖示以本節附圖為準。`];
 }
-
 function localTacticalAdviceText(){
   if(!currentCase) return '';
   const c = currentCase;
   const tips = [];
-  tips.push(`【態勢摘要】${c.floors||'?'}樓${c.purpose||''}建物，起火樓層：${c.fireFloor||'未明'}，火煙：${c.fireStatus||'未明'}，受困：${c.trapped||'未知'} ${c.trappedCount||0}人。`);
+  tips.push(`【態勢摘要】${c.floors||'?'}樓${c.purpose||''}建物，起火樓層：${floorText(c.fireFloor,'未明')}，火煙：${c.fireStatus||'未明'}，受困：${c.trapped||'未知'} ${c.trappedCount||0}人。`);
   if(c.trapped==='有' || Number(c.trappedCount)>0) tips.push('【人命優先】優先確認受困位置，派遣二人以上搜救小組，並以水線掩護搜救任務。');
   if(!c.ritSet) tips.push('【RIT】尚未律定 RIT，請指定待命位置、裝備與聯絡頻道。');
   if(/黑煙|大量明火|延燒/.test(c.fireStatus||'')) tips.push('【安全】火煙強烈，內攻前請確認通風、溫度、氣量與退路，必要時先行防護與降溫。');
