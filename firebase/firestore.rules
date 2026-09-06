@@ -110,7 +110,9 @@ service cloud.firestore {
       allow read: if superAdmin()
         || sameBrigade(resource.data.brigade);
 
-      allow update: if canWrite(resource.data.brigade);
+      // 實戰案件維持指揮角色權限；練習案件允許同大隊啟用帳號協作。
+      allow update: if canWrite(resource.data.brigade)
+        || (sameBrigade(resource.data.brigade) && resource.data.mode == 'practice');
 
       allow delete: if superAdmin()
         || (sameBrigade(resource.data.brigade) && chiefRole());
@@ -119,7 +121,11 @@ service cloud.firestore {
         allow read: if superAdmin()
           || sameBrigade(get(/databases/$(database)/documents/cases/$(caseId)).data.brigade);
 
-        allow create, update, delete: if canWrite(get(/databases/$(database)/documents/cases/$(caseId)).data.brigade);
+        allow create, update, delete: if canWrite(get(/databases/$(database)/documents/cases/$(caseId)).data.brigade)
+          || (
+            sameBrigade(get(/databases/$(database)/documents/cases/$(caseId)).data.brigade)
+            && get(/databases/$(database)/documents/cases/$(caseId)).data.mode == 'practice'
+          );
       }
     }
   }

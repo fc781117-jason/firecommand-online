@@ -4,8 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#15120e" />
-  <title>FireCommand 火場指揮系統 v25</title>
-  <link rel="stylesheet" href="./assets/styles.css?v=25" />
+  <title>FireCommand 火場指揮系統 v26</title>
+  <link rel="stylesheet" href="./assets/styles.css?v=26" />
 </head>
 <body>
   <div id="toast" class="toast" hidden></div>
@@ -15,6 +15,14 @@
       <div class="brand-kicker">FireCommand</div>
       <h1>火場指揮系統</h1>
       <p>火場指揮、到場回報、戰術部署、戰情彙整與進度報告產出的行動化指揮工具。</p>
+      <div id="authRecoveryCard" class="auth-recovery-card" hidden>
+        <b>登入狀態需要重新連接</b>
+        <span id="authRecoveryMessage">請返回 FireCommand 後重新登入；既有案件資料不會因此消失。</span>
+        <div class="button-row compact-actions">
+          <button id="retryLoginBtn" type="button" class="btn small primary">重新登入</button>
+          <button id="reloadAppBtn" type="button" class="btn small ghost">重新載入</button>
+        </div>
+      </div>
       <button id="googleLoginBtn" class="btn primary full">使用 Google 登入</button>
     </div>
   </section>
@@ -72,7 +80,7 @@
   <section id="appScreen" class="screen app-screen" hidden>
     <header class="topbar">
       <div>
-        <div class="brand-mini">FireCommand</div>
+        <div class="brand-mini">FireCommand <span class="app-version">v26</span></div>
         <button id="profileQuickEditBtn" type="button" class="user-line user-profile-button" aria-label="開啟個人資訊及修改火場代號"><span id="userLine">—</span></button>
       </div>
       <button id="adminManageBtn" class="btn small ghost" hidden>帳號管理</button><button id="logoutBtn" class="btn small ghost">登出</button>
@@ -116,6 +124,14 @@
                 <li>正式版不再使用 OpenStreetMap；Google 地圖無法載入時會顯示明確錯誤，不會偷偷改用錯誤的行政區中心。</li>
               </ol>
             </section>
+            <section class="troubleshooting-card">
+              <h4>登入頁顯示 missing initial state</h4>
+              <ol>
+                <li>這是舊登入回跳頁的暫存狀態失效，不代表案件資料遺失。</li>
+                <li>按上一頁或關閉該頁，回到 FireCommand 後重新登入。</li>
+                <li>若在 App 內瀏覽器仍失敗，請改用 Safari／Chrome 直接開啟正式網址。</li>
+              </ol>
+            </section>
           </div>
         </div>
       </details>
@@ -143,6 +159,13 @@
         <button id="refreshBtn" class="btn small ghost">重新整理</button>
       </div>
 
+      <div class="home-mode-switch" role="tablist" aria-label="案件模式">
+        <button id="liveModeBtn" type="button" class="home-mode-btn active" role="tab" aria-selected="true">實戰案件</button>
+        <button id="practiceModeBtn" type="button" class="home-mode-btn" role="tab" aria-selected="false">練習模式</button>
+      </div>
+
+      <section id="liveHomePanel">
+
       <details id="createCaseDetails" class="accordion">
         <summary>
           <span>新增案件 / 貼上派遣令</span><span class="chevron">›</span>
@@ -154,6 +177,10 @@
           <div class="field"><label>派遣令內容（可貼上，系統會嘗試抓地址）</label><textarea id="dispatchText" rows="3" placeholder="可貼派遣令文字；若案件地址空白，會嘗試從這裡擷取地址"></textarea></div>
           <div class="two-col">
             <div class="field"><label>案件類型</label><select id="caseType"><option>建物火災</option><option>住宅火警</option><option>工廠火災</option><option>倉庫火災</option><option>車輛火災</option><option>其他火警</option></select></div>
+            <div class="field"><label>建物用途</label><select id="casePurpose"><option value="">尚未確認</option><option>住宅</option><option>工廠</option><option>倉庫</option><option>商業</option><option>複合用途</option><option>其他</option></select></div>
+          </div>
+          <div class="two-col">
+            <div class="field"><label>建築構造</label><select id="caseBuildingStructure"><option value="">尚未確認</option><option>RC</option><option>SC</option><option>SRC</option><option>磚造</option><option>木造</option><option>鐵皮</option><option>其他</option></select></div>
             <div class="field"><label>建物樓層</label><select id="caseFloors" aria-label="建物樓層"></select></div>
           </div>
           <div class="two-col">
@@ -162,7 +189,11 @@
           </div>
           <div class="two-col">
             <div class="field"><label>受困人數</label><select id="caseTrappedCountMode"></select></div>
-            <div class="field"><label>火煙狀況</label><select id="caseFireStatus"><option>未知</option><option>白煙</option><option>灰煙</option><option>黑煙</option><option>大量明火</option><option>延燒中</option></select></div>
+            <div class="field"><label>初報火煙／火焰</label><select id="caseFireStatus"><option>未知</option><option>白煙</option><option>灰煙</option><option>黑煙</option><option>大量明火</option><option>延燒中</option><option>未見明顯火煙</option></select></div>
+          </div>
+          <div class="two-col">
+            <div class="field"><label>初報觀察面向</label><select id="caseObservedSide"><option value="">未指定</option><option>第一面</option><option>第二面</option><option>第三面</option><option>第四面</option><option>建物內部</option><option>屋頂</option></select></div>
+            <div class="field"><label>初報煙量</label><select id="caseSmokeVolume"><option value="">尚未確認</option><option>少量</option><option>大量</option><option>持續增加</option><option>已減弱</option></select></div>
           </div>
           <details id="victimDetails" class="sub-accordion">
             <summary>受困人員細節（可新增性別、年齡、備註）</summary>
@@ -175,6 +206,49 @@
       </details>
 
       <div id="caseList" class="case-list"></div>
+      </section>
+
+      <section id="practiceHomePanel" class="practice-home" hidden>
+        <div class="practice-intro">
+          <div><div class="eyebrow">多人協作演練</div><h3>建立或加入虛擬火場</h3></div>
+          <p>沿用正式案件的 SOP、戰情、部署與人車功能，但所有資料會標示為練習，不會混入實戰案件。</p>
+        </div>
+        <div class="practice-join-card">
+          <div class="two-col compact-grid">
+            <div class="field"><label>房間代碼</label><input id="practiceJoinCode" maxlength="6" autocomplete="off" placeholder="輸入 6 碼代碼" /></div>
+            <div class="field"><label>我的演練身分</label><select id="practiceJoinRole"><option>現場指揮官</option><option>初期指揮官</option><option>安全官</option><option>紀錄官</option><option>分區指揮官</option><option>單位帶隊官</option><option>觀察員</option></select></div>
+          </div>
+          <button id="joinPracticeRoomBtn" type="button" class="btn primary full">加入練習房間</button>
+        </div>
+        <details id="practiceCreateDetails" class="accordion practice-create-details">
+          <summary><span>建立新的練習房間</span><span class="chevron">›</span></summary>
+          <div class="accordion-body">
+            <div class="practice-source-switch" role="radiogroup" aria-label="情境來源">
+              <label><input type="radio" name="practiceSource" value="manual" checked /> 個人情境設定</label>
+              <label><input type="radio" name="practiceSource" value="ai" /> AI 自動設置</label>
+              <label><input type="radio" name="practiceSource" value="file" /> 上傳案例檔案</label>
+            </div>
+            <div class="two-col compact-grid">
+              <div class="field"><label>情境名稱</label><input id="practiceScenarioTitle" placeholder="例：住宅三樓火警與人命搜救" /></div>
+              <div class="field"><label>演練難度</label><select id="practiceDifficulty"><option value="basic">基礎</option><option value="standard" selected>標準</option><option value="advanced">進階</option></select></div>
+            </div>
+            <div class="field"><label>我的演練身分</label><select id="practiceHostRole"><option>現場指揮官</option><option>初期指揮官</option><option>安全官</option><option>紀錄官</option><option>分區指揮官</option><option>單位帶隊官</option><option>觀察員</option></select></div>
+            <div id="practiceManualFields">
+              <div class="field"><label>初始情境</label><textarea id="practiceScenarioBrief" rows="4" placeholder="例：住宅三樓後側冒黑煙，關係人表示屋內可能有一名長者，巷道狹窄。"></textarea></div>
+            </div>
+            <div id="practiceAiFields" hidden>
+              <div class="field"><label>希望 AI 設計的重點</label><textarea id="practiceAiPrompt" rows="3" placeholder="例：加入水源不足、風向改變與 RIT 決策，避免一次揭露全部答案。"></textarea></div>
+            </div>
+            <div id="practiceFileFields" hidden>
+              <div class="field"><label>案例檔案</label><input id="practiceSourceFile" type="file" accept=".txt,.md,.json,.csv,.pdf,image/*" /><div class="hint">支援文字、PDF 與圖片；檔案會送至系統設定的 OpenAI API 產生情境，請先移除姓名、電話等可識別個資。</div></div>
+              <div id="practiceFileStatus" class="hint">尚未選擇檔案。</div>
+            </div>
+            <button id="createPracticeRoomBtn" type="button" class="btn danger full">建立虛擬練習案件</button>
+          </div>
+        </details>
+        <div class="field-inline-title">可加入的練習房間</div>
+        <div id="practiceRoomList" class="case-list"></div>
+      </section>
     </main>
 
     <main id="detailPage" class="page detail-page" hidden>
@@ -197,6 +271,30 @@
           <button type="button" class="case-nav-item" data-case-page="reportSection"><span class="case-nav-icon">文</span><span>報告</span></button>
           <button type="button" class="case-nav-item" data-case-page="assessmentSection"><span class="case-nav-icon">檢</span><span>檢討</span></button>
         </nav>
+        <section id="practiceSessionPanel" class="practice-session-panel" hidden>
+          <div class="practice-session-head">
+            <div><div class="eyebrow">練習模式｜不列入實戰</div><h3 id="practiceSessionTitle">虛擬火場</h3></div>
+            <div class="practice-room-code">房號 <b id="practiceRoomCode">------</b></div>
+          </div>
+          <div id="practiceLatestEvent" class="practice-latest-event">等待教官開始情境。</div>
+          <div class="practice-session-grid">
+            <div><div class="panel-title">參與者與 AI 補位</div><div id="practicePlayerList" class="practice-player-list"></div></div>
+            <div id="practiceHostControls" class="practice-host-controls" hidden>
+              <div class="panel-title">教官／房主控制</div>
+              <div class="button-row compact-actions">
+                <button id="togglePracticeRunBtn" type="button" class="btn small danger">開始演練</button>
+                <button id="releaseNextPracticeEventBtn" type="button" class="btn small primary">發布下一情境</button>
+                <button id="fillPracticeAiBtn" type="button" class="btn small ghost">AI 自動補位</button>
+              </div>
+              <div class="two-col compact-grid">
+                <div class="field"><label>臨時情境</label><input id="practiceCustomEvent" placeholder="例：第三面窗戶突然竄出火舌" /></div>
+                <div class="field"><label>等級</label><select id="practiceEventSeverity"><option value="info">一般</option><option value="warning">警示</option><option value="critical">緊急</option></select></div>
+              </div>
+              <button id="addPracticeCustomEventBtn" type="button" class="btn small ghost full">發布臨時情境</button>
+            </div>
+          </div>
+          <details class="sub-accordion practice-event-history"><summary>已發布情境紀錄</summary><div id="practiceEventList"></div></details>
+        </section>
         <div id="casePageContent" class="case-page-content">
 
       <section id="caseInfo" class="stack case-page-panel" data-case-page-panel="caseInfo">
@@ -312,7 +410,7 @@
                 </div>
               </div>
               <div class="arrival-detail-panel" data-arrival-panel="contact" hidden>
-                <div class="notice compact">先確認是否已找到關係人；只有選擇已找到後才展開資料，避免到場頁面過長。</div>
+                <div class="notice compact">尋找到關係人後會展開填寫相關資料。</div>
                 <div class="choice-row arrival-state-row">
                   <label class="choice-chip"><input id="contactStateNotFound" class="arrival-detail-input" type="radio" name="contactState" value="notfound" /> 尚未找到關係人</label>
                   <label class="choice-chip"><input id="contactStateFound" class="arrival-detail-input" type="radio" name="contactState" value="found" /> 已找到關係人</label>
@@ -333,6 +431,7 @@
                 </div>
               </div>
               <div class="arrival-detail-panel" data-arrival-panel="hazard" hidden>
+                <div class="notice compact">確認有危險物後會展開填寫相關資料。</div>
                 <div class="choice-row arrival-state-row">
                   <label class="choice-chip"><input id="hazardStateNone" class="arrival-detail-input" type="radio" name="hazardState" value="none" /> 無危險物品</label>
                   <label class="choice-chip"><input id="hazardStateHas" class="arrival-detail-input" type="radio" name="hazardState" value="has" /> 有危險物品</label>
@@ -381,15 +480,16 @@
               <div class="arrival-detail-panel" data-arrival-panel="breakDoor" hidden>
                 <div class="choice-row arrival-state-row">
                   <label class="choice-chip"><input id="breakDoorStateNone" class="arrival-detail-input" type="radio" name="breakDoorState" value="none" /> 不需要破門</label>
-                  <label class="choice-chip"><input id="breakDoorStateRequired" class="arrival-detail-input" type="radio" name="breakDoorState" value="required" /> 需要 / 已執行破門</label>
+                  <label class="choice-chip"><input id="breakDoorStateRequired" class="arrival-detail-input" type="radio" name="breakDoorState" value="required" /> 需要破門 / 準備破門</label>
                 </div>
                 <div id="breakDoorDetailFields" hidden>
                 <label class="check slim"><input id="breakDoorCommanderReport" class="arrival-detail-input" type="checkbox" /> 破門前已回報現場指揮官</label>
                 <label class="check slim"><input id="breakDoorCenterReport" class="arrival-detail-input" type="checkbox" /> 破門資訊已回報指揮中心</label>
                 <div class="two-col compact-form">
-                  <div class="field"><label>破門時間</label><input id="breakDoorAt" class="arrival-detail-input" type="datetime-local" /></div>
+                  <div class="field"><label>準備破門時間</label><input id="breakDoorAt" class="arrival-detail-input" type="datetime-local" /></div>
                   <div class="field"><label>執行單位</label><input id="breakDoorUnit" class="arrival-detail-input" placeholder="例：蘆洲分隊" /></div>
                 </div>
+                <div class="field"><label>破門完成時間</label><input id="breakDoorCompletedAt" class="arrival-detail-input" type="datetime-local" /></div>
                 <div class="field"><label>破門位置 / 原因 / 補充</label><textarea id="breakDoorNote" class="arrival-detail-input" rows="2" placeholder="例：第三面一樓後門破門，作為搜救入口"></textarea></div>
                 </div>
               </div>
@@ -421,30 +521,36 @@
 
 
       <section id="sitrepSection" class="stack case-page-panel" data-case-page-panel="sitrepSection" hidden>
-        <details class="accordion important-accordion">
-          <summary><span>戰情回報｜火勢狀況 / 傷患者</span><span class="chevron">›</span></summary>
-          <div class="accordion-body">
+        <div class="accordion important-accordion sitrep-page-shell">
+          <div class="sitrep-page-head"><div><div class="eyebrow">戰情回報</div><h3>請選擇回報類型</h3></div><span class="tag blue">點選後展開</span></div>
+          <div class="accordion-body sitrep-page-body">
             <div class="notice compact">事件時間預設為現在；補述可改事件時間，系統仍記錄實際上傳時間。</div>
-            <div class="tool-cards sitrep-tool-cards two-panel">
-              <div class="tool-card">
-                <h4>現場火勢 / 狀況回報</h4>
+            <div class="sitrep-choice-list">
+              <details id="sitrepFireDetails" class="sub-accordion sitrep-entry-accordion">
+                <summary><span><b>戰情回報｜火勢狀況</b><small>火勢、搜救、部署、水線與突發事件</small></span><span class="chevron">›</span></summary>
+                <div class="sitrep-entry-body">
                 <div class="two-col compact-grid"><div class="field"><label>大隊</label><select id="sitrepBrigade"></select></div><div class="field"><label>單位</label><select id="sitrepUnit"></select></div></div>
                 <div class="two-col compact-grid"><div class="field"><label>類型</label><select id="sitrepCategory"><option>火勢回報</option><option>突發事件</option><option>人車移動</option><option>部署更新</option><option>水線 / 水源</option><option>搜救進度</option><option>支援需求</option><option>危害 / 安全</option><option>PAR / RIT</option><option>其他</option></select></div><div class="field"><label>事件時間</label><input id="sitrepEventAt" type="datetime-local" /></div></div>
                 <div class="field"><label>戰情標題</label><input id="sitrepTitle" placeholder="例：三樓火勢向四樓延燒 / 蘆洲11轉移水線" /></div>
                 <div class="field"><label>詳細回報</label><textarea id="sitrepDetail" rows="4" placeholder="目前火災進展、突發事件、現場狀況、支援需求或其他回報"></textarea></div>
                 <div class="button-row"><button id="sitrepNowBtn" class="btn small ghost" type="button">事件時間設為現在</button><button id="addSitrepBtn" class="btn small primary" type="button">送出火勢 / 狀況回報</button></div>
-              </div>
-              <div class="tool-card">
-                <h4>傷 / 患者狀況回報</h4>
+                </div>
+              </details>
+              <details id="sitrepPatientDetails" class="sub-accordion sitrep-entry-accordion">
+                <summary><span><b>戰情回報｜傷患者</b><small>尋獲、救出、救護處置與送醫</small></span><span class="chevron">›</span></summary>
+                <div class="sitrep-entry-body">
+                <div class="two-col compact-grid"><div class="field"><label>大隊</label><select id="patientBrigade"></select></div><div class="field"><label>單位</label><select id="patientUnit"></select></div></div>
+                <div class="field"><label>事件時間</label><input id="patientEventAt" type="datetime-local" /></div>
                 <div class="two-col compact-grid"><div class="field"><label>姓名</label><input id="patientName" placeholder="未知可空白" /></div><div class="field"><label>性別</label><select id="patientGender"><option>未知</option><option>男</option><option>女</option></select></div></div>
                 <div class="two-col compact-grid"><div class="field"><label>尋獲地點</label><input id="patientFoundAt" placeholder="例：3樓後側房間 / 陽台" /></div><div class="field"><label>狀況</label><select id="patientStatus"><option>待救援</option><option>已救出</option><option>輕傷</option><option>重傷</option><option>OHCA</option><option>死亡</option><option>其他</option></select></div></div>
                 <div class="field"><label>處置 / 送醫 / 補充</label><textarea id="patientNote" rows="4" placeholder="例：由○○分隊救出，交由救護站評估，送○○醫院"></textarea></div>
-                <button id="addPatientSitrepBtn" class="btn small danger full" type="button">送出傷 / 患者回報</button>
-              </div>
+                <div class="button-row"><button id="patientNowBtn" class="btn small ghost" type="button">事件時間設為現在</button><button id="addPatientSitrepBtn" class="btn small danger" type="button">送出傷 / 患者回報</button></div>
+                </div>
+              </details>
             </div>
             <div id="sitrepList" class="sitrep-list"></div>
           </div>
-        </details>
+        </div>
       </section>
 
       <section id="tacticalMapSection" class="map-section case-page-panel" data-case-page-panel="tacticalMapSection" hidden>
@@ -452,6 +558,18 @@
           <div><div class="eyebrow">戰術地圖標示</div><h3>車輛 / 人員 / 危害標示 / 水線部署圖</h3></div>
           <button id="fitMapBtn" class="btn small ghost">回到200m</button>
         </div>
+
+        <section class="deployment-text-capture">
+          <div class="deployment-text-head"><div><div class="eyebrow">第一時間快速紀錄</div><h4>部署文字紀錄</h4></div><span id="deploymentTextStatus" class="tag amber">尚未紀錄</span></div>
+          <div class="notice compact">還來不及畫圖時，可先用文字記下各面、人車、水線與任務；內容會同步到 SOP 確認資料，並固定顯示於繪圖區供邊看邊畫。</div>
+          <div class="field"><textarea id="deploymentTextRecord" rows="4" placeholder="例：淡水11第一面佈一線內攻；竹圍11第二面防護；淡水61佔據消防栓供水。"></textarea></div>
+          <div class="button-row compact-actions">
+            <button id="saveDeploymentTextBtn" type="button" class="btn small primary">儲存文字部署</button>
+            <button id="checkDeploymentConsistencyBtn" type="button" class="btn small danger">完成部署／一致性檢查</button>
+            <button id="aiDeploymentSummaryBtn" type="button" class="btn small ghost">AI 依圖面整理部署摘要</button>
+          </div>
+          <div id="deploymentTextReference" class="deployment-text-reference" hidden></div>
+        </section>
 
         <details id="deploymentMapDetails" class="accordion tool-accordion">
           <summary><span>車輛 / 人員 / 危害標示 / 水線部署圖</span><span class="chevron">›</span></summary>
@@ -539,6 +657,7 @@
                 <details id="buildingOpsDetails" class="accordion">
                   <summary><span>建物內部作戰圖｜縱向剖面 / 水平俯視</span><span class="chevron">›</span></summary>
                   <div class="accordion-body">
+                    <div id="deploymentDrawingReference" class="deployment-drawing-reference" hidden></div>
                     <div class="notice">點選「同步樓層」後，左側會依建物樓層產生縱向剖面圖；右側可切換火災樓層並標示起火點、受困者、死亡者、入口、隔間與水線。此資料會併入報告與操作紀錄。</div>
                     <div id="orientationHint" class="orientation-hint" hidden>
                       <b>建議將手機轉為橫向</b><span>橫向可取得較大的繪圖區；直向仍可完整操作。</span>
@@ -661,6 +780,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
   <script src="./firebase/firebase-config.js"></script>
-  <script src="./assets/app.js?v=25"></script>
+  <script src="./assets/app.js?v=26"></script>
 </body>
 </html>
