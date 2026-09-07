@@ -61,7 +61,7 @@ service cloud.firestore {
     }
 
     function protectedUserFieldsChanged() {
-      return request.resource.data.diff(resource.data).changedKeys().hasAny([
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny([
         'status',
         'role',
         'isSuperAdmin',
@@ -101,31 +101,72 @@ service cloud.firestore {
     }
 
     match /cases/{caseId} {
-      allow create: if isActive()
-        && (
-          superAdmin()
-          || (activeUser() && request.resource.data.brigade == userDoc().data.brigade)
-        );
+      function room() { return get(/databases/$(database)/documents/cases/$(caseId)).data; }
+      function practice() { return room().get('mode','live') == 'practice'; }
+      function host() { return signedIn() && room().hostUid == request.auth.uid; }
+      function playerPath() { return /databases/$(database)/documents/cases/$(caseId)/players/$(request.auth.uid); }
+      function member() { return signedIn() && exists(playerPath()) && get(playerPath()).data.ai == false; }
+      function participant() { return member() && get(playerPath()).data.role != '觀察員'; }
+      function scope() { return sameBrigade(room().brigade); }
+      function actorRole() { return get(playerPath()).data.role; }
+      function validRole(role) { return role in ['現場指揮官','初期指揮官','安全官','紀錄官','分區指揮官','單位帶隊官','觀察員']; }
+      allow create: if isActive() && sameBrigade(request.resource.data.brigade)
+        && (request.resource.data.get('mode','live') != 'practice'
+          || (request.resource.data.hostUid == request.auth.uid
+            && request.resource.data.instructorMode in ['ai','human']
+            && (request.resource.data.instructorMode == 'ai' && request.resource.data.instructorUid == null
+              || request.resource.data.instructorMode == 'human' && request.resource.data.instructorUid == request.auth.uid)));
+      allow read: if sameBrigade(resource.data.brigade);
+      allow update: if sameBrigade(resource.data.brigade)
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['brigade','mode','hostUid','instructorUid','instructorMode','traineeUid','roomCode','createdBy'])
+        && ((resource.data.get('mode','live') != 'practice' && canWrite(resource.data.brigade))
+          || (resource.data.get('mode','live') == 'practice' && (host()
+            || (participant() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['training','practiceStatus','nextPracticeEventAt','lastPracticeEventAt','practiceEventIntervalMs','scenarioTitle','scenarioBrief','learningMode'])))));
+      allow delete: if superAdmin() || (sameBrigade(resource.data.brigade) && (chiefRole() || (resource.data.get('mode','live') == 'practice' && host())));
 
-      allow read: if superAdmin()
-        || sameBrigade(resource.data.brigade);
-
-      // 實戰案件維持指揮角色權限；練習案件允許同大隊啟用帳號協作。
-      allow update: if canWrite(resource.data.brigade)
-        || (sameBrigade(resource.data.brigade) && resource.data.mode == 'practice');
-
-      allow delete: if superAdmin()
-        || (sameBrigade(resource.data.brigade) && chiefRole());
-
+      match /players/{playerId} {
+        allow read: if scope();
+        allow create, update: if scope() && practice() && (
+          (playerId == request.auth.uid && request.resource.data.userId == request.auth.uid
+            && request.resource.data.ai == false
+            && (validRole(request.resource.data.role) || (host() && room().get('instructorMode','ai') == 'human' && request.resource.data.role == '教官')))
+          || (host() && request.resource.data.ai == true && validRole(request.resource.data.role)));
+        allow delete: if scope() && practice() && (host() || playerId == request.auth.uid);
+      }
+      match /simulationEvents/{eventId} {
+        allow read: if scope();
+        allow write: if scope() && practice() && host();
+      }
+      match /practiceResponses/{responseId} {
+        allow read: if scope();
+        allow create: if scope() && practice() && participant()
+          && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.role == actorRole()
+          && request.resource.data.text is string && request.resource.data.text.size() >= 8 && request.resource.data.text.size() <= 3000
+          && room().training.phase == 'running';
+        allow update, delete: if false;
+      }
+      match /practiceMessages/{messageId} {
+        allow read: if scope();
+        allow create, update: if scope() && practice() && host() && request.resource.data.authorUid == request.auth.uid;
+        allow delete: if false;
+      }
+      match /intakeEvents/{eventId} {
+        allow read: if scope();
+        allow create: if scope() && ((!practice() && canWrite(room().brigade)) || (practice() && participant()))
+          && request.resource.data.authorUid == request.auth.uid
+          && room().get('status','active') != 'closed'
+          && request.resource.data.caseId == caseId
+          && request.resource.data.kind in ['apply','undo']
+          && request.resource.data.raw is string && request.resource.data.raw.size() <= 3000
+          && request.resource.data.writes is list && request.resource.data.writes.size() <= 100;
+        allow update, delete: if false;
+      }
       match /{subCollection}/{docId} {
-        allow read: if superAdmin()
-          || sameBrigade(get(/databases/$(database)/documents/cases/$(caseId)).data.brigade);
-
-        allow create, update, delete: if canWrite(get(/databases/$(database)/documents/cases/$(caseId)).data.brigade)
-          || (
-            sameBrigade(get(/databases/$(database)/documents/cases/$(caseId)).data.brigade)
-            && get(/databases/$(database)/documents/cases/$(caseId)).data.mode == 'practice'
-          );
+        allow read: if scope();
+        // Explicit exclusions prevent the generic collaboration rule from bypassing instructor privileges.
+        allow create, update, delete: if !(subCollection in ['players','simulationEvents','practiceResponses','practiceMessages','intakeEvents'])
+          && scope() && ((!practice() && canWrite(room().brigade)) || (practice() && participant()));
       }
     }
   }

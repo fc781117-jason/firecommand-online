@@ -14,3 +14,7 @@ window.FIRECOMMAND_FIREBASE_CONFIG = {
   appId: "1:575184567138:web:4173df8ba7be8a4a7bca3b",
   measurementId: ""
 };
+
+// v28 preferred login: set Vercel GOOGLE_WEB_CLIENT_ID to the existing Google OAuth Web client ID.
+// For static hosting you may set the same PUBLIC client ID below. Never put a client secret here.
+window.FIRECOMMAND_GOOGLE_CLIENT_ID = '';

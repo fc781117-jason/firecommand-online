@@ -3,9 +3,11 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#15120e" />
-  <title>FireCommand 火場指揮系統 v26</title>
-  <link rel="stylesheet" href="./assets/styles.css?v=26" />
+  <meta name="theme-color" content="#142f45" />
+  <title>FireCommand 火場指揮系統 v28</title>
+  <link rel="stylesheet" href="./assets/styles.css?v=28" />
+  <link rel="stylesheet" href="./assets/v27.css?v=28" />
+  <link rel="stylesheet" href="./assets/v28.css?v=28" />
 </head>
 <body>
   <div id="toast" class="toast" hidden></div>
@@ -23,7 +25,9 @@
           <button id="reloadAppBtn" type="button" class="btn small ghost">重新載入</button>
         </div>
       </div>
+      <div id="identityButton28" hidden></div><p id="authMethod28" class="hint" aria-live="polite"></p>
       <button id="googleLoginBtn" class="btn primary full">使用 Google 登入</button>
+      <p class="hint">若停留在 firebaseapp.com 的舊登入頁，請關閉該頁，從正式系統首頁重新登入。</p><a class="auth-help-link" href="./login-help.html">登入問題與返回首頁</a>
     </div>
   </section>
 
@@ -80,7 +84,7 @@
   <section id="appScreen" class="screen app-screen" hidden>
     <header class="topbar">
       <div>
-        <div class="brand-mini">FireCommand <span class="app-version">v26</span></div>
+        <div class="brand-mini">FireCommand <span class="app-version">v28</span></div>
         <button id="profileQuickEditBtn" type="button" class="user-line user-profile-button" aria-label="開啟個人資訊及修改火場代號"><span id="userLine">—</span></button>
       </div>
       <button id="adminManageBtn" class="btn small ghost" hidden>帳號管理</button><button id="logoutBtn" class="btn small ghost">登出</button>
@@ -232,7 +236,7 @@
               <div class="field"><label>情境名稱</label><input id="practiceScenarioTitle" placeholder="例：住宅三樓火警與人命搜救" /></div>
               <div class="field"><label>演練難度</label><select id="practiceDifficulty"><option value="basic">基礎</option><option value="standard" selected>標準</option><option value="advanced">進階</option></select></div>
             </div>
-            <div class="field"><label>我的演練身分</label><select id="practiceHostRole"><option>現場指揮官</option><option>初期指揮官</option><option>安全官</option><option>紀錄官</option><option>分區指揮官</option><option>單位帶隊官</option><option>觀察員</option></select></div>
+            <div class="two-col"><div class="field"><label for="practiceInstructorMode">你要擔任教官出題嗎？</label><select id="practiceInstructorMode"><option value="ai">否，我要受測，由 AI 教官主持</option><option value="human">是，我擔任真人教官</option></select></div><div class="field"><label>訓練方式</label><select id="practiceLearningMode"><option value="guided">引導練習（提供提示）</option><option value="assessment">自主測驗（隱藏提示）</option></select></div></div><div class="field"><label>我的演練身分</label><select id="practiceHostRole"><option>現場指揮官</option><option>初期指揮官</option><option>安全官</option><option>紀錄官</option><option>分區指揮官</option><option>單位帶隊官</option><option>觀察員</option></select></div>
             <div id="practiceManualFields">
               <div class="field"><label>初始情境</label><textarea id="practiceScenarioBrief" rows="4" placeholder="例：住宅三樓後側冒黑煙，關係人表示屋內可能有一名長者，巷道狹窄。"></textarea></div>
             </div>
@@ -258,42 +262,29 @@
           <div id="detailCaseNo" class="eyebrow">—</div>
           <h2 id="detailAddress">—</h2>
         </div>
+        <button id="openIntake28" type="button" class="btn primary intake-entry">語音／文字快速回報</button>
       </div>
 
       <div class="case-workspace">
         <nav class="case-page-nav" id="casePageNav" aria-label="案件功能分頁">
-          <button type="button" class="case-nav-item active" data-case-page="caseInfo" aria-selected="true"><span class="case-nav-icon">▣</span><span>概要</span></button>
-          <button type="button" class="case-nav-item" data-case-page="arrivalSection"><span class="case-nav-icon">SOP</span><span>流程 SOP</span></button>
+          <button type="button" class="case-nav-item" data-case-page="arrivalSection"><span class="case-nav-icon">SOP</span><span>流程</span></button>
           <button type="button" class="case-nav-item" data-case-page="sitrepSection"><span class="case-nav-icon">報</span><span>戰情</span></button>
+          <button type="button" class="case-nav-item overview-nav active" data-case-page="caseInfo"><span class="case-nav-icon">▣</span><span>概要</span></button>
           <button type="button" class="case-nav-item" data-case-page="tacticalMapSection"><span class="case-nav-icon">圖</span><span>部署</span></button>
-          <button type="button" class="case-nav-item" data-case-page="aiSection"><span class="case-nav-icon">AI</span><span>建議</span></button>
-          <button type="button" class="case-nav-item" data-case-page="dashboardSection"><span class="case-nav-icon">人</span><span>人車</span></button>
-          <button type="button" class="case-nav-item" data-case-page="reportSection"><span class="case-nav-icon">文</span><span>報告</span></button>
-          <button type="button" class="case-nav-item" data-case-page="assessmentSection"><span class="case-nav-icon">檢</span><span>檢討</span></button>
+          <button type="button" class="case-nav-item" id="moreNavBtn"><span class="case-nav-icon">•••</span><span>更多</span></button>
         </nav>
         <section id="practiceSessionPanel" class="practice-session-panel" hidden>
-          <div class="practice-session-head">
-            <div><div class="eyebrow">練習模式｜不列入實戰</div><h3 id="practiceSessionTitle">虛擬火場</h3></div>
-            <div class="practice-room-code">房號 <b id="practiceRoomCode">------</b></div>
+          <div class="practice-session-head"><div><div class="eyebrow">模擬演練 · 不列入實戰</div><h3 id="practiceSessionTitle">虛擬火場</h3><p id="practiceRoleStatus" class="hint"></p></div><div class="practice-room-code">房號 <b id="practiceRoomCode">------</b></div></div>
+          <div class="training-toolbar"><span id="practiceProgress"></span><div class="training-clock"><span id="practiceClockLabel">反應時間</span><strong id="practiceCountdown" role="timer">--:--</strong></div><button id="togglePracticeRunBtn" type="button" class="btn small primary">開始演練</button></div>
+          <div class="training-two-streams">
+            <section class="training-stream"><div class="stream-title">模擬情境狀況 <span id="instructorBadge" class="tag"></span></div><div id="practiceLatestEvent" class="practice-latest-event" aria-live="polite"></div><div id="practiceResponsePanel"><div id="practiceRoleActions" class="role-actions"></div><label for="practiceResponseText">我的判斷與處置</label><textarea id="practiceResponseText" rows="2" placeholder="說明對象、位置、任務與回報要求"></textarea><div class="button-row"><button id="practiceResponseVoice" type="button" class="btn small ghost">語音輸入</button><button id="submitPracticeResponse" type="button" class="btn small primary">送出處置／回報</button></div><p id="practiceResponseStatus" class="hint" aria-live="polite"></p></div></section>
+            <section class="training-stream"><div class="stream-title">協作情報與回報 <span id="practiceMessageCount" class="tag"></span></div><div id="practiceMessages" class="training-messages" aria-live="polite"></div></section>
           </div>
-          <div id="practiceLatestEvent" class="practice-latest-event">等待教官開始情境。</div>
-          <div class="practice-session-grid">
-            <div><div class="panel-title">參與者與 AI 補位</div><div id="practicePlayerList" class="practice-player-list"></div></div>
-            <div id="practiceHostControls" class="practice-host-controls" hidden>
-              <div class="panel-title">教官／房主控制</div>
-              <div class="button-row compact-actions">
-                <button id="togglePracticeRunBtn" type="button" class="btn small danger">開始演練</button>
-                <button id="releaseNextPracticeEventBtn" type="button" class="btn small primary">發布下一情境</button>
-                <button id="fillPracticeAiBtn" type="button" class="btn small ghost">AI 自動補位</button>
-              </div>
-              <div class="two-col compact-grid">
-                <div class="field"><label>臨時情境</label><input id="practiceCustomEvent" placeholder="例：第三面窗戶突然竄出火舌" /></div>
-                <div class="field"><label>等級</label><select id="practiceEventSeverity"><option value="info">一般</option><option value="warning">警示</option><option value="critical">緊急</option></select></div>
-              </div>
-              <button id="addPracticeCustomEventBtn" type="button" class="btn small ghost full">發布臨時情境</button>
-            </div>
-          </div>
-          <details class="sub-accordion practice-event-history"><summary>已發布情境紀錄</summary><div id="practiceEventList"></div></details>
+          <div id="practiceHostControls" class="practice-host-controls" hidden><div class="stream-title">真人教官控制</div><p class="hint">可採用建議、修改情境，或依受測者表現發布下一階段。</p><div id="practiceSuggestions" class="role-actions"></div><div class="two-col"><div class="field"><label for="practiceCustomEvent">追加情境</label><input id="practiceCustomEvent" placeholder="例：主攻線水壓下降，原因待查" /></div><div class="field"><label for="practiceCustomTime">反應秒數（30–900）</label><input id="practiceCustomTime" type="number" min="30" max="900" value="180" /></div></div><select id="practiceEventSeverity" aria-label="情境等級"><option value="info">一般</option><option value="warning">警示</option><option value="critical">緊急</option></select><div class="button-row"><button id="releaseNextPracticeEventBtn" class="btn small primary">採納回應／下一情境</button><button id="addPracticeCustomEventBtn" class="btn small ghost">追加情境至佇列</button><button id="endPracticeBtn" class="btn small danger">結束並檢討</button></div></div>
+          <div id="practiceReview" hidden></div>
+          <details class="sub-accordion"><summary>參與者與角色</summary><div id="practicePlayerList" class="practice-player-list"></div><button id="fillPracticeAiBtn" type="button" class="btn small ghost">補齊 AI 角色</button></details>
+          <details class="sub-accordion practice-event-history"><summary>情境與處置時間軸</summary><div id="practiceEventList"></div></details>
+          <p id="practiceEngineNote" class="hint"></p>
         </section>
         <div id="casePageContent" class="case-page-content">
 
@@ -562,7 +553,7 @@
         <section class="deployment-text-capture">
           <div class="deployment-text-head"><div><div class="eyebrow">第一時間快速紀錄</div><h4>部署文字紀錄</h4></div><span id="deploymentTextStatus" class="tag amber">尚未紀錄</span></div>
           <div class="notice compact">還來不及畫圖時，可先用文字記下各面、人車、水線與任務；內容會同步到 SOP 確認資料，並固定顯示於繪圖區供邊看邊畫。</div>
-          <div class="field"><textarea id="deploymentTextRecord" rows="4" placeholder="例：淡水11第一面佈一線內攻；竹圍11第二面防護；淡水61佔據消防栓供水。"></textarea></div>
+          <div class="field"><textarea id="deploymentTextRecord" rows="4" placeholder="例：淡水11第一面佈一線內攻；竹圍11第二面防護；淡水61佔據消防栓供水。"></textarea><div class="button-row"><button id="parseDeploymentBtn" type="button" class="btn small primary">文字轉部署草圖</button><button id="rotateDeploymentBtn" type="button" class="btn small ghost">旋轉建物 90°</button></div><div id="deploymentDraftPreview" hidden></div></div>
           <div class="button-row compact-actions">
             <button id="saveDeploymentTextBtn" type="button" class="btn small primary">儲存文字部署</button>
             <button id="checkDeploymentConsistencyBtn" type="button" class="btn small danger">完成部署／一致性檢查</button>
@@ -776,10 +767,36 @@
     </div>
   </section>
 
+
+  <dialog id="intakeDialog28" class="intake-dialog" aria-labelledby="intakeTitle28">
+    <header class="intake-head"><div><p id="intakeCase28" class="eyebrow"></p><h2 id="intakeTitle28">快速回報</h2></div><button id="intakeClose28" type="button" class="btn ghost" aria-label="關閉快速回報">關閉</button></header>
+    <div class="intake-body">
+      <p class="hint">報到、人數、移位、水線，使用同一入口。未提及的資料保持現況。</p>
+      <label for="intakeText28">本次新增或修正</label><textarea id="intakeText28" rows="3" maxlength="3000" placeholder="例如：但水4人報到；主委6人第三面搜救"></textarea>
+      <div class="button-row"><button id="intakeMic28" type="button" class="btn primary">開始語音</button><button id="intakeParse28" type="button" class="btn ghost">辨識本次回報</button><button id="intakeNew28" type="button" class="btn ghost">清空輸入</button></div>
+      <p id="intakeMessage28" role="status" aria-live="polite"></p>
+      <details class="intake-examples"><summary>可直接套用的說法</summary><div class="intake-example-grid">
+        <button type="button" data-intake-example="淡水4人報到；竹圍6人第三面搜救">新單位報到</button><button type="button" data-intake-example="淡水人數修正為6人">修正總人數</button><button type="button" data-intake-example="淡水新增2人">增加人員</button><button type="button" data-intake-example="竹圍移至第二面">人員移位</button><button type="button" data-intake-example="淡水11移至第一面">車輛移位</button><button type="button" data-intake-example="淡水61供水給淡水11；淡水11第一面出兩線">建立水線</button><button type="button" data-intake-example="淡水11水線改接第三面">改接水線</button><button type="button" data-intake-example="竹圍A組4人報到；竹圍B組3人報到">分組報到</button>
+      </div><p class="hint">名稱與句型在裝置上解析，不需 OpenAI API。樓層、水源定位、否定句及不明數字會要求補充；不會猜測登錄。瀏覽器語音服務是否連網，依裝置而異。</p></details>
+      <section id="intakeResult28" hidden>
+        <h3>核對此次差異</h3><div id="intakeCorrections28" class="intake-corrections"></div><p id="intakeCorrected28" class="intake-corrected"></p>
+        <p id="intakeTotal28" class="intake-total"></p><div id="intakeIssues28"></div><div id="intakeChanges28" class="intake-changes"></div><p id="intakeNotes28" class="hint"></p>
+        <p class="hint">未指定位置的人員先放待部署區；位置為示意，可在部署圖拖曳。歷史文字保留供查核，概要以最新人車水線資料產生。</p>
+        <div class="intake-confirm"><label><input id="intakeConfirm28" type="checkbox" />我已核對名稱、人數及變更內容</label><button id="intakeApply28" type="button" class="btn primary">確認登錄並同步</button></div>
+      </section>
+      <details class="intake-history"><summary>最近回報與復原</summary><div id="intakeHistory28"></div></details>
+    </div>
+  </dialog>
+
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
   <script src="./firebase/firebase-config.js"></script>
-  <script src="./assets/app.js?v=26"></script>
+  <script src="./assets/training-core.js?v=28"></script>
+  <script src="./assets/deployment-core.js?v=28"></script>
+  <script src="./assets/intake-core.js?v=28"></script>
+  <script src="./assets/intake-ui.js?v=28"></script>
+  <script src="./assets/auth28.js?v=28"></script>
+  <script src="./assets/app.js?v=28"></script>
 </body>
 </html>

@@ -201,7 +201,7 @@ let profile = null;
 let cases = [];
 let currentCaseId = null;
 let currentCase = null;
-let live = { vehicles: [], crews: [], hoses: [], hazards: [], sitreps: [], logs: [], players: [], simulationEvents: [] };
+let live = { vehicles: [], crews: [], hoses: [], hazards: [], sitreps: [], logs: [], players: [], simulationEvents: [], practiceResponses: [], practiceMessages: [], hazardReferences: [] };
 let unsubscribers = [];
 let map = null;
 let mapOverlays = [];
@@ -419,10 +419,10 @@ function bindEvents(){
   $('addPatientSitrepBtn')?.addEventListener('click', addPatientSitrep);
   $('sitrepNowBtn')?.addEventListener('click', setSitrepNow);
   $('patientNowBtn')?.addEventListener('click', setPatientNow);
-  $('togglePracticeRunBtn')?.addEventListener('click', togglePracticeRun);
-  $('releaseNextPracticeEventBtn')?.addEventListener('click', releaseNextPracticeEvent);
+  $('togglePracticeRunBtn')?.addEventListener('click', safeRun27(togglePracticeRun));
+  $('releaseNextPracticeEventBtn')?.addEventListener('click', safeRun27(releaseNextPracticeEvent));
   $('fillPracticeAiBtn')?.addEventListener('click', fillPracticeAiRoles);
-  $('addPracticeCustomEventBtn')?.addEventListener('click', addPracticeCustomEvent);
+  $('addPracticeCustomEventBtn')?.addEventListener('click', safeRun27(addPracticeCustomEvent));
   $('generateAssessmentBtn')?.addEventListener('click', generateAssessmentReport);
   $('aiAssessmentBtn')?.addEventListener('click', requestAiAssessment);
   $('closeCaseBtn')?.addEventListener('click', closeCase);
@@ -617,7 +617,8 @@ async function initFirebase(){
     auth = firebase.auth();
     db = firebase.firestore();
     auth.useDeviceLanguage?.();
-    await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+    const persistence=await setAuthPersistence28(auth,firebase.auth.Auth.Persistence);
+    if(persistence!=='LOCAL')$('authMethod28').textContent='此瀏覽器無法保留長期登入，關閉後可能需要重新登入。';
   } catch (err) {
     console.error('Firebase 初始化失敗', err);
     firebaseEnabled = false;
@@ -629,13 +630,7 @@ async function initFirebase(){
     show('authScreen');
     return;
   }
-  try{
-    await auth.getRedirectResult();
-  }catch(err){
-    if(/missing.*initial.*state|sessionStorage|redirect/i.test(`${err?.code||''} ${err?.message||''}`)){
-      showAuthRecovery('登入頁的暫存狀態已失效。請回到 FireCommand 後按「重新登入」；既有案件資料不會消失。');
-    }else console.warn('Firebase redirect result',err);
-  }
+  setupIdentity28();
   auth.onAuthStateChanged(async user => {
     fbUser = user;
     if(!user){ show('authScreen'); return; }
@@ -651,10 +646,7 @@ async function loginGoogle(){
     $('googleLoginBtn') && ($('googleLoginBtn').disabled=true);
     await auth.signInWithPopup(provider);
   }catch(err){
-    const embedded=isEmbeddedIosBrowser();
-    const message = embedded
-      ? '目前瀏覽器把登入頁與 FireCommand 的暫存空間分開了。請回到此頁再按一次重新登入；若仍失敗，請用 Safari 開啟同一網址。'
-      : `Google 登入未完成：${err?.message||'請重新嘗試登入。'}`;
+    const message=authErrorMessage28(err);
     showAuthRecovery(message);
   }finally{
     $('googleLoginBtn') && ($('googleLoginBtn').disabled=false);
@@ -712,6 +704,7 @@ function prefillProfile(user){
   $('profileUnit').value = '淡水';
 }
 async function logout(){
+  clearIntake28();window.google?.accounts?.id?.disableAutoSelect();
   cleanupSubscriptions(); currentCaseId=null; currentCase=null;
   if(firebaseEnabled) await auth.signOut();
   else { fbUser=null; profile=null; show('authScreen'); }
@@ -893,7 +886,7 @@ function parseScenarioResult(value){
   try{return JSON.parse(clean);}catch{return null;}
 }
 async function requestPracticeScenario(payload){
-  const response=await fetch('/api/ai-advice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'simulation_setup',practice:payload,sourceFile:practiceSourceFile})});
+  const response=await authenticatedAI('/api/ai-advice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'simulation_setup',practice:payload,sourceFile:practiceSourceFile})});
   const data=await response.json(); if(!response.ok) throw new Error(data.error||'AI 情境產生失敗');
   return parseScenarioResult(data.scenario||data.advice);
 }
@@ -907,7 +900,7 @@ function normalizePracticeScenario(raw,fallback){
     purpose:String(value.purpose||fallback.purpose||'住宅'),buildingStructure:String(value.buildingStructure||fallback.buildingStructure||'RC'),
     floors:Math.max(1,Math.min(50,Number(value.floors)||fallback.floors||3)),fireFloor:normalizeFloorValue(value.fireFloor||fallback.fireFloor||'1樓'),
     fireStatus:String(value.fireStatus||fallback.fireStatus||''),trapped:['有','無','未知'].includes(value.trapped)?value.trapped:fallback.trapped,
-    trappedCount:Math.max(0,Number(value.trappedCount)||0),events:events.map((x,i)=>({order:i+1,title:String(x.title||`情境更新 ${i+1}`).slice(0,100),detail:String(x.detail||x.content||'現場狀況更新').slice(0,1200),severity:['info','warning','critical'].includes(x.severity)?x.severity:'warning'}))
+    trappedCount:Math.max(0,Number(value.trappedCount)||0),events:events.map((x,i)=>({order:i+1,title:String(x.title||`情境更新 ${i+1}`).slice(0,100),detail:String(x.detail||x.content||'現場狀況更新').slice(0,1200),severity:['info','warning','critical'].includes(x.severity)?x.severity:'warning',timeLimitSec:Math.max(30,Math.min(900,Number(x.timeLimitSec)||[180,180,120,300,30][i%5]))}))
   };
 }
 async function createPracticeRoom(){
@@ -926,9 +919,9 @@ async function createPracticeRoom(){
     catch(err){console.warn('practice scenario fallback',err);toast('AI 暫時無法產生情境，已建立可立即使用的本機演練腳本',4600);}
   }
   scenario=normalizePracticeScenario(scenario,fallback);
-  const roomCode=generatePracticeRoomCode(); const hostRole=$('practiceHostRole')?.value||'現場指揮官';
+  const roomCode=generatePracticeRoomCode(); const instructorMode=$('practiceInstructorMode').value; const hostRole=instructorMode==='human'?'教官':($('practiceHostRole')?.value||'現場指揮官');
   const createdAt=Date.now();
-  const newCase={mode:'practice',schemaVersion:26,caseNo:`SIM-${todayKey()}-${roomCode}`,roomCode,scenarioTitle:scenario.title,scenarioBrief:scenario.brief,scenarioSource:source,practiceDifficulty:difficulty,practiceStatus:'waiting',practiceEventIntervalMs:difficulty==='advanced'?30000:difficulty==='basic'?60000:45000,hostUid:profile.id,hostName:radioCallSign(),address:`虛擬情境｜${scenario.title}`,type:'模擬火場',summary:scenario.brief,initialSummary:scenario.brief,purpose:scenario.purpose,buildingStructure:scenario.buildingStructure,floors:scenario.floors,fireFloor:scenario.fireFloor,fireObservedFloor:scenario.fireFloor,fireObservation:scenario.fireStatus,fireStatus:scenario.fireStatus,trapped:scenario.trapped,trappedCount:scenario.trappedCount,brigade:profile.brigade,unit:profile.unit||'',createdBy:profile.id,createdByName:profile.callName,lat:DEFAULT_CENTER.lat,lng:DEFAULT_CENTER.lng,createdAt,updatedAt:createdAt};
+  const newCase={mode:'practice',schemaVersion:27,caseNo:`SIM-${todayKey()}-${roomCode}`,roomCode,scenarioTitle:scenario.title,scenarioBrief:scenario.brief,scenarioSource:source,practiceDifficulty:difficulty,learningMode:$('practiceLearningMode').value,traineeUid:instructorMode==='ai'?profile.id:null,instructorMode,instructorUid:instructorMode==='human'?profile.id:null,training:FCTraining.initial(),practiceStatus:'waiting',practiceEventIntervalMs:difficulty==='advanced'?30000:difficulty==='basic'?60000:45000,hostUid:profile.id,hostName:radioCallSign(),address:`虛擬情境｜${scenario.title}`,type:'模擬火場',summary:scenario.brief,initialSummary:scenario.brief,purpose:scenario.purpose,buildingStructure:scenario.buildingStructure,floors:scenario.floors,fireFloor:scenario.fireFloor,fireObservedFloor:scenario.fireFloor,fireObservation:scenario.fireStatus,fireStatus:scenario.fireStatus,trapped:scenario.trapped,trappedCount:scenario.trappedCount,brigade:profile.brigade,unit:profile.unit||'',createdBy:profile.id,createdByName:profile.callName,lat:DEFAULT_CENTER.lat,lng:DEFAULT_CENTER.lng,createdAt,updatedAt:createdAt};
   const player={name:radioCallSign(),role:hostRole,ai:false,userId:profile.id,joinedAt:createdAt,createdAt};
   let id;
   try{
@@ -955,6 +948,7 @@ async function joinPracticeRoom(){
 }
 async function joinPracticeCaseById(id,role='觀察員'){
   const room=cases.find(c=>c.id===id);if(!room)return;
+  if(room.instructorUid===profile.id)role='教官';
   const player={name:radioCallSign(),role,ai:false,userId:profile.id,joinedAt:Date.now(),createdAt:Date.now()};
   if(firebaseEnabled) await db.collection('cases').doc(id).collection('players').doc(profile.id).set(player,{merge:true});
   else{
@@ -965,81 +959,158 @@ async function joinPracticeCaseById(id,role='觀察員'){
 }
 function isPracticeHost(){ return !!(currentCase?.mode==='practice'&&profile?.id&&currentCase.hostUid===profile.id); }
 function severityLabel(value='info'){return ({info:'一般',warning:'警示',critical:'緊急'})[value]||'一般';}
+const TRAINING_ROLES={
+ '現場指揮官':{focus:'建立指揮、任務分派與整體安全',actions:['到場偵察','部署命令','要求回報'],template:'指示【單位】於【位置】執行【任務】，並於【時間】回報【項目】。'},
+ '初期指揮官':{focus:'初報、第一面與指揮移交',actions:['到場初報','建立指揮','移交情報'],template:'現場【建物／火煙／人命】，第一面設於【位置】，已建立【指揮點】，請支援【需求】。'},
+ '安全官':{focus:'風險辨識、人員清查與撤退條件',actions:['安全巡查','要求 PAR','提出撤退評估'],template:'於【位置】觀察到【風險】，影響【單位】，建議【措施】並確認【安全條件】。'},
+ '紀錄官':{focus:'時序紀錄、情報核對與追蹤',actions:['彙整情報','核對缺項','追蹤回報'],template:'【時間】【單位】回報【資訊】，與【既有情報】比對為【一致／待確認】，待追蹤【事項】。'},
+ '分區指揮官':{focus:'分區部署、進度與資源需求',actions:['分區回報','調整任務','請求資源'],template:'【分區】現有【人車水線】，正在【任務】，進度【狀況】，需要【資源】，下次【時間】回報。'},
+ '單位帶隊官':{focus:'小組位置、任務、進退與人員狀態',actions:['任務回報','回報障礙','確認人員'],template:'【單位】【人數】人位於【位置】，執行【任務】，目前【進度／障礙】，人員【狀態】。'}
+};
+let trainingRenderKey='', trainingWork=false, trainingSend=false;
+function trainingSteps(){return (live.simulationEvents||[]).slice().sort((a,b)=>(a.order||0)-(b.order||0)||(a.createdAt||0)-(b.createdAt||0)).map(FCTraining.normalizeStep);}
+function trainingState(){return currentCase?.training||FCTraining.initial();}
+function myTrainingRole(){return currentCase?.instructorUid===profile?.id?'教官':(live.players||[]).find(x=>!x.ai&&x.userId===profile?.id)?.role||'觀察員';}
+function isHumanInstructor(){return isPracticeHost()&&currentCase.instructorMode==='human';}
+function isAiInstructor(){return currentCase?.instructorMode!=='human';}
+function canControlTraining(){return isPracticeHost();}
+function activeTrainingStep(){return trainingSteps()[trainingState().index];}
+function formatDuration(ms){const n=Math.max(0,Math.ceil(ms/1000));return `${String(Math.floor(n/60)).padStart(2,'0')}:${String(n%60).padStart(2,'0')}`;}
 function renderPracticeSession(){
-  const panel=$('practiceSessionPanel');if(!panel)return;
-  const active=currentCase?.mode==='practice';panel.hidden=!active;
-  if(!active){stopPracticeTicker();return;}
-  $('practiceSessionTitle').textContent=currentCase.scenarioTitle||'虛擬火場';
-  $('practiceRoomCode').textContent=currentCase.roomCode||'------';
-  const released=live.simulationEvents.filter(x=>x.released).sort((a,b)=>(b.releasedAt||b.createdAt||0)-(a.releasedAt||a.createdAt||0));
-  const latest=released[0];
-  $('practiceLatestEvent').innerHTML=latest?`<span class="practice-event-severity ${escapeHtml(latest.severity||'info')}">${severityLabel(latest.severity)}</span><div><b>${escapeHtml(latest.title||'情境更新')}</b><p>${escapeHtml(latest.detail||'')}</p></div>`:`<span class="practice-event-severity info">初始</span><div><b>${escapeHtml(practiceStatusLabel(currentCase.practiceStatus))}</b><p>${escapeHtml(currentCase.scenarioBrief||'等待教官開始情境。')}</p></div>`;
-  const players=live.players.slice().sort((a,b)=>Number(a.ai)-Number(b.ai));
-  $('practicePlayerList').innerHTML=players.length?players.map(x=>`<div class="practice-player"><span>${x.ai?'AI':'真人'}</span><b>${escapeHtml(x.name||'參與者')}</b><small>${escapeHtml(x.role||'觀察員')}${x.userId===currentCase.hostUid?'｜房主':''}</small></div>`).join(''):'<div class="empty">參與者同步中。</div>';
-  const host=isPracticeHost();$('practiceHostControls').hidden=!host;
-  const toggle=$('togglePracticeRunBtn');if(toggle)toggle.textContent=currentCase.practiceStatus==='running'?'暫停演練':currentCase.practiceStatus==='paused'?'繼續演練':'開始演練';
-  $('practiceEventList').innerHTML=released.length?released.map(x=>`<article class="practice-event-item ${escapeHtml(x.severity||'info')}"><div><b>${escapeHtml(x.title||'情境更新')}</b><span>${fmtTime(x.releasedAt||x.createdAt)}</span></div><p>${escapeHtml(x.detail||'')}</p></article>`).join(''):'<div class="empty">尚未發布動態情境。</div>';
-  if(host&&currentCase.practiceStatus==='running') startPracticeTicker(); else stopPracticeTicker();
+ const panel=$('practiceSessionPanel');if(!panel)return;
+ const active=currentCase?.mode==='practice';panel.hidden=!active;
+ document.body.classList.toggle('in-training',active);
+ if(!active){stopPracticeTicker();return;}
+ const state=trainingState(),steps=trainingSteps(),step=steps[state.index],role=myTrainingRole(),config=TRAINING_ROLES[role];
+ $('practiceSessionTitle').textContent=currentCase.scenarioTitle||'虛擬火場';$('practiceRoomCode').textContent=currentCase.roomCode||'------';
+ $('practiceRoleStatus').textContent=`我的角色：${role}${config?' · '+config.focus:role==='觀察員'?' · 僅供觀察與回放':''}`;
+ $('instructorBadge').textContent=isAiInstructor()?'AI 教官':'真人教官';
+ $('practiceProgress').textContent=`${practiceStatusLabel(state.phase)} · ${Math.min(steps.length,state.index+1)}／${steps.length} 情境`;
+ $('practiceHostControls').hidden=!isHumanInstructor();
+ const toggle=$('togglePracticeRunBtn');toggle.hidden=!canControlTraining()||state.phase==='completed';toggle.disabled=state.phase==='waiting'&&!steps.length;toggle.textContent=state.phase==='running'?'暫停':state.phase==='paused'?'繼續':'開始練習';
+ $('practiceResponsePanel').hidden=!config||state.phase==='completed';
+ $('submitPracticeResponse').disabled=state.phase!=='running'||trainingSend;
+ $('practiceResponseText').disabled=state.phase!=='running';$('practiceResponseVoice').disabled=state.phase!=='running';
+ $('fillPracticeAiBtn').hidden=!isPracticeHost();
+ $('releaseNextPracticeEventBtn').disabled=state.phase!=='running';
+ $('endPracticeBtn').disabled=!['running','paused'].includes(state.phase);
+ const renderKey=[currentCase.id,state.revision,step?.id,role,currentCase.learningMode].join('|');
+ if(renderKey!==trainingRenderKey){
+  trainingRenderKey=renderKey;
+  $('practiceLatestEvent').innerHTML=step&&state.phase!=='completed'?`<span class="practice-event-severity ${escapeHtml(step.severity||'info')}">${severityLabel(step.severity)}</span><div><b>${escapeHtml(step.title)}</b><p>${escapeHtml(step.detail)}</p><small>本情境反應時間 ${step.timeLimitSec} 秒（訓練設定）</small></div>`:`<div><b>${state.phase==='completed'?'演練結束':'準備開始'}</b><p>${escapeHtml(state.phase==='completed'?state.reason:currentCase.scenarioBrief||'請選擇角色並開始練習。')}</p></div>`;
+  const guided=currentCase.learningMode!=='assessment';
+  $('practiceRoleActions').innerHTML=config&&guided?config.actions.map(x=>`<button class="btn small ghost" type="button" data-role-template="1">${x}</button>`).join(''):'';
+  $('practiceRoleActions').querySelectorAll('button').forEach(b=>b.onclick=()=>{if(!$('practiceResponseText').value.trim())$('practiceResponseText').value=({
+'到場偵察':'到場觀察【建物／火煙／人命】，第一面為【位置】，尚待確認【事項】。',
+'部署命令':'指示【單位】於【位置】執行【任務】，以【安全條件】為前提，於【時間】回報。',
+'要求回報':'請【單位】回報【位置、人數、任務進度與風險】，回報時限為【時間】。',
+'到場初報':'【單位】到達【位置】，現場【建物、火煙、人命】，目前採取【措施】。',
+'建立指揮':'由【呼號】建立現場指揮，指揮點位於【位置】，第一面設於【方向】。',
+'移交情報':'向【接任指揮官】移交【火勢、人命、部署、水源、風險及待追蹤事項】。',
+'安全巡查':'於【位置】發現【風險】，影響【單位】，請採取【措施】並回報【確認結果】。',
+'要求 PAR':'請【單位／分區】進行人員清查，回報【人數、位置、任務與狀態】，時限【時間】。',
+'提出撤退評估':'因【風險與依據】，建議評估【單位／區域】撤退，確認【路線、集合點與清查】。',
+'彙整情報':'截至【時間】，已確認【情報】，尚未確認【事項】，來源【單位】。',
+'核對缺項':'目前缺少【項目】，請【單位】查明並於【時間】回報。',
+'追蹤回報':'【時間】已要求【單位】回報【內容】，目前【進度】，下一次追蹤【時間】。',
+'分區回報':'【分區】現有【人車水線】，執行【任務】，目前【進度與風險】。',
+'調整任務':'請【單位】由【原任務】調整至【新任務與位置】，確認【安全與資源條件】。',
+'請求資源':'【分區】因【原因】需要【資源與數量】，請至【位置】支援【任務】。',
+'任務回報':'【單位】【人數】人位於【位置】，任務【內容】，目前【進度與安全狀態】。',
+'回報障礙':'【單位】於【位置】遇到【障礙】，影響【任務】，請求【措施／支援】。',
+'確認人員':'【單位】應到【人數】、實到【人數】，位置【位置】，狀態【狀態】。'
+})[b.textContent]||config.template;$('practiceResponseText').focus();});
+  const suggestions=['主攻單位回報水壓下降，原因尚待確認。','關係人補充受困位置，與初報有落差。','分區回報煙流方向改變，請重新評估。'];
+  $('practiceSuggestions').innerHTML=suggestions.map((x,i)=>`<button type="button" class="btn small ghost" data-suggestion="${i}">${['水源變化','情報落差','煙流變化'][i]}</button>`).join('');
+  $('practiceSuggestions').querySelectorAll('button').forEach(b=>b.onclick=()=>{$('practiceCustomEvent').value=suggestions[Number(b.dataset.suggestion)];});
+ }
+ const players=(live.players||[]).filter(p=>!p.ai||!(live.players||[]).some(h=>!h.ai&&(h.role===p.role||(h.role==='初期指揮官'&&p.role==='現場指揮官'))));
+ $('practicePlayerList').innerHTML=players.map(p=>`<div class="practice-player"><span>${p.ai?'AI':'真人'}</span><b>${escapeHtml(p.name)}</b><small>${escapeHtml(p.role)}</small></div>`).join('');
+ const messages=[...(live.practiceMessages||[]),...(live.practiceResponses||[]).map(x=>({...x,text:x.text,name:x.name||x.role,kind:'回應'})),...(live.logs||[]).filter(x=>!['practice'].includes(x.type)).slice(-15).map(x=>({...x,text:x.message,name:x.operator,kind:'操作'}))].sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).slice(0,40);
+ $('practiceMessageCount').textContent=`${messages.length} 則`;
+ const messageHtml=messages.length?messages.map(x=>`<article class="training-message"><div><b>${escapeHtml(x.name||x.role||'協作回報')}</b><small>${escapeHtml(x.kind||'情報')} · ${fmtTime(x.createdAt)}</small></div><p>${escapeHtml(x.text||'')}</p></article>`).join(''):'<p class="empty">開始後顯示角色回報與操作紀錄。</p>';
+ if($('practiceMessages').innerHTML!==messageHtml)$('practiceMessages').innerHTML=messageHtml;
+ const outcomes=state.outcomes||[];
+ $('practiceEventList').innerHTML=outcomes.map((o,i)=>`<article class="practice-event-item"><b>${i+1}. ${escapeHtml(o.title)}</b><p>${({respond:'已回應',timeout:'逾時',skip:'教官跳過'})[o.result]} · 用時 ${formatDuration(o.elapsedMs)}${o.late?' · 逾時回應':''}</p>${o.responseText?`<p>${escapeHtml(o.role)}：${escapeHtml(o.responseText)}</p>`:''}</article>`).join('')||'<p class="empty">尚無完成階段。</p>';
+ $('practiceEngineNote').textContent=isAiInstructor()?'AI 教官以本房間腳本與回應規則推進；房主頁面須保持開啟。離開頁面不會暫停，回來後先記錄當前階段逾時。':'由真人教官控制開始、暫停、下一階段與結束。';
+ renderTrainingReview();updateTrainingClock();startPracticeTicker();
 }
-function startPracticeTicker(){
-  if(practiceTickTimer)return;
-  practiceTickTimer=setInterval(()=>{
-    if(!isPracticeHost()||currentCase?.practiceStatus!=='running')return;
-    if(Number(currentCase.nextPracticeEventAt||0)&&Date.now()>=Number(currentCase.nextPracticeEventAt)) releaseNextPracticeEvent(true);
-  },5000);
+function updateTrainingClock(){if(!currentCase||currentCase.mode!=='practice')return;const s=trainingState();$('practiceCountdown').textContent=['running','paused'].includes(s.phase)?formatDuration(FCTraining.remaining(s,Date.now())):'--:--';$('practiceCountdown').classList.toggle('urgent',s.phase==='running'&&FCTraining.remaining(s,Date.now())<=30000);$('practiceClockLabel').textContent=s.phase==='paused'?'已暫停（記錄中）':'本階段剩餘';}
+function startPracticeTicker(){if(practiceTickTimer)return;practiceTickTimer=setInterval(()=>{updateTrainingClock();if(isPracticeHost()&&isAiInstructor())processTraining().catch(err=>toast(`演練同步失敗：${err.message}`));if(isPracticeHost())processTrainingAssistance().catch(err=>console.warn('角色回報失敗',err));},1000);}
+function stopPracticeTicker(){if(practiceTickTimer){clearInterval(practiceTickTimer);practiceTickTimer=null;}trainingRenderKey='';}
+async function trainingCommit(action){
+ if(!isPracticeHost())return false;
+ const id=currentCaseId,steps=trainingSteps(),before=trainingState(),now=Date.now();let next;
+ if(firebaseEnabled){const ref=db.collection('cases').doc(id);await db.runTransaction(async tx=>{const doc=await tx.get(ref);next=null;const old=doc.data().training||FCTraining.initial();if(old.revision!==before.revision)return;next=FCTraining.transition(old,action,steps,now);if(next){tx.update(ref,{training:next,practiceStatus:next.phase,updatedAt:now});if(next.index!==old.index&&steps[next.index])tx.update(ref.collection('simulationEvents').doc(steps[next.index].id),{released:true,releasedAt:now,releasedBy:isAiInstructor()?'AI 教官':radioCallSign()});}});}
+ else{next=FCTraining.transition(before,action,steps,now);if(next){currentCase.training=next;currentCase.practiceStatus=next.phase;saveLocalCase();}}
+ if(!next||currentCaseId!==id)return false;
+ currentCase.training=next;currentCase.practiceStatus=next.phase;
+ if(next.index!==before.index&&steps[next.index]){
+  const step=steps[next.index];if(!firebaseEnabled)await updateItem('simulationEvents',step.id,{released:true,releasedAt:now,releasedBy:isAiInstructor()?'AI 教官':radioCallSign()});
+  await emitTrainingSupport(step,next.index);
+ }
+ await addLog('practice',`${({start:'開始演練',pause:'暫停演練',resume:'繼續演練',respond:'採納回應',timeout:'逾時推進',skip:'教官跳過',finish:'結束演練'})[action.type]}｜階段 ${Math.min(next.index+1,steps.length)}`);
+ renderPracticeSession();updateAssessmentAvailability();return true;
 }
-function stopPracticeTicker(){if(practiceTickTimer){clearInterval(practiceTickTimer);practiceTickTimer=null;}}
+async function emitTrainingSupport(step,index){
+ const humans=new Set((live.players||[]).filter(x=>!x.ai).map(x=>x.role));if(humans.has('初期指揮官'))humans.add('現場指揮官');
+ const ai=(live.players||[]).filter(x=>x.ai&&!humans.has(x.role));
+ // One context-aware scripted role transmission per stage. No invented completed field operation.
+ const preferred=['單位帶隊官','分區指揮官','紀錄官','安全官','現場指揮官'][index%5];const p=ai.find(x=>x.role===preferred)||ai[0];if(!p)return;
+ const text=currentCase.learningMode==='assessment'?`【模擬回報】已收到「${step.title}」資訊，等待任務指示。`:`【模擬協作】針對「${step.title}」，請確認負責單位、作業位置與下一次回報條件。尚未回報的進度維持待確認。`;
+ const data={name:p.name,role:p.role,kind:'AI 腳本',text,eventId:step.id,createdAt:Date.now(),authorUid:profile.id};
+ if(firebaseEnabled)await db.collection('cases').doc(currentCaseId).collection('practiceMessages').doc(`support_${step.id}`).set(data);
+ else if(!(live.practiceMessages||[]).some(x=>x.eventId===step.id))await addItem('practiceMessages',data);
+}
+async function processTraining(){
+ if(trainingWork||!isPracticeHost()||trainingState().phase!=='running')return;
+ trainingWork=true;
+ try{const s=trainingState(),step=activeTrainingStep();if(!step)return;const eligible=(live.practiceResponses||[]).filter(x=>x.eventId===step.id&&x.createdAt>=s.stepStartedAt&&x.createdAt<=s.deadline).sort((a,b)=>a.createdAt-b.createdAt);
+  // In a team, only the designated trainee's response advances the shared scenario.
+  const response=eligible.find(x=>x.authorUid===currentCase.traineeUid);
+  if(response)await trainingCommit({type:'respond',eventId:step.id,response});
+  else if(Date.now()>=s.deadline)await trainingCommit({type:'timeout',eventId:step.id});
+ }finally{trainingWork=false;}
+}
 async function togglePracticeRun(){
-  if(!isPracticeHost())return;
-  const running=currentCase.practiceStatus==='running';
-  if(!running&&live.players.filter(x=>!x.ai).length<4) await fillPracticeAiRoles(true);
-  const status=running?'paused':'running';
-  await patchCurrentCase({practiceStatus:status,nextPracticeEventAt:status==='running'?Date.now()+5000:null});
-  await addLog('practice',status==='running'?'開始／繼續練習情境':'暫停練習情境');renderPracticeSession();
+ if(!isPracticeHost()||trainingWork)return;trainingWork=true;
+ try{const s=trainingState();if(s.phase==='waiting')await fillPracticeAiRoles(true);await trainingCommit({type:s.phase==='waiting'?'start':s.phase==='running'?'pause':'resume'});}finally{trainingWork=false;}
 }
-async function nextGeneratedPracticeEvent(){
-  const fallback={title:'動態情境更新',detail:'現場條件再次變化，請各角色重新確認火煙、人命、水源、戰力與安全風險並完成回報。',severity:'warning'};
-  try{
-    const response=await fetch('/api/ai-advice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'simulation_event',caseData:currentCase,players:live.players,simulationEvents:live.simulationEvents,sitreps:live.sitreps,vehicles:live.vehicles,crews:live.crews,hoses:live.hoses})});
-    const data=await response.json();if(!response.ok)throw new Error(data.error||'AI 動態情境失敗');
-    return parseScenarioResult(data.event||data.advice)||fallback;
-  }catch{return fallback;}
-}
-async function releaseNextPracticeEvent(automatic=false){
-  if(!isPracticeHost()||practiceReleaseBusy)return;
-  practiceReleaseBusy=true;
-  try{
-  let next=live.simulationEvents.filter(x=>!x.released).sort((a,b)=>(a.order||999)-(b.order||999)||(a.createdAt||0)-(b.createdAt||0))[0];
-  if(next) await updateItem('simulationEvents',next.id,{released:true,releasedAt:Date.now(),releasedBy:radioCallSign()});
-  else{
-    next=await nextGeneratedPracticeEvent();
-    await addItem('simulationEvents',{...next,order:live.simulationEvents.length+1,released:true,releasedAt:Date.now(),releasedBy:'AI 教官',createdAt:Date.now()});
-  }
-  const interval=Number(currentCase.practiceEventIntervalMs)||45000;
-  await patchCurrentCase({nextPracticeEventAt:currentCase.practiceStatus==='running'?Date.now()+interval:null,lastPracticeEventAt:Date.now()});
-  await addLog('practice',`${automatic?'自動':'手動'}發布情境：${next.title||'情境更新'}`);renderPracticeSession();
-  }finally{practiceReleaseBusy=false;}
+async function releaseNextPracticeEvent(){
+ if(!isHumanInstructor()||trainingWork||trainingState().phase!=='running')return;
+ const step=activeTrainingStep();if(!step)return;
+ const response=(live.practiceResponses||[]).filter(x=>x.eventId===step.id).sort((a,b)=>b.createdAt-a.createdAt)[0];
+ trainingWork=true;try{await trainingCommit({type:response?'respond':'skip',eventId:step.id,response});}finally{trainingWork=false;}
 }
 async function fillPracticeAiRoles(silent=false){
-  if(!isPracticeHost())return;
-  const required=['現場指揮官','安全官','紀錄官','分區指揮官','單位帶隊官'];
-  const occupied=new Set(live.players.map(x=>x.role));
-  const missing=required.filter(x=>!occupied.has(x)).slice(0,Math.max(0,5-live.players.length));
-  for(const role of missing){
-    const data={name:`AI ${role}`,role,ai:true,userId:`ai-${role}`,joinedAt:Date.now(),createdAt:Date.now()};
-    if(firebaseEnabled) await db.collection('cases').doc(currentCaseId).collection('players').doc(`ai_${role}`).set(data,{merge:true});
-    else await addItem('players',data);
-  }
-  if(missing.length)await addLog('practice',`AI 補位：${missing.join('、')}`);
-  if(!silent)toast(missing.length?`已由 AI 補上 ${missing.length} 個角色`:'目前角色已足夠');
+ if(!isPracticeHost())return;
+ const occupied=new Set((live.players||[]).map(x=>x.role));if(occupied.has('初期指揮官'))occupied.add('現場指揮官');
+ const missing=['現場指揮官','安全官','紀錄官','分區指揮官','單位帶隊官'].filter(x=>!occupied.has(x));
+ for(const role of missing){const data={name:`AI ${role}`,role,ai:true,userId:`ai-${role}`,joinedAt:Date.now(),createdAt:Date.now()};if(firebaseEnabled)await db.collection('cases').doc(currentCaseId).collection('players').doc(`ai_${role}`).set(data);else await addItem('players',data);}
+ if(!silent)toast(missing.length?`AI 已補齊 ${missing.length} 個角色`:'角色已齊全');
 }
 async function addPracticeCustomEvent(){
-  if(!isPracticeHost())return;
-  const detail=$('practiceCustomEvent')?.value.trim()||'';if(!detail){toast('請輸入臨時情境');return;}
-  const severity=$('practiceEventSeverity')?.value||'info';
-  await addItem('simulationEvents',{title:'教官臨時情境',detail,severity,order:live.simulationEvents.length+1,released:true,releasedAt:Date.now(),releasedBy:radioCallSign(),createdAt:Date.now()});
-  $('practiceCustomEvent').value='';await addLog('practice',`發布臨時情境：${detail.slice(0,80)}`);renderPracticeSession();
+ if(!isHumanInstructor())return;
+ const detail=$('practiceCustomEvent').value.trim();if(!detail)return toast('請輸入情境');
+ if(trainingState().phase==='completed')return toast('演練已結束，請建立新房間');
+ await addItem('simulationEvents',{title:'教官追加情境',detail:detail.slice(0,1200),severity:$('practiceEventSeverity').value,timeLimitSec:Math.max(30,Math.min(900,Number($('practiceCustomTime').value)||180)),order:Math.max(0,...trainingSteps().map(x=>x.order))+1,released:false});
+ $('practiceCustomEvent').value='';toast('情境已加入本次演練佇列');
 }
+async function submitTrainingResponse(){
+ const role=myTrainingRole(),text=$('practiceResponseText').value.trim(),step=activeTrainingStep();
+ if(!TRAINING_ROLES[role]||trainingState().phase!=='running'||!step||trainingSend)return;
+ if(text.length<8||/【|】/.test(text))return toast('請填入實際判斷與處置；範本中的【】必須完成或移除');
+ trainingSend=true;const id=currentCaseId;
+ try{await addItem('practiceResponses',{authorUid:profile.id,name:radioCallSign(),role,text:text.slice(0,3000),eventId:step.id,createdAt:Date.now()});if(currentCaseId!==id)return;$('practiceResponseText').value='';$('practiceResponseStatus').textContent=isAiInstructor()?'已記錄；主受測者回應後推進。':'已記錄，等待教官採納。';if(isAiInstructor())await processTraining();}finally{trainingSend=false;renderPracticeSession();}
+}
+function renderTrainingReview(){
+ const el=$('practiceReview'),s=trainingState();el.hidden=s.phase!=='completed';if(el.hidden)return;
+ const q=FCTraining.summary(s,trainingSteps());
+ el.innerHTML=`<div class="stream-title">本次演練檢討</div><div class="review-metrics"><div><strong>${q.responded}/${q.total}</strong><span>已回應情境</span></div><div><strong>${q.timingScore}</strong><span>時效參考分</span></div><div><strong>${q.timeouts}</strong><span>逾時情境</span></div><div><strong>${q.pauseCount}</strong><span>暫停 ${formatDuration(q.pauseMs)}</span></div></div><p>時效參考分＝準時回應情境／全部情境 × 100。暫停時間排除於反應時間之外，另列紀錄；本分數不表示戰術正確或訓練合格。</p><p>${q.timeouts?'建議重練逾時階段，先確認受影響單位，再說明措施與回報條件。':'已完成的回應可按「風險辨識、資訊依據、任務分派、回報條件」逐項檢討。'}${q.skipped?' 教官跳過的階段保留於時間軸，未算作完成。':''}</p><div class="button-row"><button id="copyTrainingReview" class="btn small ghost">複製檢討與時間軸</button><button id="openTrainingAssessment" class="btn small primary">完整檢討與 AI 分析</button></div>`;
+ $('openTrainingAssessment').onclick=()=>switchCasePage('assessmentSection');
+ $('copyTrainingReview').onclick=async()=>{await navigator.clipboard.writeText(`${currentCase.scenarioTitle}\n${el.innerText}\n${$('practiceEventList').innerText}`);toast('已複製演練紀錄');};
+}
+
 
 function inferPurposeFromCaseType(type=''){
   if(/住宅/.test(type)) return '住宅';
@@ -1077,7 +1148,7 @@ async function createCase(e){
   const initialPurpose=$('casePurpose')?.value || inferPurposeFromCaseType($('caseType').value);
   const newCase = {
     mode:'live',
-    schemaVersion:26,
+    schemaVersion:27,
     caseNo: nextCaseNo(),
     address,
     type: $('caseType').value,
@@ -1394,13 +1465,18 @@ function chooseLocationCandidate(candidates,address){
 
 
 function backHome(){
-  cleanupSubscriptions(); stopPracticeTicker(); currentCaseId=null; currentCase=null; pendingDeploymentVehicles=[]; mapUndoStack=[]; updateMapUndoButton();
+  clearIntake28();resourceReady28.clear();
+  cleanupSubscriptions(); stopPracticeTicker(); document.body.classList.remove('in-training'); currentCaseId=null; currentCase=null; pendingDeploymentVehicles=[]; mapUndoStack=[]; updateMapUndoButton();
   $('detailPage').hidden=true; $('homePage').hidden=false;
   subscribeCases();
 }
 function openCase(id){
+  clearIntake28();resourceReady28.clear();currentCase=null;
+  deploymentDraft27=null;selectedSds27=null;if($('deploymentDraftPreview'))$('deploymentDraftPreview').hidden=true;
+  if($('practiceResponseText'))$('practiceResponseText').value='';
+  document.querySelectorAll('#sdsKnowledgePanel input,#sdsKnowledgePanel textarea').forEach(el=>{if(el.type==='checkbox')el.checked=false;else el.value='';});
   cleanupSubscriptions(); stopPracticeTicker(); currentCaseId = id; pendingDeploymentVehicles=[]; mapUndoStack=[]; updateMapUndoButton(); renderPendingDeploymentVehicles();
-  live={vehicles:[],crews:[],hoses:[],hazards:[],sitreps:[],logs:[],players:[],simulationEvents:[]};
+  live={vehicles:[],crews:[],hoses:[],hazards:[],sitreps:[],logs:[],players:[],simulationEvents:[],practiceResponses:[],practiceMessages:[],hazardReferences:[],intakeEvents:[]};
   $('homePage').hidden=true; $('detailPage').hidden=false;
   switchCasePage('caseInfo', false);
   if(firebaseEnabled){ subscribeCaseRemote(id); }
@@ -1409,12 +1485,15 @@ function openCase(id){
 }
 function subscribeCaseRemote(id){
   const caseUnsub = db.collection('cases').doc(id).onSnapshot(doc => {
+    if(currentCaseId!==id)return;
     if(!doc.exists){ toast('此案件已不存在'); backHome(); return; }
     currentCase = { id:doc.id, ...doc.data() }; renderDetail();
   });
   unsubscribers.push(caseUnsub);
-  ['vehicles','crews','hoses','hazards','sitreps','logs','players','simulationEvents'].forEach(coll => {
+  ['vehicles','crews','hoses','hazards','sitreps','logs','players','simulationEvents','practiceResponses','practiceMessages','hazardReferences','intakeEvents'].forEach(coll => {
     const unsub = db.collection('cases').doc(id).collection(coll).onSnapshot(snap => {
+      if(currentCaseId!==id)return;
+      if(['crews','vehicles','hoses'].includes(coll))resourceReady28.add(coll);
       live[coll] = snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
       renderLiveParts();
     });
@@ -1423,6 +1502,7 @@ function subscribeCaseRemote(id){
 }
 function loadCaseLocal(id){
   currentCase = localState.cases.find(c=>c.id===id);
+  live.intakeEvents=currentCase.intakeEvents||[];
   live.vehicles = currentCase.vehicles || [];
   live.crews = currentCase.crews || [];
   live.hoses = currentCase.hoses || [];
@@ -1430,21 +1510,24 @@ function loadCaseLocal(id){
   live.sitreps = currentCase.sitreps || [];
   live.logs = currentCase.logs || [];
   live.players = currentCase.players || [];
-  live.simulationEvents = currentCase.simulationEvents || [];
+  live.simulationEvents = currentCase.simulationEvents || []; live.practiceResponses=currentCase.practiceResponses||[]; live.practiceMessages=currentCase.practiceMessages||[]; live.hazardReferences=currentCase.hazardReferences||[];
   renderDetail(); renderLiveParts();
 }
 function saveLocalCase(){
   if(!currentCase) return;
-  currentCase.vehicles = live.vehicles; currentCase.crews = live.crews; currentCase.hoses = live.hoses; currentCase.hazards = live.hazards; currentCase.sitreps = live.sitreps; currentCase.logs = live.logs; currentCase.players=live.players; currentCase.simulationEvents=live.simulationEvents;
+  currentCase.intakeEvents=live.intakeEvents||[];
+  currentCase.vehicles = live.vehicles; currentCase.crews = live.crews; currentCase.hoses = live.hoses; currentCase.hazards = live.hazards; currentCase.sitreps = live.sitreps; currentCase.logs = live.logs; currentCase.players=live.players; currentCase.simulationEvents=live.simulationEvents; currentCase.practiceResponses=live.practiceResponses||[]; currentCase.practiceMessages=live.practiceMessages||[]; currentCase.hazardReferences=live.hazardReferences||[];
   const idx = localState.cases.findIndex(c=>c.id===currentCase.id); if(idx>=0) localState.cases[idx] = currentCase;
   saveLocalState();
 }
 async function patchCurrentCase(patch={}, render=false){
-  if(!currentCase || !currentCaseId) return;
-  const data={...patch,updatedAt:patch.updatedAt||Date.now()};
+  if(currentCase?.mode==='practice'&&myTrainingRole()==='觀察員'&&!isPracticeHost())throw Error('觀察員僅可閱覽');
+  if(!currentCase||!currentCaseId)return;
+  const id=currentCaseId,data={...patch,updatedAt:patch.updatedAt||Date.now()};
+  if(firebaseEnabled)await db.collection('cases').doc(id).set(data,{merge:true});
+  if(currentCaseId!==id)return;
   Object.assign(currentCase,data);
-  if(firebaseEnabled) await db.collection('cases').doc(currentCaseId).set(data,{merge:true});
-  else { saveLocalCase(); if(render) renderLiveParts(); }
+  if(!firebaseEnabled)saveLocalCase();if(render)renderLiveParts();
 }
 function renderDetail(){
   if(!currentCase) return;
@@ -1596,6 +1679,7 @@ function renderOverviewContent(){
   }
 }
 function scheduleDerivedSummaryPersist(){
+  if(currentCase?.mode==='practice'&&myTrainingRole()==='觀察員')return;
   if(!currentCase) return;
   clearTimeout(derivedSummaryTimer);
   derivedSummaryTimer=setTimeout(persistDerivedSummary,650);
@@ -1624,6 +1708,8 @@ function renderSummaryCards(){
   renderOverviewContent();
 }
 function renderLiveParts(){
+  renderIntakeHistory28();
+  renderSds27();
   if(!currentCase) return;
   renderSummaryCards(); renderToolOptions(); renderDeploymentPalette(); renderDeploymentTextReference(); scheduleDerivedSummaryPersist(); renderMap(); renderLocationControl(); renderDashboard(); renderRules(); renderSitreps(); renderLogs(); renderCommandGuide(); renderBuildingOps(); renderPracticeSession(); renderLocalTacticalAdvice(false); updateAiAdviceButton(); updateAssessmentAvailability(); renderParCrewChecklist(); generateReport(false);
 }
@@ -2283,34 +2369,37 @@ async function updateMapItemWithUndo(coll,id,patch,label){
   pushMapUndo(`復原${label||'地圖操作'}`,async()=>updateItem(coll,id,before));
 }
 async function addItem(coll, data){
+  if(currentCase?.mode==='practice'&&myTrainingRole()==='觀察員'&&!isPracticeHost())throw Error('觀察員僅可閱覽，請以受測角色加入');
   data.createdAt = data.createdAt || Date.now();
+  if(currentCase?.mode==='practice'&&!['simulationEvents','players','practiceMessages'].includes(coll))data.authorUid=profile.id;
   if(firebaseEnabled){
-    const ref=await db.collection('cases').doc(currentCaseId).collection(coll).add(data);
-    return ref.id;
+    const parent=db.collection('cases').doc(currentCaseId),ref=parent.collection(coll).doc();
+    const batch=db.batch();batch.set(ref,data);
+    if(FCIntake.collections.includes(coll))batch.update(parent,{resourceRevision:firebase.firestore.FieldValue.increment(1)});
+    await batch.commit();return ref.id;
   }
   const id=uid(coll);
   live[coll]=live[coll]||[];
   live[coll].push({ id, ...data });
+  if(FCIntake.collections.includes(coll))currentCase.resourceRevision=(currentCase.resourceRevision||0)+1;
   saveLocalCase(); renderLiveParts();
   return id;
 }
 async function deleteMapRecordSilent(coll,id){
-  if(firebaseEnabled) await db.collection('cases').doc(currentCaseId).collection(coll).doc(id).delete();
+  if(firebaseEnabled){const parent=db.collection('cases').doc(currentCaseId),batch=db.batch();batch.delete(parent.collection(coll).doc(id));if(FCIntake.collections.includes(coll))batch.update(parent,{resourceRevision:firebase.firestore.FieldValue.increment(1)});await batch.commit();}
   else{
-    const arr=live[coll]||[]; const idx=arr.findIndex(x=>x.id===id); if(idx>=0) arr.splice(idx,1);
+    const arr=live[coll]||[]; const idx=arr.findIndex(x=>x.id===id); if(idx>=0) arr.splice(idx,1);if(FCIntake.collections.includes(coll))currentCase.resourceRevision=(currentCase.resourceRevision||0)+1;
     saveLocalCase(); renderLiveParts();
   }
 }
 async function updateItem(coll, id, patch){
+  if(currentCase?.mode==='practice'&&myTrainingRole()==='觀察員'&&!isPracticeHost())throw Error('觀察員僅可閱覽');
   patch.updatedAt = Date.now();
-  if(firebaseEnabled){ await db.collection('cases').doc(currentCaseId).collection(coll).doc(id).set(patch,{merge:true}); }
-  else { const arr=live[coll]||[]; const item=arr.find(x=>x.id===id); if(item) Object.assign(item,patch); saveLocalCase(); renderLiveParts(); }
+  if(['vehicles','crews'].includes(coll)&&('lat' in patch||'lng' in patch))patch.anchorBuilding=false;
+  if(firebaseEnabled){const parent=db.collection('cases').doc(currentCaseId),batch=db.batch();batch.set(parent.collection(coll).doc(id),patch,{merge:true});if(FCIntake.collections.includes(coll))batch.update(parent,{resourceRevision:firebase.firestore.FieldValue.increment(1)});await batch.commit();}
+  else { const arr=live[coll]||[]; const item=arr.find(x=>x.id===id); if(item) Object.assign(item,patch);if(FCIntake.collections.includes(coll))currentCase.resourceRevision=(currentCase.resourceRevision||0)+1; saveLocalCase(); renderLiveParts(); }
 }
-async function deleteItem(coll, id, label='資料'){
-  if(firebaseEnabled){ await db.collection('cases').doc(currentCaseId).collection(coll).doc(id).delete(); }
-  else { const arr=live[coll]; const idx=arr.findIndex(x=>x.id===id); if(idx>=0) arr.splice(idx,1); saveLocalCase(); renderLiveParts(); }
-  await addLog(coll, `刪除${label}`);
-}
+async function deleteItem(coll,id,label='資料'){await deleteMapRecordSilent(coll,id);await addLog(coll,`刪除${label}`);}
 
 function openActionSheet(title,html){
   const sheet=$('appActionSheet'); if(!sheet) return;
@@ -2637,17 +2726,19 @@ function syncBuildingBoxForm(){
   if(lock) lock.hidden=!!box.locked;
 }
 async function saveBuildingBox(patch={}, message='更新建物中心框',options={}){
-  if(!currentCase) return;
-  const before={...getBuildingBox()};
-  const next = Object.assign(before, patch, {rotationDeg:normalizeRotationDeg(patch.rotationDeg??before.rotationDeg),updatedAt:Date.now()});
-  currentCase.buildingBox = next;
-  if(firebaseEnabled) await db.collection('cases').doc(currentCaseId).set({buildingBox:next, updatedAt:Date.now()},{merge:true});
-  else saveLocalCase();
-  if(!options.skipUndo && !suppressMapUndo){
-    pushMapUndo(`復原：${message}`,async()=>saveBuildingBox(before,'復原建物中心框',{skipUndo:true}));
+  if(!currentCase)return;
+  const before={...getBuildingBox()},next={...before,...patch,rotationDeg:normalizeRotationDeg(patch.rotationDeg??before.rotationDeg),updatedAt:Date.now()};
+  const updates=[];
+  if(next.rotationDeg!==before.rotationDeg||next.lat!==before.lat||next.lng!==before.lng){
+    for(const coll of ['vehicles','crews'])for(const item of live[coll].filter(x=>x.anchorBuilding)){
+      const pt=latLngToLocalPoint(before,item.lat,item.lng),moved=localPointToLatLng(next,pt.x,pt.y);updates.push({coll,id:item.id,patch:moved});
+    }
   }
-  syncBuildingBoxForm(); renderMap(); renderCommandGuide(); renderOverviewContent();
-  await addLog('map', message);
+  if(firebaseEnabled){const batch=db.batch(),ref=db.collection('cases').doc(currentCaseId);batch.update(ref,{buildingBox:next,resourceRevision:firebase.firestore.FieldValue.increment(1),updatedAt:Date.now()});for(const x of updates)batch.update(ref.collection(x.coll).doc(x.id),x.patch);await batch.commit();}
+  else{for(const x of updates)Object.assign(live[x.coll].find(v=>v.id===x.id),x.patch);}
+  currentCase.buildingBox=next;if(!firebaseEnabled){currentCase.resourceRevision=(currentCase.resourceRevision||0)+1;saveLocalCase();}
+  if(!options.skipUndo&&!suppressMapUndo)pushMapUndo(`復原：${message}`,()=>saveBuildingBox(before,'復原建物框',{skipUndo:true}));
+  syncBuildingBoxForm();renderMap();renderCommandGuide();renderOverviewContent();await addLog('map',message);
 }
 function saveBuildingBoxFromForm(){ toast('請直接在地圖拖曳建物框中心、大小或旋轉控制點。',3600); }
 function setBuildingBoxLock(locked){ saveBuildingBox({locked}, locked?'鎖定建物中心框':'解鎖建物中心框'); }
@@ -2761,7 +2852,7 @@ function renderSitreps(){
   </div>`).join('') : '<div class="empty">尚無戰情回報。各單位可在此回報火勢、人車移動、部署、搜救、支援等進度。</div>';
 }
 
-function caseIsClosed(){ return currentCase?.status === 'closed' || currentCase?.closedAt; }
+function caseIsClosed(){ if(currentCase?.mode==='practice'&&trainingState().phase==='completed')return true; return currentCase?.status === 'closed' || currentCase?.closedAt; }
 function updateAssessmentAvailability(){
   const btn=$('aiAssessmentBtn'); const draft=$('assessmentDraft');
   if(!btn) return;
@@ -2769,8 +2860,8 @@ function updateAssessmentAvailability(){
   btn.textContent = closed ? '產生 AI 檢討評估' : '結案後才能產生 AI 檢討評估';
   if(draft && !closed) draft.placeholder = '本功能為結案後才能使用，避免火場進行中誤觸消耗 token。';
 }
-async function closeCase(){ if(!currentCase) return; if(!confirm(currentCase.mode==='practice'?'確認結束並關閉這個練習房間？':'確認將本案標記為結案？結案後可產生 AI 檢討評估報告。')) return; const patch={status:'closed',closedAt:Date.now(),updatedAt:Date.now(),...(currentCase.mode==='practice'?{practiceStatus:'closed',nextPracticeEventAt:null}:{})}; Object.assign(currentCase,patch); if(firebaseEnabled) await db.collection('cases').doc(currentCaseId).set(patch,{merge:true}); else saveLocalCase(); await addLog('case',currentCase.mode==='practice'?'練習房間已結束':'案件標記結案'); updateAssessmentAvailability(); renderPracticeSession(); toast(currentCase.mode==='practice'?'已結束練習房間':'已標記結案'); }
-async function reopenCase(){ if(!currentCase) return; const patch={status:'active',closedAt:null,updatedAt:Date.now(),...(currentCase.mode==='practice'?{practiceStatus:'waiting'}:{})}; Object.assign(currentCase,patch); if(firebaseEnabled) await db.collection('cases').doc(currentCaseId).set(patch,{merge:true}); else saveLocalCase(); await addLog('case',currentCase.mode==='practice'?'練習房間重新開啟':'案件重新開啟'); updateAssessmentAvailability(); renderPracticeSession(); toast(currentCase.mode==='practice'?'已重新開啟練習房間':'已重新開啟案件'); }
+async function closeCase(){ if(!currentCase) return; if(currentCase.mode==='practice'){if(!isPracticeHost())return toast('由教官或房主關閉房間');if(trainingState().phase!=='completed'){if(!isHumanInstructor())return toast('AI 演練請先完成情境；需要休息時可暫停');await trainingCommit({type:'finish',reason:'真人教官結束演練'});}} if(!confirm(currentCase.mode==='practice'?'確認結束並關閉這個練習房間？':'確認將本案標記為結案？結案後可產生 AI 檢討評估報告。')) return; const patch={status:'closed',closedAt:Date.now(),updatedAt:Date.now(),...(currentCase.mode==='practice'?{practiceStatus:'closed',nextPracticeEventAt:null}:{})}; Object.assign(currentCase,patch); if(firebaseEnabled) await db.collection('cases').doc(currentCaseId).set(patch,{merge:true}); else saveLocalCase(); await addLog('case',currentCase.mode==='practice'?'練習房間已結束':'案件標記結案'); updateAssessmentAvailability(); renderPracticeSession(); toast(currentCase.mode==='practice'?'已結束練習房間':'已標記結案'); }
+async function reopenCase(){ if(!currentCase) return; if(currentCase.mode==='practice')return toast('請建立新練習房間，保留本次評估紀錄'); const patch={status:'active',closedAt:null,updatedAt:Date.now(),...(currentCase.mode==='practice'?{practiceStatus:'waiting'}:{})}; Object.assign(currentCase,patch); if(firebaseEnabled) await db.collection('cases').doc(currentCaseId).set(patch,{merge:true}); else saveLocalCase(); await addLog('case',currentCase.mode==='practice'?'練習房間重新開啟':'案件重新開啟'); updateAssessmentAvailability(); renderPracticeSession(); toast(currentCase.mode==='practice'?'已重新開啟練習房間':'已重新開啟案件'); }
 async function generateAssessmentReport(){
   const text = assessmentLocalText();
   if($('assessmentDraft')) $('assessmentDraft').value = text;
@@ -2787,7 +2878,7 @@ async function requestAiAssessment(){
   $('aiAdviceStatus') && ($('aiAdviceStatus').textContent = '正在呼叫 AI 產生檢討評估，請稍候…');
   try{
     const payload = { mode:'assessment', caseData: currentCase, vehicles: live.vehicles, crews: live.crews, hoses: live.hoses, hazards: live.hazards, sitreps: live.sitreps, logs: live.logs, players:live.players, simulationEvents:live.simulationEvents.filter(x=>x.released), buildingOps: getBuildingOps(), localRules: localTacticalAdviceText(), assessmentDraft: assessmentLocalText() };
-    const res = await fetch('/api/ai-advice', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+    const res = await authenticatedAI('/api/ai-advice', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
     const data = await res.json();
     if(!res.ok) throw new Error(data.error || 'AI 檢討評估呼叫失敗');
     const text = data.advice || '';
@@ -2862,7 +2953,7 @@ function renderRules(){
   if(!currentCase?.aiLastAdvice) setAiAdviceText(localTacticalAdviceText());
 }
 function renderLogs(){ const el=$('logList'); if(!el) return; el.innerHTML = live.logs.length ? live.logs.slice().reverse().map(l=>`<div class="log"><div class="log-time">${fmtTime(l.createdAt)}｜${escapeHtml(l.type)}｜${escapeHtml(l.operator||'')}</div><div>${escapeHtml(l.message)}</div></div>`).join('') : '<div class="empty">尚無時間軸紀錄。</div>'; }
-async function addLog(type, message){ if(firebaseEnabled) await addLogRemote(currentCaseId,type,message); else { live.logs.push({id:uid('log'),type,message,createdAt:Date.now(),operator:profile.callName}); saveLocalCase(); renderLogs(); } }
+async function addLog(type, message){ if(firebaseEnabled) await addLogRemote(currentCaseId,type,message); else { live.logs.push({id:uid('log'),type,message,createdAt:Date.now(),operator:profile.callName}); saveLocalCase(); renderLogs(); if(currentCase?.mode==='practice')renderPracticeSession(); } }
 async function addLogRemote(caseId,type,message){ await db.collection('cases').doc(caseId).collection('logs').add({type,message,createdAt:Date.now(),operator:profile.callName,operatorId:profile.id}); }
 function renderPhotos(){}
 function formatDurationMinutes(mins){
@@ -3048,7 +3139,7 @@ async function generateAIReport(scroll=false){
   renderReportPreview($('reportDraft').value);
   try{
     const payload = { mode:'report', caseData: currentCase, vehicles: live.vehicles, crews: live.crews, hoses: live.hoses, hazards: live.hazards, sitreps: live.sitreps, players:live.players, simulationEvents:live.simulationEvents.filter(x=>x.released), buildingOps: getBuildingOps(), localRules: localTacticalAdviceText(), baseReport: local, reportInstruction:'請產出正式給長官檢閱的火場進度報告；僅保留一、火場概要與目前發展 二、目前部署與戰力概況 三、各單位戰情及傷患者回報彙整 四、建物內部作戰圖與戰術部署摘要 五、目前注意事項與建議。請使用正式標題、次標題與完整段落；必要時才使用一般條列。不得使用 Markdown 星號、井字號或粗體符號，不得把每一句包成獨立方框。第四節不得逐項列出入口、隔間、水線等繪圖工具紀錄，僅做整體說明，詳細位置由附圖呈現。不得列出操作歷程、時間軸清單、檢討與後續評估章節。' };
-    const res = await fetch('/api/ai-advice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const res = await authenticatedAI('/api/ai-advice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const data = await res.json();
     if(!res.ok) throw new Error(data.error || 'AI 報告產生失敗');
     $('reportDraft').value = sanitizeReportText(data.advice || local);
@@ -3097,7 +3188,7 @@ function buildFullSpeech(){
   }
   const deployment=[];
   const deploymentText=effectiveDeploymentSummary();
-  const useAuthoredDeployment=!!(c.deploymentTextRecord || c.deploymentTextSource==='map-generated');
+  const useAuthoredDeployment=!!(c.deploymentTextRecord || ['map-generated','intake'].includes(c.deploymentTextSource));
   if(deploymentText && (useAuthoredDeployment || !live.crews.length)) deployment.push(deploymentText);
   if(live.crews.length && !useAuthoredDeployment) deployment.push(...live.crews.map(x=>`${x.face?`${x.face}由`:''}${x.unit||'人員'}${x.task?`執行${x.task}`:''}`));
   if(c.ritSet) deployment.push(`律定${c.ritUnit||'指定單位'}擔任RIT救援小組`);
@@ -3985,7 +4076,7 @@ function deploymentMapSummary(){
     lines.push(...live.vehicles.map(x=>`${vehicleDisplayName(x)}${x.task?`執行${x.task}`:x.status?`為${x.status}`:''}`));
   }
   if(live.hoses.length){
-    lines.push(...live.hoses.map((x,i)=>`${x.label||x.owner||`第${i+1}線`}${x.targetName?`接至${x.targetName}`:''}${x.mission?`執行${x.mission}`:''}`));
+    lines.push(...live.hoses.map((x,i)=>`${x.vehicleName||x.label||x.owner||`第${i+1}線`}${x.targetName?`接至${x.targetName}`:''}${x.mission?`執行${x.mission}`:''}`));
   }
   if(live.hazards.length){
     const names=[...new Set(live.hazards.map(x=>x.type||x.name||x.label).filter(Boolean))];
@@ -4005,7 +4096,7 @@ function deploymentMapSignature(){
   const raw=JSON.stringify({
     vehicles:keep(live.vehicles,['name','unit','task','status','lat','lng']),
     crews:keep(live.crews,['unit','leader','face','task','status','count','lat','lng']),
-    hoses:keep(live.hoses,['label','owner','targetName','mission','type']),
+    hoses:keep(live.hoses,['id','vehicleId','vehicleName','targetType','targetId','label','owner','targetName','mission','type']),
     hazards:keep(live.hazards,['type','name','label','lat','lng']),
     floorActions:keep(ops.floorActions||[],['floor','action','note']),
     planMarkers:keep(ops.planMarkers||[],['floor','type','label','note','x','y','x2','y2'])
@@ -4033,6 +4124,7 @@ function deploymentRecordsConflict(text=$('deploymentTextRecord')?.value||curren
   return matched.length<threshold;
 }
 function effectiveDeploymentSummary(){
+  if(currentCase?.deploymentTextSource==='intake')return deploymentMapSummary();
   const draft=$('deploymentTextRecord')?.value?.trim();
   if(draft) return draft;
   if(currentCase?.deploymentTextRecord) return String(currentCase.deploymentTextRecord).trim();
@@ -4045,7 +4137,7 @@ function renderDeploymentTextReference(dirty=false){
   if(!currentCase) return;
   const textarea=$('deploymentTextRecord');
   if(textarea && !dirty && document.activeElement!==textarea) textarea.value=currentCase.deploymentTextRecord||'';
-  const manual=textarea?.value.trim()||currentCase.deploymentTextRecord||'';
+  const manual=deploymentTextSource==='intake'?'':(textarea?.value.trim()||currentCase.deploymentTextRecord||'');
   const mapText=deploymentMapSummary();
   const storedStillMatches=currentCase.deploymentMapSignature===deploymentMapSignature();
   const text=manual||((deploymentTextSource==='map-generated'&&storedStillMatches)?currentCase.deploymentMapSummary:'')||mapText||currentCase.deploymentMapSummary||'';
@@ -4099,7 +4191,7 @@ async function generateAiDeploymentSummary(){
   const btn=$('aiDeploymentSummaryBtn'); if(btn){btn.disabled=true;btn.textContent='AI 整理中…';}
   let summary=fallback;
   try{
-    const response=await fetch('/api/ai-advice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'deployment',caseData:currentCase,vehicles:live.vehicles,crews:live.crews,hoses:live.hoses,hazards:live.hazards,buildingOps:currentCase.buildingOps})});
+    const response=await authenticatedAI('/api/ai-advice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'deployment',caseData:currentCase,vehicles:live.vehicles,crews:live.crews,hoses:live.hoses,hazards:live.hazards,buildingOps:currentCase.buildingOps})});
     const data=await response.json(); if(!response.ok) throw new Error(data.error||'AI 整理失敗');
     summary=sanitizeAdviceText(data.advice||fallback).replace(/\n+/g,'；');
   }catch(err){
@@ -4239,7 +4331,7 @@ async function requestAiAdvice(options={}){
   $('aiAdviceStatus') && ($('aiAdviceStatus').textContent = '正在呼叫 AI，請稍候…');
   try{
     const payload = { mode:'advice', caseData: currentCase, vehicles: live.vehicles, crews: live.crews, hoses: live.hoses, hazards: live.hazards, sitreps: live.sitreps, logs: live.logs, buildingOps: getBuildingOps(), localRules: localTacticalAdviceText() };
-    const res = await fetch('/api/ai-advice', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+    const res = await authenticatedAI('/api/ai-advice', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
     const data = await res.json();
     if(!res.ok) throw new Error(data.error || 'AI 呼叫失敗');
     const cleanedAdvice=setAiAdviceText(data.advice || '');
@@ -4273,4 +4365,72 @@ function maybeAutoAiAdvice(){
   requestAiAdvice({silent:true});
 }
 setInterval(updateAiAdviceButton, 30000);
+let deploymentDraft27=null,deploymentApplyBusy=false;
+function safeRun27(fn){return async(...args)=>{try{return await fn(...args);}catch(err){console.error(err);toast(err.message||'操作失敗，請重試',5000);}};}
+async function authenticatedAI(url,options={}){
+ if(options.body){const body=JSON.parse(options.body);if(body.caseData)body.caseData=Object.fromEntries(Object.entries(body.caseData).filter(([k])=>!['vehicles','crews','hoses','hazards','logs','sitreps','players','simulationEvents','practiceResponses','practiceMessages','hazardReferences','intakeEvents'].includes(k)));if(['advice','report','assessment'].includes(body.mode||'advice'))body.hazardReferences=(live.hazardReferences||[]).map(r=>({productName:r.productName,supplier:r.supplier,cas:r.cas,un:r.un,concentration:r.concentration,revision:r.revision,sourceUrl:r.sourceUrl,sourceName:r.sourceFile?.name||'',sha256:r.sourceFile?.sha256||'',reviewedBy:r.reviewedBy,reviewedAt:r.reviewedAt,sections:r.sections}));options={...options,body:JSON.stringify(body)};}
+ const token=firebaseEnabled&&firebase.auth().currentUser?await firebase.auth().currentUser.getIdToken():'';
+ return fetch(url,{...options,headers:{...(options.headers||{}),...(token?{Authorization:`Bearer ${token}`}:{})},signal:options.signal||AbortSignal.timeout(45000)});
+}
+function initV27(){
+ $('practiceInstructorMode').onchange=()=>{const human=$('practiceInstructorMode').value==='human';$('practiceHostRole').disabled=human;};
+ $('moreNavBtn').onclick=()=>{openActionSheet('更多功能',`<div class="more-grid">${[['aiSection','AI 建議與化災資料'],['dashboardSection','人員與車輛'],['reportSection','進度報告'],['assessmentSection','檢討評估']].map(([id,label])=>`<button type="button" class="btn ghost" data-more-page="${id}">${label}</button>`).join('')}</div>`);$('appActionBody').querySelectorAll('[data-more-page]').forEach(b=>b.onclick=()=>{switchCasePage(b.dataset.morePage);closeActionSheet();});};
+ $('submitPracticeResponse').onclick=safeRun27(submitTrainingResponse);
+ $('practiceResponseVoice').onclick=()=>startSpeechFor27('practiceResponseText');
+ $('endPracticeBtn').onclick=safeRun27(async()=>{if(isHumanInstructor())await trainingCommit({type:'finish',reason:'真人教官判定演練結束'});});
+ $('parseDeploymentBtn').onclick=safeRun27(parseDeployment27);
+ $('rotateDeploymentBtn').onclick=safeRun27(()=>saveBuildingBox({rotationDeg:getBuildingBox().rotationDeg+90},'旋轉建物 90°，保留連結'));
+ installSds27();
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden){updateTrainingClock();if(isAiInstructor())safeRun27(processTraining)();}});
+}
+function startSpeechFor27(id){const caseId=currentCaseId,Speech=window.SpeechRecognition||window.webkitSpeechRecognition;if(!Speech)return toast('此瀏覽器請使用鍵盤的麥克風語音輸入');const rec=new Speech();rec.lang='zh-TW';rec.interimResults=false;rec.onresult=e=>{if(currentCaseId!==caseId)return;$(id).value=($(id).value+' '+e.results[0][0].transcript).trim();$(id).dispatchEvent(new Event('input'));};rec.onerror=()=>toast('語音未完成，可改用鍵盤麥克風或文字');rec.start();}
+
+async function parseDeployment27(){openIntake28($('deploymentTextRecord').value.trim());}
+const SDS_SECTIONS=['化學品與廠商資料','危害辨識','成分辨識','急救措施','滅火措施','洩漏處理','安全處置與儲存','暴露預防與防護','物理及化學性質','安定性與反應性','毒性資料','生態資料','廢棄處置','運送資料','法規資料','其他資料與版本'];
+let selectedSds27=null;
+function installSds27(){
+ const card=document.createElement('details');card.className='accordion sds-card';card.id='sdsKnowledgePanel';
+ card.innerHTML=`<summary><span>化災資料與 SDS</span><span class="chevron">›</span></summary><div class="accordion-body"><p>安全資料表（SDS，舊稱 MSDS）記錄產品成分、危害與應變資訊。先核對產品、製造商及濃度，再使用對應版本。</p><div class="source-links"><a href="https://ghs.osha.gov.tw/cht/intro/search.aspx" target="_blank" rel="noopener noreferrer">職安署危害資料</a><a href="https://toxicdms.moenv.gov.tw/Chm" target="_blank" rel="noopener noreferrer">環境部毒化物查詢</a><a href="https://www.phmsa.dot.gov/training/hazmat/erg/emergency-response-guidebook-erg" target="_blank" rel="noopener noreferrer">ERG 運輸事故初期指引</a></div><p class="hint">官方查詢入口於 2026-09-07 核對；目前提供外部查詢及上傳資料整理，不宣稱已連接即時 SDS 搜尋。一般物質資料不能直接取代現場產品 SDS。</p><div class="field"><label for="sdsFilter27">搜尋本案件資料（品名／CAS／UN）</label><input id="sdsFilter27" placeholder="輸入名稱或編號" /></div><div id="sdsSavedList27"></div><details class="sub-accordion"><summary>新增 SDS 或危害資料</summary><div class="field"><label for="sdsFile27">原始資料（PDF／圖片／文字，400 KB 內）</label><input id="sdsFile27" type="file" accept=".pdf,.txt,.md,image/*" /><p class="hint">原檔與摘錄會儲存在此案件；較大文件可填官方或製造商原文連結，再貼上摘錄。</p></div><div class="two-col"><div class="field"><label>產品名稱</label><input id="sdsProduct27" /></div><div class="field"><label>製造商／資料單位</label><input id="sdsSupplier27" /></div><div class="field"><label>CAS 號碼</label><input id="sdsCas27" /></div><div class="field"><label>UN 編號</label><input id="sdsUn27" /></div><div class="field"><label>濃度／混合物</label><input id="sdsConcentration27" /></div><div class="field"><label>修訂日期（原文未載填未知）</label><input id="sdsRevision27" placeholder="例：2025-03-10／未知" /></div></div><div class="field"><label>原文連結</label><input id="sdsUrl27" type="url" placeholder="https://" /></div><div class="field"><label>原文摘錄（可直接貼上）</label><textarea id="sdsText27" rows="4" placeholder="依原文整理；不知道的欄位維持未知"></textarea></div><button id="sdsExtract27" type="button" class="btn small ghost">AI 整理原文</button><p id="sdsExtractStatus27" class="hint" aria-live="polite"></p><details class="sub-accordion"><summary>核對 16 項內容</summary><div class="sds-sections">${SDS_SECTIONS.map((x,i)=>`<div class="field"><label for="sdsSection${i+1}">${i+1}. ${x}</label><textarea id="sdsSection${i+1}" rows="2" placeholder="原文未提供"></textarea></div>`).join('')}</div></details><label class="check"><input id="sdsConfirmed27" type="checkbox" />我已對照原始文件核對產品與摘錄</label><button id="sdsSave27" type="button" class="btn primary full">儲存本案件參考資料</button></details></div>`;
+ $('aiSection').prepend(card);
+ $('sdsFilter27').oninput=renderSds27;
+ $('sdsFile27').onchange=safeRun27(async e=>{const f=e.target.files[0];selectedSds27=null;if(!f)return;if(f.size>400*1024){e.target.value='';throw Error('原檔超過 400 KB；請改填原文連結與摘錄');}const buffer=await f.arrayBuffer();const hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',buffer))].map(x=>x.toString(16).padStart(2,'0')).join('');const dataUrl=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(f);});selectedSds27={name:f.name,type:f.type||'text/plain',dataUrl,sha256:hash};if(/text|json/.test(f.type)||/\.(txt|md)$/i.test(f.name))$('sdsText27').value=await f.text();$('sdsConfirmed27').checked=false;});
+ $('sdsExtract27').onclick=safeRun27(extractSds27);$('sdsSave27').onclick=safeRun27(saveSds27);
+ card.addEventListener('input',e=>{if(e.target.id!=='sdsConfirmed27')$('sdsConfirmed27').checked=false;});
+}
+async function extractSds27(){
+ if(!selectedSds27&&!$('sdsText27').value.trim())throw Error('請先上傳資料或貼上原文');const caseId=currentCaseId;const btn=$('sdsExtract27');btn.disabled=true;$('sdsExtractStatus27').textContent='正在依原文整理…';
+ try{const res=await authenticatedAI('/api/ai-advice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'sds_extract',text:$('sdsText27').value.slice(0,22000),sourceFile:selectedSds27})});const data=await res.json();if(!res.ok)throw Error(data.error||'整理失敗');if(currentCaseId!==caseId)return;const s=data.sds;for(const [key,id]of Object.entries({productName:'sdsProduct27',supplier:'sdsSupplier27',cas:'sdsCas27',un:'sdsUn27',concentration:'sdsConcentration27',revision:'sdsRevision27'}))if(s[key])$(id).value=String(s[key]);for(let i=1;i<=16;i++)$('sdsSection'+i).value=String(s.sections?.[i]||'原文未提供');$('sdsConfirmed27').checked=false;$('sdsExtractStatus27').textContent='AI 摘錄完成，尚未核對；請對照原始文件後儲存。';}
+ catch(err){$('sdsExtractStatus27').textContent='AI 未完成，原文仍保留，可手動整理後儲存。';throw err;}finally{btn.disabled=false;}
+}
+async function saveSds27(){
+ if(!$('sdsConfirmed27').checked)throw Error('請先核對原始資料並勾選確認');const productName=$('sdsProduct27').value.trim(),sourceUrl=$('sdsUrl27').value.trim();if(!productName)throw Error('請填產品名稱');if(!selectedSds27&&!sourceUrl)throw Error('請附原檔或原文連結，以便查證');if(sourceUrl){const u=new URL(sourceUrl);if(!['https:','http:'].includes(u.protocol))throw Error('原文連結需為 HTTPS 或 HTTP');}
+ const record={productName,supplier:$('sdsSupplier27').value.trim()||'未知',cas:$('sdsCas27').value.trim()||'未知',un:$('sdsUn27').value.trim()||'未知',concentration:$('sdsConcentration27').value.trim()||'未知',revision:$('sdsRevision27').value.trim()||'未知',sourceUrl,sourceFile:selectedSds27||null,excerpt:$('sdsText27').value.slice(0,22000),sections:Object.fromEntries(SDS_SECTIONS.map((x,i)=>[String(i+1),$('sdsSection'+(i+1)).value.slice(0,3000)||'原文未提供'])),reviewedBy:radioCallSign(),authorUid:profile.id,reviewedAt:Date.now()};
+ await addItem('hazardReferences',record);$('sdsConfirmed27').checked=false;await addLog('hazard',`已核對並新增 SDS 參考：${productName}｜版本 ${record.revision}`);renderSds27();toast('原文與參考內容已儲存');
+}
+function renderSds27(){
+ const el=$('sdsSavedList27');if(!el)return;const q=($('sdsFilter27').value||'').toLowerCase();const records=(live.hazardReferences||[]).filter(x=>[x.productName,x.cas,x.un].join(' ').toLowerCase().includes(q));
+ const html=records.map(r=>`<details class="sub-accordion"><summary>${escapeHtml(r.productName)} · 版本 ${escapeHtml(r.revision)}</summary><p>${escapeHtml(r.supplier)}｜CAS ${escapeHtml(r.cas)}｜UN ${escapeHtml(r.un)}｜濃度 ${escapeHtml(r.concentration)}</p><p class="hint">${escapeHtml(r.reviewedBy)} 於 ${new Date(r.reviewedAt).toLocaleString('zh-TW')} 核對；來源版本未必為最新。</p>${r.sourceUrl&&/^https?:\/\//i.test(r.sourceUrl)?`<a href="${escapeHtml(r.sourceUrl)}" target="_blank" rel="noopener noreferrer">開啟原文</a>`:''}${r.sourceFile?.dataUrl?`<button class="btn small ghost" data-sds-download="${escapeHtml(r.id)}">下載原始資料</button>`:''}<div class="sds-summary-grid">${[2,4,5,6,8,10,14].map(i=>`<section><b>${i}. ${SDS_SECTIONS[i-1]}</b><p>${escapeHtml(r.sections?.[i]||'原文未提供')}</p></section>`).join('')}</div><details><summary>完整 16 項與原文摘錄</summary>${SDS_SECTIONS.map((label,i)=>`<p><b>${i+1}. ${label}</b><br>${escapeHtml(r.sections?.[i+1]||'原文未提供')}</p>`).join('')}<pre>${escapeHtml(r.excerpt||'')}</pre></details></details>`).join('')||'<p class="empty">尚無符合的已核對資料。</p>';
+ if(el.innerHTML===html)return;el.innerHTML=html;
+ el.querySelectorAll('[data-sds-download]').forEach(b=>b.onclick=()=>{const r=records.find(x=>x.id===b.dataset.sdsDownload);const link=document.createElement('a');link.href=r.sourceFile.dataUrl;link.download=r.sourceFile.name;link.click();});
+}
+
+let trainingAssistBusy=false;
+async function processTrainingAssistance(){
+ if(trainingAssistBusy||!isPracticeHost()||!['running','paused'].includes(trainingState().phase))return;
+ const responses=(live.practiceResponses||[]).slice().sort((a,b)=>a.createdAt-b.createdAt);
+ const response=responses.find(r=>!(live.practiceMessages||[]).some(m=>m.responseId===r.id));if(!response)return;
+ const humanRoles=new Set(live.players.filter(p=>!p.ai).map(p=>p.role));if(humanRoles.has('初期指揮官'))humanRoles.add('現場指揮官');
+ const actors=live.players.filter(p=>p.ai&&!humanRoles.has(p.role));
+ const actor=actors.find(p=>p.role==='單位帶隊官')||actors.find(p=>p.role==='現場指揮官')||actors[0];if(!actor)return;
+ trainingAssistBusy=true;const roomId=currentCaseId;let kind='AI 腳本',text=`【模擬回應】已收到${response.role}回報：「${response.text.slice(0,160)}」。尚未確認的作業結果維持待回報。`;
+ try{
+  try{const res=await authenticatedAI('/api/ai-advice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'simulation_role',role:actor.role,response:{text:response.text,role:response.role},event:trainingSteps().find(e=>e.id===response.eventId)})});const data=await res.json();if(res.ok&&data.message?.text){text='【模擬回應】'+String(data.message.text).slice(0,600);kind='AI 角色';}}catch{}
+  if(currentCaseId!==roomId)return;
+  const record={name:actor.name,role:actor.role,kind,text,responseId:response.id,eventId:response.eventId,authorUid:profile.id,createdAt:Date.now()};
+  if(firebaseEnabled)await db.collection('cases').doc(roomId).collection('practiceMessages').doc('reply_'+response.id).set(record);
+  else await addItem('practiceMessages',record);
+ }finally{trainingAssistBusy=false;}
+}
 init();
+initV27();
+initV28();

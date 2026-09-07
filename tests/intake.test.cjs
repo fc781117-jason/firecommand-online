@@ -1,0 +1,21 @@
+const {test}=require('node:test'),assert=require('node:assert/strict'),C=require('../assets/intake-core');
+const roster=[{unit:'淡水',brigade:'第三大隊'},{unit:'竹圍',brigade:'第三大隊'},{unit:'滬尾',brigade:'第三大隊'}];
+const empty=()=>({crews:[],vehicles:[],hoses:[]});
+const plan=(text,state=empty(),choices={})=>C.plan(C.parse(text,roster,choices),state);
+function apply(text,state=empty(),choices={}){const p=plan(text,state,choices);assert.deepEqual(p.issues,[]);return C.apply(p,state);}
+test('首報：別字校正；無面向仍報到並計入人數',()=>{const p=plan('但水4人報到；主委6人第三面搜救；戶尾四人報到');assert.equal(p.totalAfter,14);assert.equal(p.corrections.length,3);assert.deepEqual(p.issues,[]);assert.equal(p.after.crews[0].staged,true);assert.equal(p.after.crews[1].face,'第三面');});
+test('相同絕對回報再次辨識：不重複建立、不重複計數',()=>{const s=apply('淡水4人報到');const p=plan('淡水4人報到',s);assert.equal(p.writes.length,0);assert.equal(p.totalAfter,4);});
+test('二報：新增單位並更正既有人數，保留 ID',()=>{const first=apply('淡水4人報到'),next=apply('淡水人數修正為6人；竹圍3人報到',first);assert.equal(next.crews[0].id,first.crews[0].id);assert.equal(next.crews.reduce((n,c)=>n+c.count,0),9);});
+test('增量、減量與絕對數有不同語意',()=>{let s=apply('淡水4人報到');s=apply('淡水新增2人',s);assert.equal(s.crews[0].count,6);s=apply('淡水減少1人',s);assert.equal(s.crews[0].count,5);s=apply('淡水人數從5人修正為3人',s);assert.equal(s.crews[0].count,3);});
+test('多組同分隊：必須選擇；不會覆蓋或加總到任一組',()=>{const s=apply('竹圍A組4人报到'.replace('报','報')+'；竹圍B組3人報到');const p=plan('竹圍修正為6人',s);assert.equal(p.issues[0].candidates.length,2);assert.equal(p.writes.length,0);const picked=plan('竹圍修正為6人',s,{'target:0':s.crews[1].id});assert.equal(picked.issues.length,0);assert.equal(picked.after.crews[0].count,4);assert.equal(picked.after.crews[1].count,6);});
+test('相似單位僅提供候選，選擇後才轉成操作',()=>{const p=plan('淡火4人報到');assert.equal(p.writes.length,0);assert.ok(p.issues[0].candidates.includes('淡水'));assert.equal(plan('淡火4人報到',empty(),{'name:0':'淡水'}).after.crews[0].count,4);});
+test('主委出現在非單位上下文，不直接置換成分隊',()=>{assert.equal(C.normalize('已通知主委到場',roster).corrected,'已通知主委到場');});
+test('多個單位、人數或否定／條件語句不會靜默當成一組',()=>{for(const text of ['淡水4人竹圍6人','淡水4人6人','淡水4人尚未到場','淡水可能6人','淡水4人受傷','淡水4人如果到場'])assert.ok(plan(text).issues.length,text);});
+test('零人與超限數字；沒有報到人數不猜測',()=>{assert.ok(plan('淡水報到').issues.length);assert.ok(plan('淡水100人報到').issues.length);const s=apply('淡水4人報到');assert.equal(apply('淡水修正為零人',s).crews[0].count,0);assert.ok(plan('淡水減少5人',s).issues.length);});
+test('水線絕對條數重複回報不重複建立；口述車號自動校正',()=>{const text='淡水六一供水給淡水一一；淡水11第一面出兩線';const s=apply(text);assert.equal(s.vehicles.length,2);assert.equal(s.hoses.length,3);assert.equal(plan(text,s).writes.length,0);});
+test('同一水線改接保留 ID；車輛移位也不改接線架構',()=>{const s=apply('淡水11第一面出兩線'),n=apply('淡水11水線改接第三面',s);assert.deepEqual(n.hoses.map(x=>x.id),s.hoses.map(x=>x.id));assert.ok(n.hoses.every(x=>x.targetId==='face3'));const moved=apply('淡水11移至第二面',n);assert.deepEqual(moved.hoses,n.hoses);assert.equal(moved.vehicles[0].id,n.vehicles[0].id);});
+test('人員移位、任務更新不改人數；水線不變',()=>{const s=apply('竹圍4人第三面搜救');const n=apply('竹圍移至第二面',s);assert.equal(n.crews[0].count,4);assert.equal(n.crews[0].task,'搜救');assert.equal(n.crews[0].face,'第二面');});
+test('減少水線只移除超出的；多終點改接要求人工選線',()=>{const s=apply('淡水11第一面出兩線'),n=apply('淡水11第一面出一線',s);assert.equal(n.hoses.length,1);assert.equal(n.hoses[0].id,s.hoses[0].id);const more=apply('淡水11第三面出一線',n);assert.ok(plan('淡水11水線改接第二面',more).issues.length);});
+test('預覽後資料有異動：拒絕覆蓋',()=>{const s=apply('淡水4人報到'),p=plan('淡水修正為6人',s);s.crews[0].count=5;assert.throws(()=>C.apply(p,s),/更新/);});
+test('既有手動編組不含大隊資料也能沿用',()=>{const s=empty();s.crews=[{id:'manual1',unit:'淡水',count:4,task:'搜救',lat:25,lng:121}];const n=apply('淡水修正為6人',s);assert.equal(n.crews.length,1);assert.equal(n.crews[0].id,'manual1');assert.equal(n.crews[0].lat,25);});
+test('一段不明就不能套用整批；缺少水線數及樓層不猜位置',()=>{const p=plan('淡水4人報到；竹圍3樓');assert.throws(()=>C.apply(p,empty()),/未確認/);assert.ok(plan('淡水11出水線到第一面').issues.length);});
