@@ -1,0 +1,27 @@
+/* One responsive intake surface inside SOP initial deployment, shared by both modes. */
+.intake-panel29{border:1px solid #bdd0dc;border-radius:18px;background:#fff;margin:14px 0;overflow:hidden;min-width:0}
+.intake-panel29>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;min-height:56px;padding:16px;color:#173c53;font-weight:800;background:#edf5f9}
+.intake-panel29>summary::before{content:'＋';font-size:22px}.intake-panel29[open]>summary::before{content:'−'}
+.intake-body29{padding:20px;min-width:0}.intake-body29 textarea{width:100%;min-height:140px;font-size:17px;resize:vertical}
+.intake-body29 details>summary{cursor:pointer;padding:14px 0;font-weight:700;min-height:48px}.intake-body29 .hint{font-size:14px;line-height:1.65}
+.intake-settings29{border-block:1px solid #d7e2e9;margin:16px 0;padding:0 8px}.intake-settings29 label{display:block;margin:12px 0}
+.review-card29{border:1px solid #c7d8e2;border-radius:14px;padding:16px;margin:14px 0;background:#fff;min-width:0}
+.review-card29.deferred29{background:#faf8f2;border-style:dashed}.review-top29{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;font-weight:800}
+.review-top29 label,.review-warning29 label,.intake-confirm label,.check29{display:flex;align-items:center;gap:10px}
+.intake-panel29 input[type=checkbox]{width:24px;min-width:24px;height:24px;accent-color:#176889;margin:0;cursor:pointer}
+.review-fields29{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.review-fields29 label{display:flex;flex-direction:column;gap:7px;color:#324e61;font-size:14px;min-width:0}
+.review-fields29 input,.review-fields29 select,.intake-add29 select,.intake-settings29 select{width:100%;max-width:100%;min-width:0;min-height:46px;padding:10px;border:1px solid #b6cbd8;border-radius:9px;font-size:16px;background:white;color:#162f41}
+.review-warning29{background:#fff2d3;border-left:4px solid #bf861c;padding:12px;margin-top:12px;line-height:1.6}.review-warning29 label{margin-top:10px;font-size:14px}
+.review-preview29{margin:14px 0 0;background:#edf6f6;padding:12px;border-radius:8px;overflow-wrap:anywhere;font-size:15px}.review-card29 [data-error],#intakeIssues28{color:#9c301f;font-weight:700;font-size:15px}
+.review-evidence29 p{white-space:pre-wrap;overflow-wrap:anywhere}.intake-add29{display:flex;align-items:end;gap:12px;flex-wrap:wrap;border-top:1px solid #d7e2e9;padding:18px 0;margin-top:18px}.intake-add29 label{flex:1;min-width:180px}
+.intake-panel29 .intake-confirm{position:static;display:grid;gap:14px;margin-top:18px;padding:16px}.intake-panel29 .intake-confirm .btn{width:100%}
+.intake-panel29 .intake-corrected{font-size:16px;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}.intake-panel29 .intake-total{font-size:18px;line-height:1.6}
+.intake-panel29 button,.intake-panel29 a.btn{min-height:46px}.intake-history{border-top:1px solid #d7e2e9;margin-top:18px}.intake-history p{overflow-wrap:anywhere;font-size:14px}.intake-history details{padding:8px;border-bottom:1px solid #d7e2e9}
+.deployment-count29{font-weight:800;color:#194c64;font-size:20px}.deployment-sop-summary>details{border-bottom:1px solid #d8e2e9;padding:6px}.deployment-sop-summary>details>summary{padding:12px;cursor:pointer;font-weight:700;min-height:48px}
+.deployment-text-capture>summary{padding:12px;cursor:pointer;font-weight:700;min-height:48px}
+@media(min-width:1100px){.review-fields29{grid-template-columns:repeat(3,minmax(0,1fr))}.intake-body29{padding:24px}.intake-panel29 .intake-confirm{grid-template-columns:minmax(0,1fr) 240px;align-items:center}}
+@media(max-width:540px){.intake-body29{padding:12px}.review-card29{padding:12px}.review-fields29{grid-template-columns:1fr}.intake-panel29>summary{font-size:16px;padding:14px 10px}.intake-panel29>summary .tag{display:none}.intake-body29 .button-row{display:flex;flex-wrap:wrap}.intake-body29 .button-row>*{flex:1 1 130px}.intake-add29>*{width:100%}.intake-panel29 .intake-confirm{padding:12px}}
+@media(orientation:landscape) and (max-height:600px){.intake-body29 textarea{min-height:100px}.intake-panel29>summary{min-height:48px}}
+
+.intake-panel29 button:disabled{opacity:.5;cursor:not-allowed}.intake-panel29 .intake-confirm label{min-width:0}
+@media print{.intake-panel29{display:none!important}}

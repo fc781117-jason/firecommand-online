@@ -1,3 +1,5 @@
+> 歷史版本文件。v29 的現行操作與部署請以 README.md、AI_SETUP_v29.html 為準；LOGIN_v28.md 的登入設定仍適用。
+
 # FireCommand v26 更新與驗收說明
 
 版本：v26

@@ -1,3 +1,5 @@
+> 歷史版本文件。v29 的現行操作與部署請以 README.md、AI_SETUP_v29.html 為準；LOGIN_v28.md 的登入設定仍適用。
+
 # FireCommand v28｜登入修正與部署設定
 
 ## 為什麼 v26 改 Popup 後仍可能看到同一錯誤

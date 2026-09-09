@@ -158,7 +158,7 @@ service cloud.firestore {
           && room().get('status','active') != 'closed'
           && request.resource.data.caseId == caseId
           && request.resource.data.kind in ['apply','undo']
-          && request.resource.data.raw is string && request.resource.data.raw.size() <= 3000
+          && request.resource.data.raw is string && request.resource.data.raw.size() <= 6000
           && request.resource.data.writes is list && request.resource.data.writes.size() <= 100;
         allow update, delete: if false;
       }

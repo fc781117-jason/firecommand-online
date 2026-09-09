@@ -4,10 +4,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#142f45" />
-  <title>FireCommand 火場指揮系統 v28</title>
-  <link rel="stylesheet" href="./assets/styles.css?v=28" />
-  <link rel="stylesheet" href="./assets/v27.css?v=28" />
-  <link rel="stylesheet" href="./assets/v28.css?v=28" />
+  <title>FireCommand 火場指揮系統 v29</title>
+  <link rel="stylesheet" href="./assets/styles.css?v=29" />
+  <link rel="stylesheet" href="./assets/v27.css?v=29" />
+  <link rel="stylesheet" href="./assets/v28.css?v=29" />
+  <link rel="stylesheet" href="./assets/v29.css?v=29" />
 </head>
 <body>
   <div id="toast" class="toast" hidden></div>
@@ -84,7 +85,7 @@
   <section id="appScreen" class="screen app-screen" hidden>
     <header class="topbar">
       <div>
-        <div class="brand-mini">FireCommand <span class="app-version">v28</span></div>
+        <div class="brand-mini">FireCommand <span class="app-version">v29</span></div>
         <button id="profileQuickEditBtn" type="button" class="user-line user-profile-button" aria-label="開啟個人資訊及修改火場代號"><span id="userLine">—</span></button>
       </div>
       <button id="adminManageBtn" class="btn small ghost" hidden>帳號管理</button><button id="logoutBtn" class="btn small ghost">登出</button>
@@ -262,7 +263,6 @@
           <div id="detailCaseNo" class="eyebrow">—</div>
           <h2 id="detailAddress">—</h2>
         </div>
-        <button id="openIntake28" type="button" class="btn primary intake-entry">語音／文字快速回報</button>
       </div>
 
       <div class="case-workspace">
@@ -277,7 +277,7 @@
           <div class="practice-session-head"><div><div class="eyebrow">模擬演練 · 不列入實戰</div><h3 id="practiceSessionTitle">虛擬火場</h3><p id="practiceRoleStatus" class="hint"></p></div><div class="practice-room-code">房號 <b id="practiceRoomCode">------</b></div></div>
           <div class="training-toolbar"><span id="practiceProgress"></span><div class="training-clock"><span id="practiceClockLabel">反應時間</span><strong id="practiceCountdown" role="timer">--:--</strong></div><button id="togglePracticeRunBtn" type="button" class="btn small primary">開始演練</button></div>
           <div class="training-two-streams">
-            <section class="training-stream"><div class="stream-title">模擬情境狀況 <span id="instructorBadge" class="tag"></span></div><div id="practiceLatestEvent" class="practice-latest-event" aria-live="polite"></div><div id="practiceResponsePanel"><div id="practiceRoleActions" class="role-actions"></div><label for="practiceResponseText">我的判斷與處置</label><textarea id="practiceResponseText" rows="2" placeholder="說明對象、位置、任務與回報要求"></textarea><div class="button-row"><button id="practiceResponseVoice" type="button" class="btn small ghost">語音輸入</button><button id="submitPracticeResponse" type="button" class="btn small primary">送出處置／回報</button></div><p id="practiceResponseStatus" class="hint" aria-live="polite"></p></div></section>
+            <section class="training-stream"><div class="stream-title">模擬情境狀況 <span id="instructorBadge" class="tag"></span></div><div id="practiceLatestEvent" class="practice-latest-event" aria-live="polite"></div><div id="practiceResponsePanel"><div id="practiceRoleActions" class="role-actions"></div><label for="practiceResponseText">我的判斷與處置</label><textarea id="practiceResponseText" rows="2" placeholder="說明對象、位置、任務與回報要求；可使用手機鍵盤語音轉文字"></textarea><div class="button-row"><button id="submitPracticeResponse" type="button" class="btn small primary">送出處置／回報</button></div><p id="practiceResponseStatus" class="hint" aria-live="polite"></p></div></section>
             <section class="training-stream"><div class="stream-title">協作情報與回報 <span id="practiceMessageCount" class="tag"></span></div><div id="practiceMessages" class="training-messages" aria-live="polite"></div></section>
           </div>
           <div id="practiceHostControls" class="practice-host-controls" hidden><div class="stream-title">真人教官控制</div><p class="hint">可採用建議、修改情境，或依受測者表現發布下一階段。</p><div id="practiceSuggestions" class="role-actions"></div><div class="two-col"><div class="field"><label for="practiceCustomEvent">追加情境</label><input id="practiceCustomEvent" placeholder="例：主攻線水壓下降，原因待查" /></div><div class="field"><label for="practiceCustomTime">反應秒數（30–900）</label><input id="practiceCustomTime" type="number" min="30" max="900" value="180" /></div></div><select id="practiceEventSeverity" aria-label="情境等級"><option value="info">一般</option><option value="warning">警示</option><option value="critical">緊急</option></select><div class="button-row"><button id="releaseNextPracticeEventBtn" class="btn small primary">採納回應／下一情境</button><button id="addPracticeCustomEventBtn" class="btn small ghost">追加情境至佇列</button><button id="endPracticeBtn" class="btn small danger">結束並檢討</button></div></div>
@@ -386,7 +386,41 @@
                 <div id="trappedDetailFields" hidden><div class="field"><label>受困人數</label><select id="trappedCountArrival" aria-label="受困人數"></select></div></div>
               </div>
               <div class="arrival-detail-panel" data-arrival-panel="deployment" hidden>
-                <div class="notice compact">此區由「部署」頁的人員、車輛及水線資料自動整理。請先完成地圖部署，再回到此處確認。</div>
+                <p class="hint">可先輸入現場描述，核對後同步人員、圖面與 SOP。也可直接在部署圖手動調整。</p>
+<details id="intakeDialog28" class="intake-panel29">
+  <summary><span>文字回報 → 人員、部署與紀錄</span><span class="tag">AI 整理</span></summary>
+  <div class="intake-body29">
+    <p id="intakeCase28" class="eyebrow"></p>
+    <label for="intakeText28">本次新增或修正</label>
+    <textarea id="intakeText28" rows="5" maxlength="6000" placeholder="例如：淡水分隊七人、竹圍分隊六人、三芝分隊三人到場。淡水由第一面部署一線，竹圍第二面部署一線。現場水源不足，需要水庫車支援。"></textarea>
+    <p class="hint">不方便打字時，可使用手機鍵盤的語音轉文字。系統會整理輸入內容，核對後才登錄；不需要開啟 App 麥克風。</p>
+    <div class="button-row"><button id="intakeParse28" type="button" class="btn primary">AI 辨識內容</button><button id="intakeNew28" type="button" class="btn ghost">清空輸入</button></div>
+    <p id="intakeMessage28" role="status" aria-live="polite">支援中文數字、分隊報到、人數修正與部署描述。</p>
+    <details class="intake-settings29"><summary>AI 服務與備援設定</summary>
+      <label for="aiProvider29">優先使用<select id="aiProvider29"><option value="auto">依系統設定</option><option value="openai">OpenAI</option><option value="gemini">Google Gemini</option></select></label>
+      <label class="check29"><input id="aiFallback29" type="checkbox" checked>失敗時允許切換另一服務／備用模型</label>
+      <p class="hint">此選擇適用本次開啟 App 的 AI 功能。啟用跨服務備援後，必要時會將同一份輸入送至另一家已設定的服務。金鑰由管理者在伺服器設定。</p>
+      <div class="button-row"><button id="aiCheck29" type="button" class="btn ghost">檢查 AI 設定</button><a class="btn ghost" href="./AI_SETUP_v29.html" target="_blank" rel="noopener">查看設定指南</a><button id="intakeLocal29" type="button" class="btn ghost">本機整理（非 AI）</button></div>
+      <p id="aiStatus29" class="hint" role="status"></p>
+    </details>
+    <details class="intake-examples"><summary>輸入範例</summary><div class="intake-example-grid">
+      <button type="button" data-intake-example="淡水分隊七人、竹圍分隊六人、三芝分隊三人到場；淡水由第一面佈一線，竹圍由第二面佈一線。">多隊報到與部署</button>
+      <button type="button" data-intake-example="淡水人數修正為九人；竹圍新增兩人；三芝移至第三面。">後續人數與位置修正</button>
+      <button type="button" data-intake-example="淡水六一到場，供水給淡水一一；淡水一一第一面出兩線。">車輛與水線</button>
+    </div></details>
+    <section id="intakeResult28" hidden>
+      <h3>核對本次資料</h3>
+      <details><summary>查看整理後全文與文字校正</summary><div id="intakeCorrections28"></div><p id="intakeCorrected28" class="intake-corrected"></p></details>
+      <p id="intakeTotal28" class="intake-total"></p><p id="intakeIssues28" role="status"></p><div id="intakeChanges28"></div>
+      <p id="intakeNotes28" class="hint"></p>
+      <p class="hint">只儲存勾選的項目。人員位置與水線為示意，可到部署圖拖曳調整。未提及的資料保留現況。</p>
+      <button id="intakeRefresh29" type="button" class="btn ghost">以最新資料重新核對</button>
+      <div class="intake-confirm"><label><input id="intakeConfirm28" type="checkbox">我已核對選入項目的名稱、人數與變更</label><button id="intakeApply28" type="button" class="btn primary">確認登錄並同步</button></div>
+    </section>
+    <div class="intake-add29"><label for="intakeAddKind29">漏辨識？手動新增<select id="intakeAddKind29"><option value="crew">人員報到／部署</option><option value="vehicle">車輛</option><option value="hose">水線</option><option value="support">支援需求</option><option value="note">情資紀錄</option><option value="command">指揮權轉移</option><option value="firstSide">第一面設定</option></select></label><button id="intakeAdd29" type="button" class="btn ghost">新增可編輯項目</button></div>
+    <details class="intake-history"><summary>最近回報、待處理項目與復原</summary><div id="intakeHistory28"></div></details>
+  </div>
+</details>
                 <div id="deploymentSopSummary" class="deployment-sop-summary"></div>
                 <button type="button" class="btn small primary" data-case-page-jump="tacticalMapSection">前往部署頁</button>
               </div>
@@ -550,7 +584,7 @@
           <button id="fitMapBtn" class="btn small ghost">回到200m</button>
         </div>
 
-        <section class="deployment-text-capture">
+        <details class="deployment-text-capture"><summary>部署文字紀錄與圖文核對</summary>
           <div class="deployment-text-head"><div><div class="eyebrow">第一時間快速紀錄</div><h4>部署文字紀錄</h4></div><span id="deploymentTextStatus" class="tag amber">尚未紀錄</span></div>
           <div class="notice compact">還來不及畫圖時，可先用文字記下各面、人車、水線與任務；內容會同步到 SOP 確認資料，並固定顯示於繪圖區供邊看邊畫。</div>
           <div class="field"><textarea id="deploymentTextRecord" rows="4" placeholder="例：淡水11第一面佈一線內攻；竹圍11第二面防護；淡水61佔據消防栓供水。"></textarea><div class="button-row"><button id="parseDeploymentBtn" type="button" class="btn small primary">文字轉部署草圖</button><button id="rotateDeploymentBtn" type="button" class="btn small ghost">旋轉建物 90°</button></div><div id="deploymentDraftPreview" hidden></div></div>
@@ -560,7 +594,7 @@
             <button id="aiDeploymentSummaryBtn" type="button" class="btn small ghost">AI 依圖面整理部署摘要</button>
           </div>
           <div id="deploymentTextReference" class="deployment-text-reference" hidden></div>
-        </section>
+        </details>
 
         <details id="deploymentMapDetails" class="accordion tool-accordion">
           <summary><span>車輛 / 人員 / 危害標示 / 水線部署圖</span><span class="chevron">›</span></summary>
@@ -768,35 +802,18 @@
   </section>
 
 
-  <dialog id="intakeDialog28" class="intake-dialog" aria-labelledby="intakeTitle28">
-    <header class="intake-head"><div><p id="intakeCase28" class="eyebrow"></p><h2 id="intakeTitle28">快速回報</h2></div><button id="intakeClose28" type="button" class="btn ghost" aria-label="關閉快速回報">關閉</button></header>
-    <div class="intake-body">
-      <p class="hint">報到、人數、移位、水線，使用同一入口。未提及的資料保持現況。</p>
-      <label for="intakeText28">本次新增或修正</label><textarea id="intakeText28" rows="3" maxlength="3000" placeholder="例如：但水4人報到；主委6人第三面搜救"></textarea>
-      <div class="button-row"><button id="intakeMic28" type="button" class="btn primary">開始語音</button><button id="intakeParse28" type="button" class="btn ghost">辨識本次回報</button><button id="intakeNew28" type="button" class="btn ghost">清空輸入</button></div>
-      <p id="intakeMessage28" role="status" aria-live="polite"></p>
-      <details class="intake-examples"><summary>可直接套用的說法</summary><div class="intake-example-grid">
-        <button type="button" data-intake-example="淡水4人報到；竹圍6人第三面搜救">新單位報到</button><button type="button" data-intake-example="淡水人數修正為6人">修正總人數</button><button type="button" data-intake-example="淡水新增2人">增加人員</button><button type="button" data-intake-example="竹圍移至第二面">人員移位</button><button type="button" data-intake-example="淡水11移至第一面">車輛移位</button><button type="button" data-intake-example="淡水61供水給淡水11；淡水11第一面出兩線">建立水線</button><button type="button" data-intake-example="淡水11水線改接第三面">改接水線</button><button type="button" data-intake-example="竹圍A組4人報到；竹圍B組3人報到">分組報到</button>
-      </div><p class="hint">名稱與句型在裝置上解析，不需 OpenAI API。樓層、水源定位、否定句及不明數字會要求補充；不會猜測登錄。瀏覽器語音服務是否連網，依裝置而異。</p></details>
-      <section id="intakeResult28" hidden>
-        <h3>核對此次差異</h3><div id="intakeCorrections28" class="intake-corrections"></div><p id="intakeCorrected28" class="intake-corrected"></p>
-        <p id="intakeTotal28" class="intake-total"></p><div id="intakeIssues28"></div><div id="intakeChanges28" class="intake-changes"></div><p id="intakeNotes28" class="hint"></p>
-        <p class="hint">未指定位置的人員先放待部署區；位置為示意，可在部署圖拖曳。歷史文字保留供查核，概要以最新人車水線資料產生。</p>
-        <div class="intake-confirm"><label><input id="intakeConfirm28" type="checkbox" />我已核對名稱、人數及變更內容</label><button id="intakeApply28" type="button" class="btn primary">確認登錄並同步</button></div>
-      </section>
-      <details class="intake-history"><summary>最近回報與復原</summary><div id="intakeHistory28"></div></details>
-    </div>
-  </dialog>
+
 
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
   <script src="./firebase/firebase-config.js"></script>
-  <script src="./assets/training-core.js?v=28"></script>
-  <script src="./assets/deployment-core.js?v=28"></script>
-  <script src="./assets/intake-core.js?v=28"></script>
-  <script src="./assets/intake-ui.js?v=28"></script>
-  <script src="./assets/auth28.js?v=28"></script>
-  <script src="./assets/app.js?v=28"></script>
+  <script src="./assets/training-core.js?v=29"></script>
+  <script src="./assets/deployment-core.js?v=29"></script>
+  <script src="./assets/intake-core.js?v=29"></script>
+  <script src="./assets/intake-semantic.js?v=29"></script>
+  <script src="./assets/intake-ui.js?v=29"></script>
+  <script src="./assets/auth28.js?v=29"></script>
+  <script src="./assets/app.js?v=29"></script>
 </body>
 </html>

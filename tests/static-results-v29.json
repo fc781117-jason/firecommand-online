@@ -1,0 +1,21 @@
+{
+  "htmlIds": 370,
+  "duplicateIds": [],
+  "tagErrors": [],
+  "missingAssets": [],
+  "syntaxFiles": [
+    "assets/intake-core.js",
+    "assets/deployment-core.js",
+    "assets/auth28.js",
+    "assets/app.js",
+    "assets/training-core.js",
+    "assets/intake-semantic.js",
+    "assets/intake-ui.js",
+    "server/ai-router.js",
+    "server/firebase-auth.js",
+    "api/maps-config.js",
+    "api/auth-config.js",
+    "api/ai-config.js",
+    "api/ai-advice.js"
+  ]
+}

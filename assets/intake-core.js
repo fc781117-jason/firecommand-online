@@ -123,7 +123,7 @@ function plan(parsed,state,options={}){
     if(!selected.length){fail(i,'尚無可改接的既有水線');continue;}
     if(new Set(selected.map(h=>h.targetType+':'+h.targetId)).size>1){fail(i,'此車有多個水線終點，請在圖面選擇要改接的水線');continue;}
    }
-   const count=i.count===undefined?selected.length:i.mode==='add'?selected.length+i.count:i.count;
+   const count=i.count===undefined?selected.length:i.mode==='add'?selected.length+i.count:i.mode==='subtract'?selected.length-i.count:i.count;
    if(!Number.isInteger(count)||count<0||count>6){fail(i,'同一起終點水線數需為 0–6 條');continue;}
    for(let j=0;j<count;j++){
     let h=selected[j];
