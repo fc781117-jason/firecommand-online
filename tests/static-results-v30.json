@@ -1,0 +1,86 @@
+[
+  {
+    "file": "assets/training-core.js",
+    "syntax": true
+  },
+  {
+    "file": "assets/app.js",
+    "syntax": true
+  },
+  {
+    "file": "assets/intake-ui.js",
+    "syntax": true
+  },
+  {
+    "file": "assets/auth28.js",
+    "syntax": true
+  },
+  {
+    "file": "assets/deployment-core.js",
+    "syntax": true
+  },
+  {
+    "file": "assets/intake-semantic.js",
+    "syntax": true
+  },
+  {
+    "file": "assets/intake-core.js",
+    "syntax": true
+  },
+  {
+    "file": "api/auth-config.js",
+    "syntax": true
+  },
+  {
+    "file": "api/ai-config.js",
+    "syntax": true
+  },
+  {
+    "file": "api/ai-advice.js",
+    "syntax": true
+  },
+  {
+    "file": "api/maps-config.js",
+    "syntax": true
+  },
+  {
+    "file": "server/firebase-auth.js",
+    "syntax": true
+  },
+  {
+    "file": "server/ai-router.js",
+    "syntax": true
+  },
+  {
+    "file": "firebase/firebase-config.js",
+    "syntax": true
+  },
+  {
+    "file": "index.html",
+    "uniqueIds": 373,
+    "missingAssets": [],
+    "inlineScriptSyntax": true
+  },
+  {
+    "file": "SETUP_v30.html",
+    "uniqueIds": 4,
+    "missingAssets": [],
+    "inlineScriptSyntax": true
+  },
+  {
+    "file": "login-help.html",
+    "uniqueIds": 6,
+    "missingAssets": [],
+    "inlineScriptSyntax": true
+  },
+  {
+    "firestoreRulesUnchangedFromV29": true
+  },
+  {
+    "runtimeAssetVersion": "30",
+    "testSuite": {
+      "pass": 96,
+      "fail": 0
+    }
+  }
+]

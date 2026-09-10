@@ -1802,7 +1802,7 @@ async function movePendingResourceTo(ll,label='指定位置'){
   pendingTool=null; selectedMapResource=null;
   if(!item) return false;
   const before={lat:item.lat,lng:item.lng};
-  await updateItem(tool.coll,tool.id,{lat:Number(ll.lat),lng:Number(ll.lng),staged:false});
+  await updateMapItemWithUndo(tool.coll,tool.id,{lat:Number(ll.lat),lng:Number(ll.lng),staged:false},'移動部署');
   pushMapUndo(`復原移動：${item.name||item.unit||item.type||''}`,async()=>updateItem(tool.coll,tool.id,before));
   await addLog('map',`部署至${label}：${item.name||item.unit||item.type||''}`);
   toast(`已部署至${label}`);
@@ -2178,6 +2178,15 @@ function googleMarkerIcon(text,className='hazard'){
   const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect x="1" y="1" width="${width-2}" height="32" rx="16" fill="${style.bg}" stroke="#ffffff" stroke-width="2"/><path d="M ${width/2-6} 32 L ${width/2} 39 L ${width/2+6} 32 Z" fill="${style.bg}"/><text x="${width/2}" y="22" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Noto Sans TC,sans-serif" font-size="13" font-weight="800" fill="${style.fg}">${escapeXml(clean)}</text></svg>`;
   return {url:`data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,scaledSize:new google.maps.Size(width,height),anchor:new google.maps.Point(width/2,height)};
 }
+function hosePath30(h,from,to){
+ const a={lat:Number(from[0]),lng:Number(from[1])},b={lat:Number(to[0]),lng:Number(to[1])};
+ const peers=live.hoses.filter(x=>x.vehicleId===h.vehicleId&&x.unit===h.unit&&x.targetType===h.targetType&&x.targetId===h.targetId).sort((x,y)=>x.id.localeCompare(y.id));
+ if(peers.length<2)return [a,b];
+ const index=peers.findIndex(x=>x.id===h.id),offset=(index-(peers.length-1)/2)*4;
+ const mean=(a.lat+b.lat)/2,dx=(b.lng-a.lng)*111320*Math.cos(mean*Math.PI/180),dy=(b.lat-a.lat)*111320,length=Math.hypot(dx,dy)||1;
+ return [a,{lat:(a.lat+b.lat)/2+metersToLatDelta(dx/length*offset),lng:(a.lng+b.lng)/2+metersToLngDelta(-dy/length*offset,mean)},b];
+}
+
 function makeGoogleMarker({position,text,className='hazard',draggable=false,title='',onDragEnd=null,onClick=null,zIndex=null}){
   const marker=addMapOverlay(new google.maps.Marker({map,position,draggable,title:title||text,icon:googleMarkerIcon(text,className),zIndex:zIndex||undefined,optimized:false}));
   if(onDragEnd) marker.addListener('dragend',ev=>onDragEnd({lat:ev.latLng.lat(),lng:ev.latLng.lng()},marker));
@@ -2211,12 +2220,12 @@ function renderMap(){
   live.hoses.forEach(h=>{
     const pts=getHosePoints(h), from=pts.from, to=pts.to;
     if(!from||!to) return;
-    const path=[{lat:Number(from[0]),lng:Number(from[1])},{lat:Number(to[0]),lng:Number(to[1])}];
+    const path=hosePath30(h,from,to);
     const poly=addMapOverlay(new google.maps.Polyline({map,path,strokeColor:h.supplyUnconfirmed?'#b7791f':'#245fc6',strokeWeight:6,strokeOpacity:h.supplyUnconfirmed?0:.88,...(h.supplyUnconfirmed?{icons:[{icon:{path:'M 0,-1 0,1',strokeOpacity:1,scale:3},offset:'0',repeat:'14px'}]}:{}),clickable:true,zIndex:20}));
     const hoseSourceName=h.supplyUnconfirmed?`${h.unit}（供水起點待確認）`:vehicleDisplayName({name:h.vehicleName,vehicleName:h.vehicleName,unit:h.unit});
     const info=`<b>${escapeHtml(hoseSourceName)} ${escapeHtml(h.port||'')}</b><div class="meta">歸屬：${escapeHtml(h.owner||h.unit||'')}<br>目的地：${escapeHtml(h.targetName||'地圖點')}<br>性質：${escapeHtml(h.kind||'水線')}<br>任務：${escapeHtml(h.task||'')}</div><div class="popup-actions"><button data-map-action="editHose" data-id="${h.id}">修改</button><button data-map-action="deleteHose" data-id="${h.id}">刪除</button></div>`;
     poly.addListener('click',ev=>{ mapInfoWindow.setPosition(ev.latLng); mapInfoWindow.setContent(`<div class="google-info-card">${info}</div>`); mapInfoWindow.open({map,shouldFocus:false}); });
-    const mid={lat:(path[0].lat+path[1].lat)/2,lng:(path[0].lng+path[1].lng)/2};
+    const mid=path.length===3?path[1]:{lat:(path[0].lat+path[1].lat)/2,lng:(path[0].lng+path[1].lng)/2};
     makeGoogleMarker({position:mid,text:`💧 ${hoseSourceName} ${h.port||''}｜${h.kind||'水線'}`,className:'hose-label',onClick:m=>openMapInfo(m,info),zIndex:40});
     if(h.targetType==='map' && h.lat && h.lng){
       makeGoogleMarker({position:{lat:Number(h.lat),lng:Number(h.lng)},text:'💧 水線終點',className:'hose-label',draggable:true,zIndex:45,
@@ -2363,7 +2372,22 @@ async function restoreMapRecords(records=[]){
   }
   if(!firebaseEnabled){ saveLocalCase(); renderLiveParts(); }
 }
+function mapFace30(lat,lng){const b=getBuildingBox(),p=latLngToLocalPoint(b,lat,lng);return Math.abs(p.x)/(b.widthM||40)>Math.abs(p.y)/(b.heightM||28)?(p.x>0?'第二面':'第四面'):(p.y<0?'第一面':'第三面');}
+async function moveLinkedVehicles30(id,patch,label){
+ const state=intakeSnapshot28(),anchor=state.vehicles.find(v=>v.id===id);if(!anchor)return;
+ const group=FCIntake29.connectedVehicles(state,id),dlat=Number(patch.lat)-Number(anchor.lat),dlng=Number(patch.lng)-Number(anchor.lng),commandId=uid('chain');
+ const face=mapFace30(patch.lat,patch.lng);
+ const writes=stampWrites28(group.map(v=>({coll:'vehicles',id:v.id,before:v,after:{...v,...patch,lat:Number(v.lat)+dlat,lng:Number(v.lng)+dlng,face,anchorBuilding:true,staged:false}})),commandId);
+ const caseId=currentCaseId,event={id:commandId,caseId,kind:'apply',raw:'',corrected:'',corrections:[],writes,caseChanges:[],createdAt:Date.now(),authorUid:profile.id,operator:radioCallSign(),summary:`移動供水車組：${group.map(v=>v.name).join('、')}，${face}`};
+ const result=await commitIntake28(event,intakeRevision28());
+ if(caseId!==currentCaseId)return;
+ if(firebaseEnabled){for(const w of writes){const v=live.vehicles.find(v=>v.id===w.id);if(v)Object.assign(v,w.after);}currentCase.resourceRevision=result.revision;currentCase.deploymentTextSource='intake';if(!live.intakeEvents.some(e=>e.id===event.id))live.intakeEvents.push(event);}
+ pushMapUndo(`復原${label||'車組移動'}`,()=>undoIntake28(commandId));renderLiveParts();
+}
+
 async function updateMapItemWithUndo(coll,id,patch,label){
+  if(coll==='vehicles'&&Number.isFinite(patch?.lat)&&Number.isFinite(patch?.lng)&&FCIntake29.connectedVehicles(intakeSnapshot28(),id).length>1)return moveLinkedVehicles30(id,patch,label);
+  if(['vehicles','crews'].includes(coll)&&Number.isFinite(patch?.lat)&&Number.isFinite(patch?.lng))patch={...patch,face:mapFace30(patch.lat,patch.lng)};
   const item=(live[coll]||[]).find(x=>x.id===id); if(!item) return;
   const before={}; Object.keys(patch||{}).forEach(k=>before[k]=item[k]);
   await updateItem(coll,id,patch);
@@ -4072,10 +4096,10 @@ function deploymentMapSummary(){
     lines.push(...live.crews.map(x=>`${x.face?`${x.face}由`:''}${x.unit||'未具名單位'}${x.leader?`${x.leader}`:''}${Number(x.count)?`（${Number(x.count)}人）`:''}${x.task?`執行${x.task}`:x.status?`為${x.status}`:''}`));
   }
   if(live.vehicles.length){
-    lines.push(...live.vehicles.map(x=>`${vehicleDisplayName(x)}${x.task?`執行${x.task}`:x.status?`為${x.status}`:''}`));
+    lines.push(...live.vehicles.map(x=>`${vehicleDisplayName(x)}${x.face?'於'+x.face:''}${x.task?`執行${x.task}`:x.status?`為${x.status}`:''}`));
   }
   if(live.hoses.length){
-    lines.push(...live.hoses.map((x,i)=>`${x.vehicleName||x.label||x.owner||`第${i+1}線`}${x.targetName?`接至${x.targetName}`:''}${x.mission?`執行${x.mission}`:''}${x.supplyUnconfirmed?'（供水起點待確認）':''}`));
+    lines.push(...live.hoses.map((x,i)=>`${x.vehicleName||x.label||x.owner||`第${i+1}線`}${x.targetName?(x.task==='車輛串接（流向未指定）'?`與${x.targetName}串接（流向未指定）`:`接至${x.targetName}`):''}${(x.mission||x.task)&&x.task!=='車輛串接（流向未指定）'?`執行${x.mission||x.task}`:''}${x.supplyUnconfirmed?'（供水起點待確認）':''}`));
   }
   if(live.hazards.length){
     const names=[...new Set(live.hazards.map(x=>x.type||x.name||x.label).filter(Boolean))];

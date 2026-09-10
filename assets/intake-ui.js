@@ -23,14 +23,14 @@ function openIntake28(text){
 function invalidateIntake28(){
  if(intakeBusy28)return;intakeRequest29?.abort();intakeRequest29=null;
  const s=ensureIntake29();s.text=$('intakeText28').value;s.plan=null;s.items=[];s.base=null;s.commandId=uid('intake');
- $('intakeResult28').hidden=true;$('intakeConfirm28').checked=false;$('intakeParse28').disabled=false;$('intakeLocal29').disabled=false;$('intakeAdd29').disabled=false;
+ $('intakeComposer30').hidden=false;$('intakeEditText30').hidden=true;$('intakeResult28').hidden=true;$('intakeConfirm28').checked=false;$('intakeParse28').disabled=false;$('intakeLocal29').disabled=false;$('intakeAdd29').disabled=false;
  $('intakeMessage28').textContent='文字已更新，請點「AI 辨識內容」。也可以直接手動新增項目。';
 }
 function captureBase29(session){session.base=intakeSnapshot28();session.caseBase=JSON.parse(JSON.stringify(currentCase));session.revision=intakeRevision28();}
 async function parseIntake28(local=false){
  const session=ensureIntake29();if(intakeBusy28||intakeRequest29)return;
  const text=$('intakeText28').value.trim();if(!text||text.length>6000)throw Error('請輸入 1–6,000 字的回報');
- session.text=text;session.commandId=uid('intake');const roster=FCIntake.roster(UNIT_TREE);captureBase29(session);
+ session.text=text;session.observedAt=$('intakeEventAt30').value?new Date($('intakeEventAt30').value).getTime():Date.now();if(!Number.isFinite(session.observedAt))throw Error('請確認事件時間');session.commandId=uid('intake');const roster=FCIntake.roster(UNIT_TREE);captureBase29(session);
  let draft,meta;
  if(local===true){draft=FCIntake29.local(text,roster);meta={providerUsed:'local',modelUsed:'本機規則整理（非 AI）'};}
  else{
@@ -46,7 +46,8 @@ async function parseIntake28(local=false){
   finally{clearTimeout(timer);if(intakeRequest29===controller){$('intakeResult28').querySelectorAll('input,select,button').forEach(el=>el.disabled=false);$('intakeAdd29').disabled=false;intakeRequest29=null;$('intakeParse28').disabled=false;$('intakeLocal29').disabled=false;}}
  }
  if(session!==intake28||currentCaseId!==session.caseId)return;
- session.items=draft.items.map(x=>({...x,selected:!x.uncertainty,reviewed:false}));session.corrected=draft.correctedText;session.corrections=draft.corrections||[];session.meta=meta;
+ session.items=draft.items.map(x=>({...x,selected:true,reviewed:false}));session.corrected=draft.correctedText;session.corrections=draft.corrections||[];session.meta=meta;
+ $('intakeMessage28').textContent='辨識完成，逐筆按確認即可；有疑問的資料可修改或稍後處理。';
  renderIntakePlan28();
 }
 function describeIntakeRecord28(coll,x){if(!x)return '無';if(coll==='crews')return `${x.unit}${x.voiceGroup?' '+x.voiceGroup+'組':''} · ${x.count} 人 · ${x.face||'待部署'} · ${x.task||x.status||''}`;if(coll==='vehicles')return `${x.name} · ${x.face||'待部署'} · ${x.task||x.status||''}`;return `${x.vehicleName||x.unit+'（供水起點待確認）'} → ${x.targetName} · ${x.port||'水線'}`;}
@@ -56,48 +57,102 @@ function field29(i,key,label,type='text'){
  return `<label for="${escapeHtml(id)}">${label}<input id="${escapeHtml(id)}" data-field="${key}" value="${escapeHtml(String(v))}" ${type==='number'?'inputmode="text" placeholder="可填七、兩或 7；留空保留原數"':''} maxlength="${key==='text'?800:160}" /></label>`;
 }
 function select29(i,key,label,options){return `<label>${label}<select data-field="${key}">${options.map(([v,l])=>`<option value="${escapeHtml(v)}" ${String(i[key]||'')===v?'selected':''}>${escapeHtml(l)}</option>`).join('')}</select></label>`;}
+function rowPlan30(i){
+ const s=intake28,rows=[{...i,selected:true,reviewed:true}],dependencies=[];
+ if(i.kind==='hose')for(const name of [i.vehicle,i.target].filter(v=>v&&!FCIntake.faces.includes(v))){
+  const current=s.base.vehicles.find(v=>v.name===name);
+  const draft=s.items.find(v=>v.kind==='vehicle'&&v.vehicle===name&&!v.committed);
+  if(draft&&(!current||draft.face&&draft.face!==current.face)){rows.unshift({...draft,selected:true,reviewed:true});dependencies.push(draft);}
+ }
+ const plan=FCIntake29.compile(rows,s.base,s.caseBase,FCIntake.roster(UNIT_TREE),{locate:intakePosition28,vehicleType});
+ return {...plan,rows,dependencies};
+}
+function shortItem30(i){
+ const mode=i.quantityMode==='add'?'增加 ':i.quantityMode==='subtract'?'減少 ':'';
+ if(i.kind==='crew')return `${i.unit||'請選分隊'} · ${i.number===null?'保留人數':mode+i.number+' 人'} · ${i.face||'待部署'}${i.task?' · '+i.task:''}`;
+ if(i.kind==='vehicle')return `${i.vehicle||'請填車號'} · ${i.face||'待部署'}`;
+ if(i.kind==='hose')return `${i.vehicle||i.unit||'請選分隊'}${i.task==='車輛串接（流向未指定）'?' ↔ ':' → '}${i.target||i.face||'請選終點'} · ${mode}${i.number??'?'} 線`;
+ return i.text||i.evidence||'請填內容';
+}
 function renderIntakePlan28(){
- const s=intake28;if(!s)return;if(!s.base)captureBase29(s);const p=buildPlan29();
+ const s=intake28;if(!s)return;if(!s.base)captureBase29(s);buildPlan29();
  $('intakeResult28').hidden=false;$('intakeConfirm28').checked=false;
+ $('intakeComposer30').hidden=s.items.length>0;$('intakeEditText30').hidden=!s.items.length;$('intakeEditText30').textContent=s.items.some(x=>x.committed)?'輸入下一次回報':'補充／修改本次文字';
  $('intakeCorrected28').textContent=s.corrected||s.text||'手動新增';
- $('intakeCorrections28').innerHTML=(s.corrections||[]).map(c=>`<span class="intake-correction">${escapeHtml(c.from)} → <b>${escapeHtml(c.to)}</b></span>`).join('')||'<span class="hint">沒有自動名稱校正</span>';
- const roster=FCIntake.roster(UNIT_TREE);
- $('intakeChanges28').innerHTML=s.items.map(i=>{
-  const resource=['crew','vehicle','hose'].includes(i.kind),faceOptions=[['','保留現況／未提供'],...FCIntake.faces.map(x=>[x,x])];
+ $('intakeCorrections28').innerHTML=(s.corrections||[]).map(c=>`<span class="intake-correction">${escapeHtml(c.from)} → <b>${escapeHtml(c.to)}</b></span>`).join('');
+ const roster=FCIntake.roster(UNIT_TREE),pending=s.items.filter(i=>!i.committed);
+ $('intakeChanges28').innerHTML=pending.slice(0,3).map(i=>{
+  const resource=['crew','vehicle','hose'].includes(i.kind),faceOptions=[['','保留現況／待部署'],...FCIntake.faces.map(x=>[x,x])];
   let fields=select29(i,'kind','資料類型',FCIntake29.kinds.map(k=>[k,FCIntake29.labels[k]]));
-  if(resource){fields+=`<label>分隊<select data-unit-select><option value="">請選擇分隊</option>${roster.map(r=>`<option value="${escapeHtml(r.brigade+'|'+r.unit)}" ${i.unit===r.unit&&(!i.brigade||i.brigade===r.brigade)?'selected':''}>${escapeHtml(r.unit+'｜'+r.brigade)}</option>`).join('')}</select></label>`;}
+  if(resource)fields+=`<label>分隊<select data-unit-select><option value="">請選擇分隊</option>${roster.map(r=>`<option value="${escapeHtml(r.brigade+'|'+r.unit)}" ${i.unit===r.unit&&(!i.brigade||i.brigade===r.brigade)?'selected':''}>${escapeHtml(r.unit+'｜'+r.brigade)}</option>`).join('')}</select></label>`;
   if(i.kind==='crew'){
-   fields+=field29(i,'number','本次人數','number')+select29(i,'quantityMode','數量意思',[['set','目前總數／修正為'],['add','本次增加'],['subtract','本次減少']])+field29(i,'group','編組（有分組時填寫）')+select29(i,'face','部署面向',faceOptions)+field29(i,'task','任務');
-   const groups=(s.base.crews||[]).filter(c=>c.unit===i.unit);if(groups.length>1)fields+=select29(i,'targetId','更新哪一組',[['','依編組名稱判斷'],...groups.map(c=>[c.id,`${c.voiceGroup||c.leader||c.id.slice(-6)}｜${c.count}人｜${c.face||'待部署'}`])]);
+   fields+=field29(i,'number','本次人數','number')+select29(i,'face','部署面向',faceOptions);
+   const groups=(s.base.crews||[]).filter(c=>c.unit===i.unit);
+   if(groups.length>1)fields+=select29(i,'targetId','請選此次更新對象',[['','請選擇'],...groups.map(c=>[c.id,`${c.voiceGroup||c.leader||c.id.slice(-6)}｜${c.count}人｜${c.face||'待部署'}`])]);
   }
-  if(i.kind==='vehicle')fields+=field29(i,'vehicle','完整車號（例：淡水11）')+select29(i,'face','車輛面向',faceOptions);
-  if(i.kind==='hose')fields+=field29(i,'vehicle','來源車號（未提供可留空）')+field29(i,'number','水線條數','number')+select29(i,'quantityMode','數量意思',[['set','此起終點總條數'],['add','本次增加'],['subtract','本次減少']])+select29(i,'target','水線終點',[['','請選擇終點'],...FCIntake.faces.map(x=>[x,x]),...[...new Set([...(s.base.vehicles||[]).map(v=>v.name),...s.items.filter(x=>x.kind==='vehicle').map(x=>x.vehicle),i.target].filter(x=>x&&!FCIntake.faces.includes(x)))].map(x=>[x,x])])+field29(i,'task','水線任務');
+  if(i.kind==='vehicle')fields+=field29(i,'vehicle','完整車號')+select29(i,'face','部署面向',faceOptions);
+  if(i.kind==='hose')fields+=field29(i,'vehicle','來源車號（可留空）')+field29(i,'number','水線條數','number')+select29(i,'target','終點',[['','請選擇'],...FCIntake.faces.map(x=>[x,x]),...[...new Set([...(s.base.vehicles||[]).map(v=>v.name),...s.items.filter(x=>x.kind==='vehicle').map(x=>x.vehicle),i.target].filter(x=>x&&!FCIntake.faces.includes(x)))].map(x=>[x,x])]);
   if(i.kind==='support')fields+=field29(i,'task','支援類型')+field29(i,'number','需要幾台（未定可留空）','number');
   if(!resource)fields+=field29(i,'text','紀錄內容');
-  const preview=p.previews.find(x=>x.id===i.id);
-  return `<article class="review-card29 ${i.selected?'':'deferred29'}" data-item="${escapeHtml(i.id)}"><div class="review-top29"><label><input type="checkbox" data-select ${i.selected?'checked':''}>${i.selected?'列入本次登錄':'稍後處理'} · ${escapeHtml(FCIntake29.labels[i.kind])}</label><button type="button" class="btn small ghost" data-remove>移除此項</button></div>${i.uncertainty?`<div class="review-warning29">${escapeHtml(i.uncertainty)}<label><input type="checkbox" data-review ${i.reviewed?'checked':''}>已核對原句並確認此項</label></div>`:''}<details class="review-evidence29"><summary>查看原句</summary><p>${escapeHtml(i.evidence||'手動新增')}</p></details><div class="review-fields29">${fields}</div><p class="review-preview29">${escapeHtml(preview?`${preview.before?'原：'+preview.before+' → ':''}${preview.after}`:'勾選後顯示本次差異')}</p><div data-error role="status"></div></article>`;
- }).join('')||'<p>尚無項目，可按下方按鈕新增並直接編輯。</p>';
+  let extra=resource?field29(i,'task','任務／備註'):'';
+  if(['crew','hose'].includes(i.kind))extra+=select29(i,'quantityMode','本次變更',[['set','登錄／修正總數'],['add','增加'],['subtract','減少']]);
+  const plan=rowPlan30(i),errors=plan.issues;
+  return `<article class="review-card29 review-card30" data-item="${escapeHtml(i.id)}"><div class="review-top30"><span class="review-kind30">${escapeHtml(FCIntake29.labels[i.kind])}</span><span class="review-state30">${errors.length?'待補資料':i.uncertainty?'待核對':'待確認'}</span></div><p class="review-title30">${escapeHtml(shortItem30(i))}</p>${i.uncertainty?`<p class="review-notice30">${escapeHtml(i.uncertainty)}</p>`:''}<p class="review-preview29">${escapeHtml(plan.previews.find(p=>p.id===i.id)?.after||'')}</p>${plan.dependencies.length?`<p class="hint">同時登錄：${escapeHtml(plan.dependencies.map(v=>v.vehicle+(v.face?'（'+v.face+'）':'')).join('、'))}</p>`:''}<div data-error role="status">${escapeHtml(errors.map(e=>e.message).join('；'))}</div><div class="review-actions30"><button type="button" class="btn primary" data-commit ${intakeBusy28?'disabled':''}>確認登錄</button><button type="button" class="btn ghost" data-edit-toggle aria-expanded="${!!i.editOpen}">修改</button><button type="button" class="btn ghost" data-defer>稍後</button></div><details class="review-editor30" ${i.editOpen?'open':''}><summary>修改資料</summary><div class="review-fields29">${fields}</div>${extra?`<details class="review-extra30"><summary>任務／其他修正</summary><div class="review-fields29">${extra}</div></details>`:''}<details class="review-evidence29"><summary>原始回報</summary><p>${escapeHtml(i.sourceEvidence||i.evidence||s.text||'手動新增')}</p></details><button type="button" class="btn ghost" data-remove>移除此項</button></details></article>`;
+ }).join('')||'<p class="intake-done30">本次資料已處理完畢。</p>';
+ if(pending.length>3){$('intakeChanges28').innerHTML+=`<details class="review-queue30"><summary>其餘 ${pending.length-3} 項</summary>${pending.slice(3).map(i=>`<button type="button" class="btn ghost" data-prioritize="${escapeHtml(i.id)}">${escapeHtml(shortItem30(i))}</button>`).join('')}</details>`;
+ $('intakeChanges28').querySelectorAll('[data-prioritize]').forEach(b=>b.onclick=()=>{const row=s.items.find(x=>x.id===b.dataset.prioritize);s.items=[row,...s.items.filter(x=>x!==row)];renderIntakePlan28();});}
  $('intakeChanges28').querySelectorAll('[data-item]').forEach(card=>{
-  const i=s.items.find(x=>x.id===card.dataset.item);
-  card.querySelector('[data-select]').onchange=e=>{i.selected=e.target.checked;renderIntakePlan28();};
-  if(card.querySelector('[data-review]'))card.querySelector('[data-review]').onchange=e=>{i.reviewed=e.target.checked;updateIntakeSummary29();};
+  const i=s.items.find(x=>x.id===card.dataset.item),editor=card.querySelector('.review-editor30');
+  card.querySelector('[data-commit]').onclick=safeIntake28(()=>applyIntakeRow30(i.id));
+  card.querySelector('[data-edit-toggle]').onclick=()=>{editor.open=!editor.open;i.editOpen=editor.open;card.querySelector('[data-edit-toggle]').setAttribute('aria-expanded',String(editor.open));};
+  card.querySelector('[data-defer]').onclick=()=>{s.items=s.items.filter(x=>x!==i).concat(i);i.deferred=true;renderIntakePlan28();$('intakeMessage28').textContent='已移到待處理項目末端。其他項目可繼續確認。';};
   card.querySelector('[data-remove]').onclick=()=>{s.items=s.items.filter(x=>x!==i);renderIntakePlan28();};
-  card.querySelectorAll('[data-field]').forEach(el=>{const fn=()=>{i[el.dataset.field]=el.value;i.reviewed=false;const check=card.querySelector('[data-review]');if(check)check.checked=false;if(el.dataset.field==='kind')renderIntakePlan28();else updateIntakeSummary29();};el[el.tagName==='SELECT'?'onchange':'oninput']=fn;});
-  if(card.querySelector('[data-unit-select]'))card.querySelector('[data-unit-select]').onchange=e=>{[i.brigade,i.unit]=e.target.value.split('|');i.targetId='';i.reviewed=false;renderIntakePlan28();};
+  if(editor)editor.ontoggle=()=>{i.editOpen=editor.open;};
+  card.querySelectorAll('[data-field]').forEach(el=>{const fn=()=>{i[el.dataset.field]=el.value;i.reviewed=false;if(i.kind==='hose'&&el.dataset.field==='target')i.face=FCIntake.faces.includes(i.target)?i.target:'';if(el.dataset.field==='kind')renderIntakePlan28();else updateIntakeSummary29();};el[el.tagName==='SELECT'?'onchange':'oninput']=fn;});
+  const unit=card.querySelector('[data-unit-select]');if(unit)unit.onchange=e=>{[i.brigade,i.unit]=e.target.value.split('|');i.targetId='';i.reviewed=false;i.editOpen=true;renderIntakePlan28();};
  });
  updateIntakeSummary29();
 }
 function updateIntakeSummary29(){
  const s=intake28,p=buildPlan29();if(!p)return;$('intakeConfirm28').checked=false;
- const deferred=s.items.filter(i=>!i.selected).length,count=p.writes.length+p.caseChanges.length;
- $('intakeTotal28').textContent=`在冊 ${p.totalBefore} → ${p.totalAfter} 人｜${p.writes.length} 筆人車水線、${p.caseChanges.length} 個 SOP／情資欄位｜${deferred} 項稍後處理`;
- $('intakeIssues28').textContent=p.issues.length?`選入項目仍有 ${p.issues.length} 個問題。可直接修改，或取消該項的「列入本次登錄」。`:'';
- $('intakeChanges28').querySelectorAll('[data-item]').forEach(card=>{const errors=p.issues.filter(e=>e.id===card.dataset.item);card.querySelector('[data-error]').textContent=errors.map(x=>x.message).join('；');const v=p.previews.find(x=>x.id===card.dataset.item);card.querySelector('.review-preview29').textContent=v?`${v.before?'原：'+v.before+' → ':''}${v.after}`:'此項尚未列入變更';});
- $('intakeNotes28').textContent='來源：'+(s.meta?.providerUsed==='local'?'本機規則整理（非 AI）':s.meta?.providerUsed?`${s.meta.providerUsed} / ${s.meta.modelUsed}${s.meta.fallbackUsed?' · 已啟用備援':''}`:'手動編輯');
- $('intakeApply28').disabled=intakeBusy28||p.issues.length>0||!count;
- $('intakeMessage28').textContent=p.issues.length?'請修改標示的項目；其他已確認項目可先登錄。':!count?'尚無可儲存的差異。可新增項目，或勾選要登錄的資料。':'核對各項與總人數後，勾選下方確認並登錄。';
+ const pending=s.items.filter(i=>!i.committed),done=s.items.length-pending.length;
+ $('intakeTotal28').textContent=`在冊 ${s.base.crews.reduce((n,c)=>n+Number(c.count||0),0)} 人 · 已登錄 ${done} 項 · 待處理 ${pending.length} 項`;
+ $('intakeIssues28').textContent='';
+ $('intakeChanges28').querySelectorAll('[data-item]').forEach(card=>{
+  const i=pending.find(x=>x.id===card.dataset.item);if(!i)return;const row=rowPlan30(i);
+  card.querySelector('[data-error]').textContent=row.issues.map(x=>x.message).join('；');
+  card.querySelector('.review-title30').textContent=shortItem30(i);
+  card.querySelector('.review-preview29').textContent=row.previews.find(x=>x.id===i.id)?.after||'';
+  card.querySelector('.review-state30').textContent=row.issues.length?'待補資料':i.uncertainty?'待核對':'待確認';
+  // Remain tappable: a missing field opens its own editor, never disables other rows.
+  card.querySelector('[data-commit]').disabled=intakeBusy28||!!intakeRequest29;
+ });
+ $('intakeNotes28').textContent='整理來源：'+(s.meta?.providerUsed==='local'?'本機（非 AI）':s.meta?.providerUsed?`${s.meta.providerUsed} / ${s.meta.modelUsed}${s.meta.fallbackUsed?' · 備援':''}`:'手動');
+ $('intakeApply28').disabled=intakeBusy28||p.issues.length>0||!(p.writes.length+p.caseChanges.length);
 }
-function addIntakeRow29(){const s=ensureIntake29();s.text=$('intakeText28').value;if(intakeBusy28||intakeRequest29)return;if(!s.base)captureBase29(s);const kind=$('intakeAddKind29').value;s.items.push(FCIntake29.item(kind,{id:uid('row'),text:kind==='note'?$('intakeText28').value.trim():'',evidence:'手動新增'}));renderIntakePlan28();}
+async function applyIntakeRow30(id){
+ if(intakeBusy28||intakeRequest29)return;const s=ensureIntake29(),i=s.items.find(x=>x.id===id);if(!i||i.committed)return;
+ const p=rowPlan30(i);
+ if(p.issues.length){i.editOpen=true;renderIntakePlan28();throw Error(p.issues.map(x=>x.message).join('；'));}
+ const commandId=s.commandId+'_'+i.id;
+ const event={id:commandId,caseId:s.caseId,raw:s.text,corrected:s.corrected||s.text,corrections:s.corrections||[],writes:stampWrites28(p.writes,commandId),caseChanges:p.caseChanges,reviewedItems:p.rows.map(x=>({...x,reviewed:true,selected:true})),deferredItems:s.items.filter(x=>!x.committed&&x!==i&&!p.dependencies.includes(x)),reportGroupId:s.commandId,ai:s.meta||{providerUsed:'manual'},createdAt:Date.now(),eventAt:s.observedAt||Date.now(),authorUid:profile.id,operator:radioCallSign(),summary:shortItem30(i),kind:'apply',resumedFrom:s.resumedFrom||''};
+ intakeBusy28=true;setIntakeDisabled29(true);
+ try{
+  const result=await commitIntake28(event,s.revision);
+  if(currentCaseId!==s.caseId||intake28!==s)return;
+  const saved=result.event||event;
+  // Acknowledged writes are immediately available for the next row, even before the snapshot listener.
+  if(firebaseEnabled){for(const w of saved.writes){live[w.coll]=live[w.coll].filter(x=>x.id!==w.id);if(w.after)live[w.coll].push(w.after);}for(const c of saved.caseChanges||[])currentCase[c.key]=c.after;if(result.revision!==undefined)currentCase.resourceRevision=result.revision;currentCase.deploymentTextSource='intake';if(!live.intakeEvents.some(e=>e.id===saved.id))live.intakeEvents.push(saved);}
+  for(const x of [i,...p.dependencies]){x.committed=true;x.selected=false;x.reviewed=true;}
+  captureBase29(s);deploymentTextSource='intake';syncIntakeCaseFields29();renderLiveParts();renderIntakeHistory28();
+  $('intakeMessage28').textContent=result.duplicate?'此筆已登錄，未重複計算。':'已登錄：'+event.summary+'。圖面與回報稿已同步。';
+ }catch(e){
+  // Preserve edits. Refresh the comparison, but require another explicit confirmation after a conflict.
+  if(/更新|核對|變更/.test(e.message||'')){captureBase29(s);i.editOpen=true;}
+  throw e;
+ }finally{intakeBusy28=false;setIntakeDisabled29(false);if(intake28===s)renderIntakePlan28();}
+}
+function addIntakeRow29(){const s=ensureIntake29();s.text=$('intakeText28').value;if(intakeBusy28||intakeRequest29)return;if(!s.base)captureBase29(s);const kind=$('intakeAddKind29').value;s.items.push(FCIntake29.item(kind,{id:uid('row'),text:kind==='note'?$('intakeText28').value.trim():'',evidence:'手動新增',editOpen:true}));renderIntakePlan28();}
 function safeIntake28(fn){return async(...args)=>{try{return await fn(...args);}catch(err){$('intakeMessage28').textContent=err.message||'尚未儲存，請重試';toast(err.message||'尚未儲存',5000);}};}
 function stampWrites28(writes,commandId){const now=Date.now();return writes.map(w=>({...w,after:w.after?{...w.after,...(w.coll==='crews'&&w.after.status==='作業中'&&w.before?.status!=='作業中'?{startAt:now,dispatchCount:(w.before?.dispatchCount||0)+1}:{}),createdAt:w.before?.createdAt||now,updatedAt:now,lastIntakeId:commandId}:null}));}
 function withoutId28(x){const {id,...data}=x;return data;}
@@ -169,7 +224,7 @@ async function undoIntake28(eventId){
 function renderIntakeHistory28(){
  const el=$('intakeHistory28');if(!el||!$('intakeDialog28').open)return;
  const list=(live.intakeEvents||[]).slice().sort((a,b)=>b.createdAt-a.createdAt).slice(0,10);
- el.innerHTML=list.map(e=>`<details><summary>${escapeHtml(new Date(e.createdAt).toLocaleTimeString('zh-TW'))} · ${escapeHtml(e.summary)}</summary><p>${escapeHtml(e.operator||'')}｜原文：${escapeHtml(e.raw||'復原操作')}</p><p>校正：${escapeHtml(e.corrected||'—')}</p><p>整理來源：${escapeHtml(e.ai?.providerUsed||'舊版／手動')}</p>${(e.writes||[]).map(w=>`<p>${escapeHtml(describeIntakeRecord28(w.coll,w.before))} → ${escapeHtml(describeIntakeRecord28(w.coll,w.after))}</p>`).join('')}${(e.caseChanges||[]).map(c=>`<p>${escapeHtml(c.key)}：${escapeHtml(String(c.before??'未填'))} → ${escapeHtml(String(c.after??'未填'))}</p>`).join('')}${e.deferredItems?.length&&!(live.intakeEvents||[]).some(x=>x.resumedFrom===e.id&&!(live.intakeEvents||[]).some(u=>u.undoOf===x.id))?`<p>${e.deferredItems.length} 項尚未登錄：${escapeHtml(e.deferredItems.map(x=>x.text||x.evidence||x.unit).join('；'))}</p><button type="button" class="btn small ghost" data-resume="${escapeHtml(e.id)}">繼續處理待確認項目</button>`:''}${e.kind==='apply'&&!(live.intakeEvents||[]).some(x=>x.undoOf===e.id)?`<button type="button" class="btn small ghost" data-intake-undo="${escapeHtml(e.id)}">復原這次登錄</button><p class="hint">若相關資料已再次修改，請用新的修正回報。</p>`:''}</details>`).join('')||'<p class="hint">本案件尚無文字辨識登錄紀錄</p>';
+ el.innerHTML=list.map(e=>`<details><summary>${escapeHtml(new Date(e.eventAt||e.createdAt).toLocaleTimeString('zh-TW'))} · ${escapeHtml(e.summary)}</summary><p>${escapeHtml(e.operator||'')}｜登錄 ${escapeHtml(new Date(e.createdAt).toLocaleTimeString('zh-TW'))}｜原文：${escapeHtml(e.raw||'復原操作')}</p><p>校正：${escapeHtml(e.corrected||'—')}</p><p>整理來源：${escapeHtml(e.ai?.providerUsed||'舊版／手動')}</p>${(e.writes||[]).map(w=>`<p>${escapeHtml(describeIntakeRecord28(w.coll,w.before))} → ${escapeHtml(describeIntakeRecord28(w.coll,w.after))}</p>`).join('')}${(e.caseChanges||[]).map(c=>`<p>${escapeHtml(c.key)}：${escapeHtml(String(c.before??'未填'))} → ${escapeHtml(String(c.after??'未填'))}</p>`).join('')}${e.deferredItems?.length&&!(live.intakeEvents||[]).some(x=>e.reportGroupId&&x.reportGroupId===e.reportGroupId&&x.createdAt>e.createdAt)&&!(live.intakeEvents||[]).some(x=>x.resumedFrom===e.id&&!(live.intakeEvents||[]).some(u=>u.undoOf===x.id))?`<p>${e.deferredItems.length} 項尚未登錄：${escapeHtml(e.deferredItems.map(x=>x.text||x.evidence||x.unit).join('；'))}</p><button type="button" class="btn small ghost" data-resume="${escapeHtml(e.id)}">繼續處理待確認項目</button>`:''}${e.kind==='apply'&&!(live.intakeEvents||[]).some(x=>x.undoOf===e.id)?`<button type="button" class="btn small ghost" data-intake-undo="${escapeHtml(e.id)}">復原這次登錄</button><p class="hint">若相關資料已再次修改，請用新的修正回報。</p>`:''}</details>`).join('')||'<p class="hint">本案件尚無文字辨識登錄紀錄</p>';
  el.querySelectorAll('[data-intake-undo]').forEach(b=>b.onclick=safeIntake28(()=>undoIntake28(b.dataset.intakeUndo)));
  el.querySelectorAll('[data-resume]').forEach(b=>b.onclick=safeIntake28(()=>{if(intakeBusy28||intakeRequest29)return;const e=live.intakeEvents.find(x=>x.id===b.dataset.resume),s=ensureIntake29();s.resumedFrom=e.id;s.items=JSON.parse(JSON.stringify(e.deferredItems));s.text=e.raw;s.corrected=e.corrected;s.meta=e.ai;s.commandId=uid('intake');$('intakeText28').value=s.text;captureBase29(s);renderIntakePlan28();}));
 }
@@ -180,6 +235,7 @@ async function checkAI29(){
 function initV28(){
  $('parseDeploymentBtn').textContent='帶入初期部署辨識';$('parseDeploymentBtn').onclick=()=>openIntake28($('deploymentTextRecord').value.trim());
  $('intakeDialog28').addEventListener('toggle',()=>{if($('intakeDialog28').open)safeIntake28(()=>{ensureIntake29();renderIntakeHistory28();})();});
+ $('intakeEditText30').onclick=()=>{if(intake28?.items.some(x=>x.committed)){$('intakeText28').value='';$('intakeEventAt30').value='';invalidateIntake28();}else $('intakeComposer30').hidden=false;$('intakeText28').focus();};
  $('intakeText28').oninput=safeIntake28(invalidateIntake28);
  $('intakeParse28').onclick=safeIntake28(()=>parseIntake28(false));$('intakeLocal29').onclick=safeIntake28(()=>parseIntake28(true));$('intakeApply28').onclick=safeIntake28(applyIntake28);
  $('intakeNew28').onclick=safeIntake28(()=>{if(intakeBusy28)return;$('intakeText28').value='';invalidateIntake28();$('intakeText28').focus();});

@@ -22,6 +22,7 @@ export async function runAI({prompt,input,schema,json=false,maxTokens=2200,prefe
    if(attempt.provider==='openai'){
     url='https://api.openai.com/v1/responses';headers={'Content-Type':'application/json',Authorization:'Bearer '+env.OPENAI_API_KEY};
     body={model:attempt.model,instructions,input:input||prompt,max_output_tokens:maxTokens,store:false};
+    if(schema&&/^gpt-5(?:[.-]|$)/.test(attempt.model))body.reasoning={effort:['none','low','medium'].includes(env.OPENAI_INTAKE_REASONING)?env.OPENAI_INTAKE_REASONING:'low'};
     if(schema)body.text={format:{type:'json_schema',name:'field_report',strict:true,schema}};
     else if(json)body.text={format:{type:'json_object'}};
    }else{

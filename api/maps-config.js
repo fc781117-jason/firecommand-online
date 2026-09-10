@@ -1,5 +1,5 @@
 /**
- * FireCommand v29 Google Maps browser configuration.
+ * FireCommand v30 Google Maps browser configuration.
  * The browser key MUST be restricted in Google Cloud by HTTP referrer and API.
  */
 export default function handler(req, res) {
@@ -12,7 +12,7 @@ export default function handler(req, res) {
     enabled: Boolean(key),
     key,
     mapId,
-    version: '29',
+    version: '30',
     requiredApis: ['Maps JavaScript API', 'Places API (New)', 'Geocoding API']
   });
 }

@@ -111,7 +111,12 @@ function plan(parsed,state,options={}){
    const found=working.vehicles.filter(x=>x.name===i.name);
    if(found.length>1){fail(i,`${i.name} 有同名車輛，請先整理車號`);continue;}
    let v=found[0];if(!v){const code=i.name.replace(i.unit,'');const info=options.vehicleType?.(i.name)||{label:'消防車',canHose:/^[156]/.test(code)};v={id:newId('vehicle',i.name),name:i.name,unit:i.unit,brigade:i.brigade,type:info.label,canHose:info.canHose,status:'待命',task:'待部署',...locate(i.face,working.vehicles.length)};working.vehicles.push(v);}
-   if(i.face&&v.face!==i.face)Object.assign(v,locate(i.face,working.vehicles.indexOf(v)),{face:i.face,staged:false});
+   if(i.face&&v.face!==i.face){
+    const oldLat=Number(v.lat),oldLng=Number(v.lng),group=new Set([v.id]),queue=[v.id];
+    while(queue.length){const id=queue.shift();for(const h of working.hoses)if(h.targetType==='vehicle'&&!h.supplyUnconfirmed){const other=h.vehicleId===id?h.targetId:h.targetId===id?h.vehicleId:null;if(other&&!group.has(other)){group.add(other);queue.push(other);}}}
+    Object.assign(v,locate(i.face,working.vehicles.indexOf(v)),{face:i.face,staged:false});
+    for(const peer of working.vehicles)if(peer.id!==v.id&&group.has(peer.id))Object.assign(peer,{lat:Number(peer.lat)+Number(v.lat)-oldLat,lng:Number(peer.lng)+Number(v.lng)-oldLng,face:i.face,staged:false});
+   }
   }
   if(i.kind==='hose'){
    const v=working.vehicles.find(x=>x.name===i.source),targetVehicle=working.vehicles.find(x=>x.name===i.target),face=faces.indexOf(i.target);
@@ -128,10 +133,17 @@ function plan(parsed,state,options={}){
    for(let j=0;j<count;j++){
     let h=selected[j];
     if(!h){h={id:newId('hose',v.id+'|'+targetType+'|'+targetId+'|'+j),vehicleId:v.id,vehicleName:v.name,unit:v.unit,owner:v.unit,port:'出水口 '+(j+1),kind:face>=0?'進攻水線':'供水水線',task:'水線作業',status:'使用中'};if(working.hoses.some(x=>x.id===h.id)){fail(i,'水線識別衝突，請在圖面確認現況');break;}working.hoses.push(h);}
-    Object.assign(h,{targetType,targetId,targetName:i.target});
+    Object.assign(h,{targetType,targetId,targetName:i.target,...(i.task?{task:i.task}:{}),...(targetType==='vehicle'?{linkedMove:true}:{} )});
    }
    const excess=new Set(selected.slice(count).map(x=>x.id));working.hoses=working.hoses.filter(x=>!excess.has(x.id));
   }
+ }
+ for(let pass=0;pass<working.vehicles.length;pass++)for(const h of working.hoses){
+  if(h.targetType!=='vehicle')continue;
+  const a=working.vehicles.find(v=>v.id===h.vehicleId),b=working.vehicles.find(v=>v.id===h.targetId);
+  if(!a||!b)continue;
+  const anchor=a.face?a:b.face?b:null,follower=anchor===a?b:a;
+  if(anchor&&!follower.face){const n=working.vehicles.indexOf(follower)+1;Object.assign(follower,{face:anchor.face,staged:false,lat:Number(anchor.lat)+n*0.000018,lng:Number(anchor.lng)+n*0.000028,anchorBuilding:true});}
  }
  const writes=[];
  for(const coll of collections){const ids=new Set([...before[coll],...working[coll]].map(x=>x.id));for(const id of ids){const a=before[coll].find(x=>x.id===id)||null,b=working[coll].find(x=>x.id===id)||null;if(fingerprint(a)!==fingerprint(b))writes.push({coll,id,before:a,after:b});}}
