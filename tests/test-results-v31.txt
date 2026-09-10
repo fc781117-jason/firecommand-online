@@ -1,0 +1,664 @@
+TAP version 13
+# Subtest: API 無登入與待審核帳號均不得呼叫付費模型
+ok 1 - API 無登入與待審核帳號均不得呼叫付費模型
+  ---
+  duration_ms: 6.541744
+  type: 'test'
+  ...
+# Subtest: API 部署解析、SDS 與角色回應回傳各自結構
+ok 2 - API 部署解析、SDS 與角色回應回傳各自結構
+  ---
+  duration_ms: 2.174222
+  type: 'test'
+  ...
+# Subtest: API 拒絕模型格式錯誤，不回傳假成功
+ok 3 - API 拒絕模型格式錯誤，不回傳假成功
+  ---
+  duration_ms: 3.838677
+  type: 'test'
+  ...
+# Subtest: v29 intake API 真正呼叫模型並傳回可供核對的結構
+ok 4 - v29 intake API 真正呼叫模型並傳回可供核對的結構
+  ---
+  duration_ms: 4.566913
+  type: 'test'
+  ...
+# Subtest: LOCAL 失敗可降到 SESSION，不把整個 Firebase 禁用
+ok 5 - LOCAL 失敗可降到 SESSION，不把整個 Firebase 禁用
+  ---
+  duration_ms: 3.653127
+  type: 'test'
+  ...
+# Subtest: LOCAL、SESSION 都不可用時明確降到 NONE
+ok 6 - LOCAL、SESSION 都不可用時明確降到 NONE
+  ---
+  duration_ms: 1.139495
+  type: 'test'
+  ...
+# Subtest: GIS 回傳 credential 直接交 Firebase，不呼叫 helper popup 或 redirect
+ok 7 - GIS 回傳 credential 直接交 Firebase，不呼叫 helper popup 或 redirect
+  ---
+  duration_ms: 1.042679
+  type: 'test'
+  ...
+# Subtest: 主程式移除無用途的 redirect recovery 呼叫
+ok 8 - 主程式移除無用途的 redirect recovery 呼叫
+  ---
+  duration_ms: 2.510208
+  type: 'test'
+  ...
+# Subtest: 登入設定端點只回公開 client ID，不暴露 client secret
+ok 9 - 登入設定端點只回公開 client ID，不暴露 client secret
+  ---
+  duration_ms: 0.738772
+  type: 'test'
+  ...
+# Subtest: 確認前不寫入；確認後在實戰与練習同樣更新人員與摘要
+ok 10 - 確認前不寫入；確認後在實戰与練習同樣更新人員與摘要
+  ---
+  duration_ms: 33.796609
+  type: 'test'
+  ...
+# Subtest: UI 確認核取未勾選，不可套用；完成後可接第二次回報
+ok 11 - UI 確認核取未勾選，不可套用；完成後可接第二次回報
+  ---
+  duration_ms: 6.857479
+  type: 'test'
+  ...
+# Subtest: 本機持久化失敗：不留半套人數、圖面或成功紀錄
+ok 12 - 本機持久化失敗：不留半套人數、圖面或成功紀錄
+  ---
+  duration_ms: 5.601765
+  type: 'test'
+  ...
+# Subtest: 遠端交易：同一命令重送只增加一次，回報與日誌原子提交
+ok 13 - 遠端交易：同一命令重送只增加一次，回報與日誌原子提交
+  ---
+  duration_ms: 5.744465
+  type: 'test'
+  ...
+# Subtest: 遠端交易：提交失敗沒有任何部分寫入
+ok 14 - 遠端交易：提交失敗沒有任何部分寫入
+  ---
+  duration_ms: 4.971231
+  type: 'test'
+  ...
+# Subtest: 遠端交易：手動新增／旋轉後的舊預覽被拒絕
+ok 15 - 遠端交易：手動新增／旋轉後的舊預覽被拒絕
+  ---
+  duration_ms: 4.178949
+  type: 'test'
+  ...
+# Subtest: 遠端交易：即使舊客戶端未推進版本，已修改的同筆資料仍不可覆蓋
+ok 16 - 遠端交易：即使舊客戶端未推進版本，已修改的同筆資料仍不可覆蓋
+  ---
+  duration_ms: 4.434593
+  type: 'test'
+  ...
+# Subtest: 案件已切換或已關閉時拒絕遲來的回報
+ok 17 - 案件已切換或已關閉時拒絕遲來的回報
+  ---
+  duration_ms: 5.100075
+  type: 'test'
+  ...
+# Subtest: 復原保留審計；有後續修改時拒絕破壞新資料
+ok 18 - 復原保留審計；有後續修改時拒絕破壞新資料
+  ---
+  duration_ms: 6.101782
+  type: 'test'
+  ...
+# Subtest: 舊文字保留但不再蓋過最新人數摘要
+ok 19 - 舊文字保留但不再蓋過最新人數摘要
+  ---
+  duration_ms: 4.825181
+  type: 'test'
+  ...
+# Subtest: v29 遠端交易：同時提交人員與SOP差異；SOP過期時整筆拒絕
+ok 20 - v29 遠端交易：同時提交人員與SOP差異；SOP過期時整筆拒絕
+  ---
+  duration_ms: 4.635291
+  type: 'test'
+  ...
+# Subtest: 辨識只產生草稿；修改中文九人後單筆確認更新共用資料
+ok 21 - 辨識只產生草稿；修改中文九人後單筆確認更新共用資料
+  ---
+  duration_ms: 32.370422
+  type: 'test'
+  ...
+# Subtest: 選入的模糊項目未確認不能送出；取消選入後清楚項目可先儲存並保存待辦
+ok 22 - 選入的模糊項目未確認不能送出；取消選入後清楚項目可先儲存並保存待辦
+  ---
+  duration_ms: 11.93437
+  type: 'test'
+  ...
+# Subtest: 純情資與指揮權變更可送出，復原同時還原SOP與紀錄
+ok 23 - 純情資與指揮權變更可送出，復原同時還原SOP與紀錄
+  ---
+  duration_ms: 5.05063
+  type: 'test'
+  ...
+# Subtest: 同時有人修改SOP，舊草稿不能覆蓋；重新核對保留人工修正
+ok 24 - 同時有人修改SOP，舊草稿不能覆蓋；重新核對保留人工修正
+  ---
+  duration_ms: 5.265665
+  type: 'test'
+  ...
+# Subtest: 晚到AI結果：切換案件或修改原文都不注入舊結果
+ok 25 - 晚到AI結果：切換案件或修改原文都不注入舊結果
+  ---
+  duration_ms: 6.129153
+  type: 'test'
+  ...
+# Subtest: AI失敗保留原文且可使用本機，不假稱AI成功
+ok 26 - AI失敗保留原文且可使用本機，不假稱AI成功
+  ---
+  duration_ms: 7.540528
+  type: 'test'
+  ...
+# Subtest: 入口只在初期部署且預設收合；正式包完全移除自建收音
+ok 27 - 入口只在初期部署且預設收合；正式包完全移除自建收音
+  ---
+  duration_ms: 5.550393
+  type: 'test'
+  ...
+# Subtest: 編輯卡片真實oninput 與確認按鈕，不依賴勾選
+ok 28 - 編輯卡片真實oninput 與確認按鈕，不依賴勾選
+  ---
+  duration_ms: 6.35242
+  type: 'test'
+  ...
+# Subtest: 首報：別字校正；無面向仍報到並計入人數
+ok 29 - 首報：別字校正；無面向仍報到並計入人數
+  ---
+  duration_ms: 3.739718
+  type: 'test'
+  ...
+# Subtest: 相同絕對回報再次辨識：不重複建立、不重複計數
+ok 30 - 相同絕對回報再次辨識：不重複建立、不重複計數
+  ---
+  duration_ms: 0.681425
+  type: 'test'
+  ...
+# Subtest: 二報：新增單位並更正既有人數，保留 ID
+ok 31 - 二報：新增單位並更正既有人數，保留 ID
+  ---
+  duration_ms: 0.525952
+  type: 'test'
+  ...
+# Subtest: 增量、減量與絕對數有不同語意
+ok 32 - 增量、減量與絕對數有不同語意
+  ---
+  duration_ms: 0.539672
+  type: 'test'
+  ...
+# Subtest: 多組同分隊：必須選擇；不會覆蓋或加總到任一組
+ok 33 - 多組同分隊：必須選擇；不會覆蓋或加總到任一組
+  ---
+  duration_ms: 0.614334
+  type: 'test'
+  ...
+# Subtest: 相似單位僅提供候選，選擇後才轉成操作
+ok 34 - 相似單位僅提供候選，選擇後才轉成操作
+  ---
+  duration_ms: 2.863109
+  type: 'test'
+  ...
+# Subtest: 主委出現在非單位上下文，不直接置換成分隊
+ok 35 - 主委出現在非單位上下文，不直接置換成分隊
+  ---
+  duration_ms: 0.168544
+  type: 'test'
+  ...
+# Subtest: 多個單位、人數或否定／條件語句不會靜默當成一組
+ok 36 - 多個單位、人數或否定／條件語句不會靜默當成一組
+  ---
+  duration_ms: 0.382175
+  type: 'test'
+  ...
+# Subtest: 零人與超限數字；沒有報到人數不猜測
+ok 37 - 零人與超限數字；沒有報到人數不猜測
+  ---
+  duration_ms: 0.775498
+  type: 'test'
+  ...
+# Subtest: 水線絕對條數重複回報不重複建立；口述車號自動校正
+ok 38 - 水線絕對條數重複回報不重複建立；口述車號自動校正
+  ---
+  duration_ms: 2.748335
+  type: 'test'
+  ...
+# Subtest: 同一水線改接保留 ID；車輛移位也不改接線架構
+ok 39 - 同一水線改接保留 ID；車輛移位也不改接線架構
+  ---
+  duration_ms: 0.771771
+  type: 'test'
+  ...
+# Subtest: 人員移位、任務更新不改人數；水線不變
+ok 40 - 人員移位、任務更新不改人數；水線不變
+  ---
+  duration_ms: 0.345219
+  type: 'test'
+  ...
+# Subtest: 減少水線只移除超出的；多終點改接要求人工選線
+ok 41 - 減少水線只移除超出的；多終點改接要求人工選線
+  ---
+  duration_ms: 0.605141
+  type: 'test'
+  ...
+# Subtest: 預覽後資料有異動：拒絕覆蓋
+ok 42 - 預覽後資料有異動：拒絕覆蓋
+  ---
+  duration_ms: 0.997031
+  type: 'test'
+  ...
+# Subtest: 既有手動編組不含大隊資料也能沿用
+ok 43 - 既有手動編組不含大隊資料也能沿用
+  ---
+  duration_ms: 0.241143
+  type: 'test'
+  ...
+# Subtest: 一段不明就不能套用整批；缺少水線數及樓層不猜位置
+ok 44 - 一段不明就不能套用整批；缺少水線數及樓層不猜位置
+  ---
+  duration_ms: 0.350127
+  type: 'test'
+  ...
+# Subtest: 整合：房主自我練習不是教官，另一角色回報不會替主受測者跳關
+ok 45 - 整合：房主自我練習不是教官，另一角色回報不會替主受測者跳關
+  ---
+  duration_ms: 20.475453
+  type: 'test'
+  ...
+# Subtest: 整合：真人教官可開始與結束；受測者無法呼叫教官推進
+ok 46 - 整合：真人教官可開始與結束；受測者無法呼叫教官推進
+  ---
+  duration_ms: 6.70462
+  type: 'test'
+  ...
+# Subtest: 整合：確認回報一次更新人車水線，旋轉後保留連結
+ok 47 - 整合：確認回報一次更新人車水線，旋轉後保留連結
+  ---
+  duration_ms: 14.886141
+  type: 'test'
+  ...
+# Subtest: 整合：SDS 保存須有核對與原文來源
+ok 48 - 整合：SDS 保存須有核對與原文來源
+  ---
+  duration_ms: 4.938662
+  type: 'test'
+  ...
+# Subtest: 整合：初期指揮官受測時，不加入競爭指揮權的 AI 現場指揮官
+ok 49 - 整合：初期指揮官受測時，不加入競爭指揮權的 AI 現場指揮官
+  ---
+  duration_ms: 4.374403
+  type: 'test'
+  ...
+# Subtest: 主服務429：立即切Gemini，回報實際來源，金鑰只在對應標頭
+ok 50 - 主服務429：立即切Gemini，回報實際來源，金鑰只在對應標頭
+  ---
+  duration_ms: 4.331888
+  type: 'test'
+  ...
+# Subtest: 主服務失敗、另一服務失敗：採設定備用模型，最多3次
+ok 51 - 主服務失敗、另一服務失敗：採設定備用模型，最多3次
+  ---
+  duration_ms: 0.851491
+  type: 'test'
+  ...
+# Subtest: 手動Gemini + 停用備援只呼叫Gemini一次
+ok 52 - 手動Gemini + 停用備援只呼叫Gemini一次
+  ---
+  duration_ms: 1.034026
+  type: 'test'
+  ...
+# Subtest: 沒有主服務金鑰可直接使用可用備援；完全未設無外呼
+ok 53 - 沒有主服務金鑰可直接使用可用備援；完全未設無外呼
+  ---
+  duration_ms: 0.732342
+  type: 'test'
+  ...
+# Subtest: 壞JSON／截斷輸出會切換，不把部分輸出當成功
+ok 54 - 壞JSON／截斷輸出會切換，不把部分輸出當成功
+  ---
+  duration_ms: 0.729468
+  type: 'test'
+  ...
+# Subtest: Timeout會備援；內容拒絕不繞至另一服務
+ok 55 - Timeout會備援；內容拒絕不繞至另一服務
+  ---
+  duration_ms: 0.841977
+  type: 'test'
+  ...
+# Subtest: SDS/情境附件在Gemini備援仍攜帶原文，錯附件不送模型
+ok 56 - SDS/情境附件在Gemini備援仍攜帶原文，錯附件不送模型
+  ---
+  duration_ms: 1.364753
+  type: 'test'
+  ...
+# Subtest: 設定端點資料不包含金鑰；管理者關閉備援優先於前端
+ok 57 - 設定端點資料不包含金鑰；管理者關閉備援優先於前端
+  ---
+  duration_ms: 0.436617
+  type: 'test'
+  ...
+# Subtest: v29 中文、全形、阿拉伯數與逐字車號；不把三芝轉成數字
+ok 58 - v29 中文、全形、阿拉伯數與逐字車號；不把三芝轉成數字
+  ---
+  duration_ms: 4.074592
+  type: 'test'
+  ...
+# Subtest: 重現截圖整段：三隊16人；指揮、面向、支援與情資分流；不猜石台或竹圍面向
+ok 59 - 重現截圖整段：三隊16人；指揮、面向、支援與情資分流；不猜石台或竹圍面向
+  ---
+  duration_ms: 7.298042
+  type: 'test'
+  ...
+# Subtest: 首報、後報修正及增減以相同ID同步，不清空原有面向任務
+ok 60 - 首報、後報修正及增減以相同ID同步，不清空原有面向任務
+  ---
+  duration_ms: 1.346857
+  type: 'test'
+  ...
+# Subtest: 同一AI項目重複輸出不重複增加人數
+ok 61 - 同一AI項目重複輸出不重複增加人數
+  ---
+  duration_ms: 0.265319
+  type: 'test'
+  ...
+# Subtest: 不明項目可延後；直接修改中文數字、打勾後可提交
+ok 62 - 不明項目可延後；直接修改中文數字、打勾後可提交
+  ---
+  duration_ms: 0.695697
+  type: 'test'
+  ...
+# Subtest: 無車號先畫示意線；後補來源車號沿用原水線，不虛構車輛、不重複連線
+ok 63 - 無車號先畫示意線；後補來源車號沿用原水線，不虛構車輛、不重複連線
+  ---
+  duration_ms: 1.028418
+  type: 'test'
+  ...
+# Subtest: 來源車移動不變接線；水線減量與單線改接正確
+ok 64 - 來源車移動不變接線；水線減量與單線改接正確
+  ---
+  duration_ms: 1.523603
+  type: 'test'
+  ...
+# Subtest: 沒有提供原句數字的AI猜測必須再確認
+ok 65 - 沒有提供原句數字的AI猜測必須再確認
+  ---
+  duration_ms: 1.733839
+  type: 'test'
+  ...
+# Subtest: 多組同分隊可選targetId；不會覆蓋成全隊總數
+ok 66 - 多組同分隊可選targetId；不會覆蓋成全隊總數
+  ---
+  duration_ms: 0.821296
+  type: 'test'
+  ...
+# Subtest: 只有情資／支援也能儲存；相同紀錄不重複；預定動作不算到場
+ok 67 - 只有情資／支援也能儲存；相同紀錄不重複；預定動作不算到場
+  ---
+  duration_ms: 0.689527
+  type: 'test'
+  ...
+# Subtest: SOP並行修改需重新確認，非白名單欄位不得寫入
+ok 68 - SOP並行修改需重新確認，非白名單欄位不得寫入
+  ---
+  duration_ms: 0.461744
+  type: 'test'
+  ...
+# Subtest: 少數量、錯單位、無來源車與不支持的面向都有可修正錯誤
+ok 69 - 少數量、錯單位、無來源車與不支持的面向都有可修正錯誤
+  ---
+  duration_ms: 0.303096
+  type: 'test'
+  ...
+# Subtest: 單人練習依有效回應連續推進並於最後結束
+ok 70 - 單人練習依有效回應連續推進並於最後結束
+  ---
+  duration_ms: 1.356211
+  type: 'test'
+  ...
+# Subtest: 暫停凍結時鐘，恢復不重置本階段，記錄暫停次數與時長
+ok 71 - 暫停凍結時鐘，恢復不重置本階段，記錄暫停次數與時長
+  ---
+  duration_ms: 0.257207
+  type: 'test'
+  ...
+# Subtest: 逾時不提前觸發，背景恢復只推進一階段
+ok 72 - 逾時不提前觸發，背景恢復只推進一階段
+  ---
+  duration_ms: 0.212681
+  type: 'test'
+  ...
+# Subtest: 重複、錯事件、空白回應不會跳關
+ok 73 - 重複、錯事件、空白回應不會跳關
+  ---
+  duration_ms: 0.168133
+  type: 'test'
+  ...
+# Subtest: 教官提前結束保留未完成項，不算通過
+ok 74 - 教官提前結束保留未完成項，不算通過
+  ---
+  duration_ms: 0.164228
+  type: 'test'
+  ...
+# Subtest: 轉圖：車對車供水、雙線第一面、人數第三面；不亂補人數
+ok 75 - 轉圖：車對車供水、雙線第一面、人數第三面；不亂補人數
+  ---
+  duration_ms: 1.237412
+  type: 'test'
+  ...
+# Subtest: 轉圖：未支援消防栓、樓層保留待確認，缺面不補造
+ok 76 - 轉圖：未支援消防栓、樓層保留待確認，缺面不補造
+  ---
+  duration_ms: 0.220442
+  type: 'test'
+  ...
+# Subtest: 轉圖拒絕懸空連結、自接、重複車號和無效人數
+ok 77 - 轉圖拒絕懸空連結、自接、重複車號和無效人數
+  ---
+  duration_ms: 0.336647
+  type: 'test'
+  ...
+# Subtest: 截圖四：target已選第一面，即使舊face殘留正面／錯誤字串也可畫線
+ok 78 - 截圖四：target已選第一面，即使舊face殘留正面／錯誤字串也可畫線
+  ---
+  duration_ms: 4.413452
+  type: 'test'
+  ...
+# Subtest: 正面、數字第一面與中文第一面一致；明確進入帶作業中
+ok 79 - 正面、數字第一面與中文第一面一致；明確進入帶作業中
+  ---
+  duration_ms: 9.254737
+  type: 'test'
+  ...
+# Subtest: 國字及無線電車號不混淆人數，1116拆11和16，111保留
+ok 80 - 國字及無線電車號不混淆人數，1116拆11和16，111保留
+  ---
+  duration_ms: 0.454284
+  type: 'test'
+  ...
+# Subtest: 未說人數的水線回報不額外建立未知人員卡
+ok 81 - 未說人數的水線回報不額外建立未知人員卡
+  ---
+  duration_ms: 0.456628
+  type: 'test'
+  ...
+# Subtest: 同隊跨句人數與部署合併；不同面向不一概指派第一面
+ok 82 - 同隊跨句人數與部署合併；不同面向不一概指派第一面
+  ---
+  duration_ms: 1.015198
+  type: 'test'
+  ...
+# Subtest: 否定與預定部署仍留情資，不執行人車動作
+ok 83 - 否定與預定部署仍留情資，不執行人車動作
+  ---
+  duration_ms: 0.793364
+  type: 'test'
+  ...
+# Subtest: 原句不完全一致只供展開查閱；原文沒有的數字仍提醒核對
+ok 84 - 原句不完全一致只供展開查閱；原文沒有的數字仍提醒核對
+  ---
+  duration_ms: 1.201218
+  type: 'test'
+  ...
+# Subtest: 逐筆登錄：壞水線不擋住人員，修正後不需總勾選
+ok 85 - 逐筆登錄：壞水線不擋住人員，修正後不需總勾選
+  ---
+  duration_ms: 19.850472
+  type: 'test'
+  ...
+# Subtest: 逐筆新增依更新後數據累計；同筆重點不重複增加
+ok 86 - 逐筆新增依更新後數據累計；同筆重點不重複增加
+  ---
+  duration_ms: 6.079168
+  type: 'test'
+  ...
+# Subtest: 水線單筆確認含可見依賴車輛；不用先跳另一卡
+ok 87 - 水線單筆確認含可見依賴車輛；不用先跳另一卡
+  ---
+  duration_ms: 10.929147
+  type: 'test'
+  ...
+# Subtest: A串B串C產生兩個連結；沒有方向時保持流向未指定
+ok 88 - A串B串C產生兩個連結；沒有方向時保持流向未指定
+  ---
+  duration_ms: 1.545987
+  type: 'test'
+  ...
+# Subtest: 供水車承接攻擊車面向，不影響其他獨立車
+ok 89 - 供水車承接攻擊車面向，不影響其他獨立車
+  ---
+  duration_ms: 0.552361
+  type: 'test'
+  ...
+# Subtest: 拖動車組維持相對距離和水線ID；回報文字更新面向，可整組復原
+ok 90 - 拖動車組維持相對距離和水線ID；回報文字更新面向，可整組復原
+  ---
+  duration_ms: 34.986029
+  type: 'test'
+  ...
+# Subtest: 兩條進攻線圖面不同路徑，但起終點仍連同一車和建物
+ok 91 - 兩條進攻線圖面不同路徑，但起終點仍連同一車和建物
+  ---
+  duration_ms: 10.267201
+  type: 'test'
+  ...
+# Subtest: 多人改資料需再核對；失敗保留原稿與未完成卡片
+ok 92 - 多人改資料需再核對；失敗保留原稿與未完成卡片
+  ---
+  duration_ms: 5.867139
+  type: 'test'
+  ...
+# Subtest: 練習與實戰使用相同單筆流程；觀察員無法提交
+ok 93 - 練習與實戰使用相同單筆流程；觀察員無法提交
+  ---
+  duration_ms: 4.345089
+  type: 'test'
+  ...
+# Subtest: 卡片總量受限且原句、設定與戰情表單預設收合
+ok 94 - 卡片總量受限且原句、設定與戰情表單預設收合
+  ---
+  duration_ms: 4.487974
+  type: 'test'
+  ...
+# Subtest: OpenAI GPT-5系列辨識套用low推理，4.1保留相容性
+ok 95 - OpenAI GPT-5系列辨識套用low推理，4.1保留相容性
+  ---
+  duration_ms: 2.030565
+  type: 'test'
+  ...
+# Subtest: 後續語音移位也移動已連結車組，進攻水線終點保持原指定
+ok 96 - 後續語音移位也移動已連結車組，進攻水線終點保持原指定
+  ---
+  duration_ms: 1.776353
+  type: 'test'
+  ...
+# Subtest: 選分隊後輸入11、完整或重複前綴車號均正規化；111保留且不接受別隊衝突
+ok 97 - 選分隊後輸入11、完整或重複前綴車號均正規化；111保留且不接受別隊衝突
+  ---
+  duration_ms: 4.282705
+  type: 'test'
+  ...
+# Subtest: 完整使用者例句：8車、兩個入室編組、5條車間線與2條攻擊線，皆同頭車
+ok 98 - 完整使用者例句：8車、兩個入室編組、5條車間線與2條攻擊線，皆同頭車
+  ---
+  duration_ms: 13.138441
+  type: 'test'
+  ...
+# Subtest: 列隊依原始次序、第一面右側、安全留白、同向單列，不是繞建物排列
+ok 99 - 列隊依原始次序、第一面右側、安全留白、同向單列，不是繞建物排列
+  ---
+  duration_ms: 4.960474
+  type: 'test'
+  ...
+# Subtest: 第二面另設頭車形成独立車隊，後續回報不搬移第一面
+ok 100 - 第二面另設頭車形成独立車隊，後續回報不搬移第一面
+  ---
+  duration_ms: 1.894972
+  type: 'test'
+  ...
+# Subtest: 樓層只作位置資訊：在建物內，點選與水線路徑可讀同一筆人員
+ok 101 - 樓層只作位置資訊：在建物內，點選與水線路徑可讀同一筆人員
+  ---
+  duration_ms: 23.910662
+  type: 'test'
+  ...
+# Subtest: 救護車在第二面集結且不進供水車隊；未部署人員在指揮站附近待命
+ok 102 - 救護車在第二面集結且不進供水車隊；未部署人員在指揮站附近待命
+  ---
+  duration_ms: 5.425505
+  type: 'test'
+  ...
+# Subtest: 已確認人數後回報進入不歸零，重複語句不新增人車水線
+ok 103 - 已確認人數後回報進入不歸零，重複語句不新增人車水線
+  ---
+  duration_ms: 13.227415
+  type: 'test'
+  ...
+# Subtest: 手動拖動位置在無關的新回報之後保持，復原邏輯仍可使用
+ok 104 - 手動拖動位置在無關的新回報之後保持，復原邏輯仍可使用
+  ---
+  duration_ms: 4.094683
+  type: 'test'
+  ...
+# Subtest: AI回傳再正規化仍與本機拓樸相同，不重複水線，不把來源車單位當執行分隊
+ok 105 - AI回傳再正規化仍與本機拓樸相同，不重複水線，不把來源車單位當執行分隊
+  ---
+  duration_ms: 5.017871
+  type: 'test'
+  ...
+# Subtest: 否定或預定的頭車、入室與集結區不能改成既成事實
+ok 106 - 否定或預定的頭車、入室與集結區不能改成既成事實
+  ---
+  duration_ms: 0.954547
+  type: 'test'
+  ...
+# Subtest: 先報兩線後報出水頭車，同面唯一頭車可接續水線
+ok 107 - 先報兩線後報出水頭車，同面唯一頭車可接續水線
+  ---
+  duration_ms: 1.204633
+  type: 'test'
+  ...
+# Subtest: 逐筆確認完整例句：每筆有依賴時同時登錄，不殘留未接頭車的線
+ok 108 - 逐筆確認完整例句：每筆有依賴時同時登錄，不殘留未接頭車的線
+  ---
+  duration_ms: 223.459493
+  type: 'test'
+  ...
+# Subtest: 先說供水車、後說攻擊車，也依供水拓樸把供水車放頭車後方
+ok 109 - 先說供水車、後說攻擊車，也依供水拓樸把供水車放頭車後方
+  ---
+  duration_ms: 1.095988
+  type: 'test'
+  ...
+1..109
+# tests 109
+# suites 0
+# pass 109
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 552.457084

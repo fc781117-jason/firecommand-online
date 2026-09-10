@@ -97,12 +97,12 @@ function plan(parsed,state,options={}){
    if(i.targetId&&!matches.length){fail(i,'原選擇已不存在，請重新辨識');continue;}
    let c=matches[0];
    if(!c){
-    if(i.count===undefined||i.mode==='subtract'){fail(i,'尚無此編組的報到資料；請先提供完整人數');continue;}
+    if((i.count===undefined&&!i.allowUnknown)||i.mode==='subtract'){fail(i,'尚無此編組的報到資料；請先提供完整人數');continue;}
     const id=newId('crew',i.brigade+'|'+i.unit+'|'+i.group);
     if(working.crews.some(x=>x.id===id)){fail(i,'編組識別重複，請在原編組修改');continue;}
-    c={id,unit:i.unit,brigade:i.brigade,voiceGroup:i.group,leader:i.group,count:0,status:'待命',task:'待部署',...locate(i.face,working.crews.length)};working.crews.push(c);
+    c={id,unit:i.unit,brigade:i.brigade,voiceGroup:i.group,leader:i.group,count:0,...(i.count===undefined?{countUnknown:true}:{}),status:'待命',task:'待部署',...locate(i.face,working.crews.length)};working.crews.push(c);
    }
-   if(i.count!==undefined){const n=i.mode==='add'?Number(c.count||0)+i.count:i.mode==='subtract'?Number(c.count||0)-i.count:i.count;if(n<0||n>99){fail(i,'修正後人數需在 0–99 人之間');continue;}c.count=n;}
+   if(i.count!==undefined){const n=i.mode==='add'?Number(c.count||0)+i.count:i.mode==='subtract'?Number(c.count||0)-i.count:i.count;if(n<0||n>99){fail(i,'修正後人數需在 0–99 人之間');continue;}c.count=n;c.countUnknown=false;}
    if(i.face&&i.face!==c.face){Object.assign(c,locate(i.face,working.crews.indexOf(c)),{face:i.face,staged:false});}
    if(i.task)c.task=i.task;if(i.status)c.status=i.status;
    if(i.mode==='add'||i.mode==='subtract')notes.push(`${i.unit} 本次${i.mode==='add'?'增加':'減少'} ${i.count} 人，確認後為 ${c.count} 人`);
@@ -123,6 +123,7 @@ function plan(parsed,state,options={}){
    if(!v?.canHose||(!targetVehicle&&face<0)||targetVehicle?.id===v.id){fail(i,'請確認可供水車輛及不同的水線終點');continue;}
    const targetType=face>=0?'buildingFace':'vehicle',targetId=face>=0?'face'+(face+1):targetVehicle.id;
    let selected=working.hoses.filter(h=>h.vehicleId===v.id&&h.targetType===targetType&&h.targetId===targetId);
+   if(i.lineNo)selected=selected.filter((h,n)=>(h.lineNo||n+1)===i.lineNo);
    if(i.rewire){
     selected=working.hoses.filter(h=>h.vehicleId===v.id);
     if(!selected.length){fail(i,'尚無可改接的既有水線');continue;}
@@ -132,8 +133,8 @@ function plan(parsed,state,options={}){
    if(!Number.isInteger(count)||count<0||count>6){fail(i,'同一起終點水線數需為 0–6 條');continue;}
    for(let j=0;j<count;j++){
     let h=selected[j];
-    if(!h){h={id:newId('hose',v.id+'|'+targetType+'|'+targetId+'|'+j),vehicleId:v.id,vehicleName:v.name,unit:v.unit,owner:v.unit,port:'出水口 '+(j+1),kind:face>=0?'進攻水線':'供水水線',task:'水線作業',status:'使用中'};if(working.hoses.some(x=>x.id===h.id)){fail(i,'水線識別衝突，請在圖面確認現況');break;}working.hoses.push(h);}
-    Object.assign(h,{targetType,targetId,targetName:i.target,...(i.task?{task:i.task}:{}),...(targetType==='vehicle'?{linkedMove:true}:{} )});
+    if(!h){h={id:newId('hose',v.id+'|'+targetType+'|'+targetId+'|'+(i.lineNo?i.lineNo-1:j)),vehicleId:v.id,vehicleName:v.name,unit:v.unit,owner:v.unit,port:'出水口 '+(j+1),kind:face>=0?'進攻水線':'供水水線',task:'水線作業',status:'使用中'};if(working.hoses.some(x=>x.id===h.id)){fail(i,'水線識別衝突，請在圖面確認現況');break;}working.hoses.push(h);}
+    Object.assign(h,{targetType,targetId,targetName:i.target,...(i.lineNo?{lineNo:i.lineNo,port:'第'+i.lineNo+'線'}:{}),...(i.owner?{owner:i.owner}:{}),useHead:!!i.useHead,...(i.task?{task:i.task}:{}),...(targetType==='vehicle'?{linkedMove:true}:{} )});
    }
    const excess=new Set(selected.slice(count).map(x=>x.id));working.hoses=working.hoses.filter(x=>!excess.has(x.id));
   }

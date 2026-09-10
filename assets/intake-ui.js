@@ -4,6 +4,7 @@ let aiPreference29='auto',aiFallback29=true;
 function intakeSnapshot28(){return Object.fromEntries(FCIntake.collections.map(c=>[c,JSON.parse(JSON.stringify(live[c]||[]))]));}
 function intakeRevision28(c=currentCase){return FCIntake.fingerprint({revision:c?.resourceRevision||0,box:c?.buildingBox||null});}
 function intakePosition28(face,index){const box=getBuildingBox(),n=FCIntake.faces.indexOf(face),w=box.widthM/2+15,h=box.heightM/2+15;const p=n===0?[index%4*8,-h]:n===1?[w,index%4*8]:n===2?[index%4*8,h]:n===3?[-w,index%4*8]:[w+25,25-index*7];return {...localPointToLatLng(box,...p),anchorBuilding:true,staged:n<0};}
+function tacticalPosition31(face,role,index){return FCIntake29.tactics.point(getBuildingBox(),face,role,index);}
 function closeIntake28(force=false){if(intakeBusy28&&!force)return;if($('intakeDialog28'))$('intakeDialog28').open=false;}
 function clearIntake28(){intakeRequest29?.abort();intakeRequest29=null;intake28=null;if($('intakeDialog28'))setIntakeDisabled29(false);closeIntake28(true);if($('intakeText28'))$('intakeText28').value='';if($('intakeResult28'))$('intakeResult28').hidden=true;}
 function ensureIntake29(){
@@ -51,7 +52,7 @@ async function parseIntake28(local=false){
  renderIntakePlan28();
 }
 function describeIntakeRecord28(coll,x){if(!x)return '無';if(coll==='crews')return `${x.unit}${x.voiceGroup?' '+x.voiceGroup+'組':''} · ${x.count} 人 · ${x.face||'待部署'} · ${x.task||x.status||''}`;if(coll==='vehicles')return `${x.name} · ${x.face||'待部署'} · ${x.task||x.status||''}`;return `${x.vehicleName||x.unit+'（供水起點待確認）'} → ${x.targetName} · ${x.port||'水線'}`;}
-function buildPlan29(){const s=intake28;if(!s?.base)return null;s.plan=FCIntake29.compile(s.items,s.base,s.caseBase,FCIntake.roster(UNIT_TREE),{locate:intakePosition28,vehicleType});return s.plan;}
+function buildPlan29(){const s=intake28;if(!s?.base)return null;s.plan=FCIntake29.compile(s.items,s.base,s.caseBase,FCIntake.roster(UNIT_TREE),{locate:intakePosition28,vehicleType,tacticalPosition:tacticalPosition31});return s.plan;}
 function field29(i,key,label,type='text'){
  const id='edit29_'+i.id+'_'+key,v=i[key]??'';
  return `<label for="${escapeHtml(id)}">${label}<input id="${escapeHtml(id)}" data-field="${key}" value="${escapeHtml(String(v))}" ${type==='number'?'inputmode="text" placeholder="可填七、兩或 7；留空保留原數"':''} maxlength="${key==='text'?800:160}" /></label>`;
@@ -59,18 +60,19 @@ function field29(i,key,label,type='text'){
 function select29(i,key,label,options){return `<label>${label}<select data-field="${key}">${options.map(([v,l])=>`<option value="${escapeHtml(v)}" ${String(i[key]||'')===v?'selected':''}>${escapeHtml(l)}</option>`).join('')}</select></label>`;}
 function rowPlan30(i){
  const s=intake28,rows=[{...i,selected:true,reviewed:true}],dependencies=[];
- if(i.kind==='hose')for(const name of [i.vehicle,i.target].filter(v=>v&&!FCIntake.faces.includes(v))){
+ if(i.kind==='hose')for(const name of [FCIntake29.tactics.vehicleName(i.unit,i.vehicle)||i.vehicle,i.target].filter(v=>v&&!FCIntake.faces.includes(v))){
   const current=s.base.vehicles.find(v=>v.name===name);
-  const draft=s.items.find(v=>v.kind==='vehicle'&&v.vehicle===name&&!v.committed);
+  const draft=s.items.find(v=>v.kind==='vehicle'&&(FCIntake29.tactics.vehicleName(v.unit,v.vehicle)||v.vehicle)===name&&!v.committed);
   if(draft&&(!current||draft.face&&draft.face!==current.face)){rows.unshift({...draft,selected:true,reviewed:true});dependencies.push(draft);}
  }
- const plan=FCIntake29.compile(rows,s.base,s.caseBase,FCIntake.roster(UNIT_TREE),{locate:intakePosition28,vehicleType});
+ if(i.kind==='hose'&&i.useHead){const crew=s.items.find(x=>x.kind==='crew'&&x.unit===i.unit&&x.interior&&!x.committed);if(crew){rows.push({...crew,selected:true,reviewed:true});dependencies.push(crew);}}
+ const plan=FCIntake29.compile(rows,s.base,s.caseBase,FCIntake.roster(UNIT_TREE),{locate:intakePosition28,vehicleType,tacticalPosition:tacticalPosition31});
  return {...plan,rows,dependencies};
 }
 function shortItem30(i){
  const mode=i.quantityMode==='add'?'增加 ':i.quantityMode==='subtract'?'減少 ':'';
- if(i.kind==='crew')return `${i.unit||'請選分隊'} · ${i.number===null?'保留人數':mode+i.number+' 人'} · ${i.face||'待部署'}${i.task?' · '+i.task:''}`;
- if(i.kind==='vehicle')return `${i.vehicle||'請填車號'} · ${i.face||'待部署'}`;
+ if(i.kind==='crew')return `${i.unit||'請選分隊'} · ${i.number===null?(i.allowUnknown?'人數待補／沿用在冊':'保留人數'):mode+i.number+' 人'} · ${i.face||'待部署'}${i.task?' · '+i.task:''}${i.interior?' · 建物內':''}${i.floor?' · '+i.floor:''}`;
+ if(i.kind==='vehicle')return `${FCIntake29.tactics.vehicleName(i.unit,i.vehicle)||i.vehicle||'請填車號'} · ${i.face||'待部署'}`;
  if(i.kind==='hose')return `${i.vehicle||i.unit||'請選分隊'}${i.task==='車輛串接（流向未指定）'?' ↔ ':' → '}${i.target||i.face||'請選終點'} · ${mode}${i.number??'?'} 線`;
  return i.text||i.evidence||'請填內容';
 }
@@ -90,14 +92,14 @@ function renderIntakePlan28(){
    const groups=(s.base.crews||[]).filter(c=>c.unit===i.unit);
    if(groups.length>1)fields+=select29(i,'targetId','請選此次更新對象',[['','請選擇'],...groups.map(c=>[c.id,`${c.voiceGroup||c.leader||c.id.slice(-6)}｜${c.count}人｜${c.face||'待部署'}`])]);
   }
-  if(i.kind==='vehicle')fields+=field29(i,'vehicle','完整車號')+select29(i,'face','部署面向',faceOptions);
+  if(i.kind==='vehicle')fields+=field29(i,'vehicle','車輛編號（如11、111；自動加分隊）')+select29(i,'face','部署面向',faceOptions);
   if(i.kind==='hose')fields+=field29(i,'vehicle','來源車號（可留空）')+field29(i,'number','水線條數','number')+select29(i,'target','終點',[['','請選擇'],...FCIntake.faces.map(x=>[x,x]),...[...new Set([...(s.base.vehicles||[]).map(v=>v.name),...s.items.filter(x=>x.kind==='vehicle').map(x=>x.vehicle),i.target].filter(x=>x&&!FCIntake.faces.includes(x)))].map(x=>[x,x])]);
   if(i.kind==='support')fields+=field29(i,'task','支援類型')+field29(i,'number','需要幾台（未定可留空）','number');
   if(!resource)fields+=field29(i,'text','紀錄內容');
   let extra=resource?field29(i,'task','任務／備註'):'';
   if(['crew','hose'].includes(i.kind))extra+=select29(i,'quantityMode','本次變更',[['set','登錄／修正總數'],['add','增加'],['subtract','減少']]);
   const plan=rowPlan30(i),errors=plan.issues;
-  return `<article class="review-card29 review-card30" data-item="${escapeHtml(i.id)}"><div class="review-top30"><span class="review-kind30">${escapeHtml(FCIntake29.labels[i.kind])}</span><span class="review-state30">${errors.length?'待補資料':i.uncertainty?'待核對':'待確認'}</span></div><p class="review-title30">${escapeHtml(shortItem30(i))}</p>${i.uncertainty?`<p class="review-notice30">${escapeHtml(i.uncertainty)}</p>`:''}<p class="review-preview29">${escapeHtml(plan.previews.find(p=>p.id===i.id)?.after||'')}</p>${plan.dependencies.length?`<p class="hint">同時登錄：${escapeHtml(plan.dependencies.map(v=>v.vehicle+(v.face?'（'+v.face+'）':'')).join('、'))}</p>`:''}<div data-error role="status">${escapeHtml(errors.map(e=>e.message).join('；'))}</div><div class="review-actions30"><button type="button" class="btn primary" data-commit ${intakeBusy28?'disabled':''}>確認登錄</button><button type="button" class="btn ghost" data-edit-toggle aria-expanded="${!!i.editOpen}">修改</button><button type="button" class="btn ghost" data-defer>稍後</button></div><details class="review-editor30" ${i.editOpen?'open':''}><summary>修改資料</summary><div class="review-fields29">${fields}</div>${extra?`<details class="review-extra30"><summary>任務／其他修正</summary><div class="review-fields29">${extra}</div></details>`:''}<details class="review-evidence29"><summary>原始回報</summary><p>${escapeHtml(i.sourceEvidence||i.evidence||s.text||'手動新增')}</p></details><button type="button" class="btn ghost" data-remove>移除此項</button></details></article>`;
+  return `<article class="review-card29 review-card30" data-item="${escapeHtml(i.id)}"><div class="review-top30"><span class="review-kind30">${escapeHtml(FCIntake29.labels[i.kind])}</span><span class="review-state30">${errors.length?'待補資料':i.uncertainty?'待核對':'待確認'}</span></div><p class="review-title30">${escapeHtml(shortItem30(i))}</p>${i.uncertainty?`<p class="review-notice30">${escapeHtml(i.uncertainty)}</p>`:''}<p class="review-preview29">${escapeHtml(plan.previews.find(p=>p.id===i.id)?.after||'')}</p>${plan.dependencies.length?`<p class="hint">同時登錄：${escapeHtml(plan.dependencies.map(v=>(v.vehicle||v.unit+'人員')+(v.face?'（'+v.face+'）':'')).join('、'))}</p>`:''}<div data-error role="status">${escapeHtml(errors.map(e=>e.message).join('；'))}</div><div class="review-actions30"><button type="button" class="btn primary" data-commit ${intakeBusy28?'disabled':''}>確認登錄</button><button type="button" class="btn ghost" data-edit-toggle aria-expanded="${!!i.editOpen}">修改</button><button type="button" class="btn ghost" data-defer>稍後</button></div><details class="review-editor30" ${i.editOpen?'open':''}><summary>修改資料</summary><div class="review-fields29">${fields}</div>${extra?`<details class="review-extra30"><summary>任務／其他修正</summary><div class="review-fields29">${extra}</div></details>`:''}<details class="review-evidence29"><summary>原始回報</summary><p>${escapeHtml(i.sourceEvidence||i.evidence||s.text||'手動新增')}</p></details><button type="button" class="btn ghost" data-remove>移除此項</button></details></article>`;
  }).join('')||'<p class="intake-done30">本次資料已處理完畢。</p>';
  if(pending.length>3){$('intakeChanges28').innerHTML+=`<details class="review-queue30"><summary>其餘 ${pending.length-3} 項</summary>${pending.slice(3).map(i=>`<button type="button" class="btn ghost" data-prioritize="${escapeHtml(i.id)}">${escapeHtml(shortItem30(i))}</button>`).join('')}</details>`;
  $('intakeChanges28').querySelectorAll('[data-prioritize]').forEach(b=>b.onclick=()=>{const row=s.items.find(x=>x.id===b.dataset.prioritize);s.items=[row,...s.items.filter(x=>x!==row)];renderIntakePlan28();});}
@@ -135,7 +137,7 @@ async function applyIntakeRow30(id){
  const p=rowPlan30(i);
  if(p.issues.length){i.editOpen=true;renderIntakePlan28();throw Error(p.issues.map(x=>x.message).join('；'));}
  const commandId=s.commandId+'_'+i.id;
- const event={id:commandId,caseId:s.caseId,raw:s.text,corrected:s.corrected||s.text,corrections:s.corrections||[],writes:stampWrites28(p.writes,commandId),caseChanges:p.caseChanges,reviewedItems:p.rows.map(x=>({...x,reviewed:true,selected:true})),deferredItems:s.items.filter(x=>!x.committed&&x!==i&&!p.dependencies.includes(x)),reportGroupId:s.commandId,ai:s.meta||{providerUsed:'manual'},createdAt:Date.now(),eventAt:s.observedAt||Date.now(),authorUid:profile.id,operator:radioCallSign(),summary:shortItem30(i),kind:'apply',resumedFrom:s.resumedFrom||''};
+ const event={id:commandId,caseId:s.caseId,raw:s.text,corrected:s.corrected||s.text,corrections:s.corrections||[],drawingRuleVersion:FCIntake29.tactics.version,writes:stampWrites28(p.writes,commandId),caseChanges:p.caseChanges,reviewedItems:p.rows.map(x=>({...x,reviewed:true,selected:true})),deferredItems:s.items.filter(x=>!x.committed&&x!==i&&!p.dependencies.includes(x)),reportGroupId:s.commandId,ai:s.meta||{providerUsed:'manual'},createdAt:Date.now(),eventAt:s.observedAt||Date.now(),authorUid:profile.id,operator:radioCallSign(),summary:shortItem30(i),kind:'apply',resumedFrom:s.resumedFrom||''};
  intakeBusy28=true;setIntakeDisabled29(true);
  try{
   const result=await commitIntake28(event,s.revision);

@@ -1701,7 +1701,7 @@ function renderSummaryCards(){
     <button type="button" class="mini-card summary-link-card" data-summary-page="arrivalSection" data-summary-stage="建"><div class="metric">${c.floors||'?'}</div><div class="metric-label">建物樓層</div><div class="subline">起火：${escapeHtml(floorText(c.fireFloor))}｜點選查看</div></button>
     <button type="button" class="mini-card summary-link-card" data-summary-page="arrivalSection" data-summary-stage="人"><div class="metric">${c.trapped==='有'?'有':c.trapped==='無'?'無':'?'}</div><div class="metric-label">受困狀況</div><div class="subline">${c.trapped==='有'?`${c.trappedCount||0} 人`:c.trapped==='無'?'確認無人受困':'尚未確認'}｜點選查看</div></button>
     <button type="button" class="mini-card summary-link-card" data-summary-page="dashboardSection"><div class="metric">${live.vehicles.length}</div><div class="metric-label">車輛</div><div class="subline">部署與任務細節</div></button>
-    <button type="button" class="mini-card summary-link-card" data-summary-page="dashboardSection"><div class="metric">${sum(live.crews,'count')}</div><div class="metric-label">人員</div><div class="subline">作業／待命／休息</div></button>
+    <button type="button" class="mini-card summary-link-card" data-summary-page="dashboardSection"><div class="metric">${sum(live.crews,'count')}${live.crews.some(p=>p.countUnknown)?'+?':''}</div><div class="metric-label">已知人員</div><div class="subline">作業／待命／休息</div></button>
     <button type="button" class="mini-card summary-link-card" data-summary-page="tacticalMapSection"><div class="metric">${live.hoses.length}</div><div class="metric-label">水線</div><div class="subline">連接與部署細節</div></button>
     <button type="button" class="mini-card summary-link-card" data-summary-page="sitrepSection"><div class="metric">${live.sitreps.length}</div><div class="metric-label">戰情</div><div class="subline">查看最新回報</div></button>`;
   wrap.querySelectorAll('[data-summary-page]').forEach(btn=>btn.addEventListener('click',()=>{switchCasePage(btn.dataset.summaryPage);if(btn.dataset.summaryStage)selectCommandStage(btn.dataset.summaryStage);}));
@@ -1733,7 +1733,7 @@ function setDeploymentMode(mode='select'){
 function renderDeploymentPalette(){
   const wrap=$('mapResourcePalette'); if(!wrap) return;
   const vehicleHtml=live.vehicles.map(v=>`<article class="resource-chip ${selectedMapResource?.coll==='vehicles'&&selectedMapResource?.id===v.id?'active':''}" draggable="true" data-resource-coll="vehicles" data-resource-id="${v.id}" data-resource-label="${escapeHtml(v.name)}"><b>${vehEmoji(v.type)} ${escapeHtml(vehicleDisplayName(v))}</b><span>${v.staged?'右側待命｜':''}${escapeHtml(v.unit)}｜${escapeHtml(v.task||v.status||'待命')}</span><div class="resource-chip-actions">${v.canHose?`<button type="button" data-resource-action="quickHose" data-resource-id="${v.id}">拉水線</button>`:''}<button type="button" data-map-action="editVehicle" data-id="${v.id}">修改</button></div></article>`).join('');
-  const crewHtml=live.crews.map(c=>`<article class="resource-chip ${selectedMapResource?.coll==='crews'&&selectedMapResource?.id===c.id?'active':''}" draggable="true" data-resource-coll="crews" data-resource-id="${c.id}" data-resource-label="${escapeHtml(c.unit+c.leader)}"><b>👥 ${escapeHtml(c.unit)}${escapeHtml(c.leader)}</b><span>${c.count||0}人｜${escapeHtml(c.task||c.status||'待命')}</span><div class="resource-chip-actions"><button type="button" data-map-action="editCrew" data-id="${c.id}">修改</button><button type="button" data-map-action="restCrew" data-mode="原地休息" data-id="${c.id}">休息</button></div></article>`).join('');
+  const crewHtml=live.crews.map(c=>`<article class="resource-chip ${selectedMapResource?.coll==='crews'&&selectedMapResource?.id===c.id?'active':''}" draggable="true" data-resource-coll="crews" data-resource-id="${c.id}" data-resource-label="${escapeHtml(c.unit+c.leader)}"><b>👥 ${escapeHtml(c.unit)}${escapeHtml(c.leader)}</b><span>${crewCount31(c)}｜${escapeHtml(c.task||c.status||'待命')}</span><div class="resource-chip-actions"><button type="button" data-map-action="editCrew" data-id="${c.id}">修改</button><button type="button" data-map-action="restCrew" data-mode="原地休息" data-id="${c.id}">休息</button></div></article>`).join('');
   const hazards=['起火點','指揮站','前進指揮所','休息區','瓦斯','高壓電','危險物'].map(t=>`<button type="button" class="resource-chip quick-symbol" data-resource-action="newHazard" data-hazard-type="${t}"><b>${hazEmoji(t)} ${t}</b><span>點選後再點地圖</span></button>`).join('');
   wrap.innerHTML=(vehicleHtml+crewHtml+hazards)||'<div class="resource-empty">尚無人車資料；可先使用下方表單新增。</div>';
   wrap.querySelectorAll('[draggable="true"]').forEach(el=>el.addEventListener('dragstart',ev=>{
@@ -2173,6 +2173,12 @@ function googleMarkerStyle(className='hazard'){
 function googleMarkerIcon(text,className='hazard'){
   const style=googleMarkerStyle(className);
   const clean=String(text||'標示').slice(0,24);
+  const car=className.startsWith('veh ')?clean.match(/([\u4e00-\u9fff]{2,4})(\d{2,3})/):null;
+  if(car){
+    const w=70,h=66,dir=(clean.match(/[←→↑↓↗↘↙↖]/)||[''])[0];
+    const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect x="2" y="2" width="66" height="58" rx="9" fill="${style.bg}" stroke="white" stroke-width="2"/><text x="35" y="20" text-anchor="middle" font-family="sans-serif" font-size="14" fill="white">${escapeXml(car[1])}</text><text x="35" y="39" text-anchor="middle" font-family="sans-serif" font-size="18" font-weight="bold" fill="white">${escapeXml(car[2])}</text><text x="35" y="55" text-anchor="middle" font-family="sans-serif" font-size="12" fill="white">${dir}${clean.includes('頭車')?' 頭車':''}</text></svg>`;
+    return {url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(svg),scaledSize:new google.maps.Size(w,h),anchor:new google.maps.Point(w/2,h/2)};
+  }
   const width=Math.min(260,Math.max(70,clean.length*15+26));
   const height=40;
   const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect x="1" y="1" width="${width-2}" height="32" rx="16" fill="${style.bg}" stroke="#ffffff" stroke-width="2"/><path d="M ${width/2-6} 32 L ${width/2} 39 L ${width/2+6} 32 Z" fill="${style.bg}"/><text x="${width/2}" y="22" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Noto Sans TC,sans-serif" font-size="13" font-weight="800" fill="${style.fg}">${escapeXml(clean)}</text></svg>`;
@@ -2180,11 +2186,13 @@ function googleMarkerIcon(text,className='hazard'){
 }
 function hosePath30(h,from,to){
  const a={lat:Number(from[0]),lng:Number(from[1])},b={lat:Number(to[0]),lng:Number(to[1])};
+ const entryCrew=h.targetType==='buildingFace'?live.crews.find(p=>p.interior&&p.unit===(h.owner||h.unit)&&p.face===h.targetName):null;
+ const append=path=>entryCrew?[...path,{lat:Number(entryCrew.lat),lng:Number(entryCrew.lng)}]:path;
  const peers=live.hoses.filter(x=>x.vehicleId===h.vehicleId&&x.unit===h.unit&&x.targetType===h.targetType&&x.targetId===h.targetId).sort((x,y)=>x.id.localeCompare(y.id));
- if(peers.length<2)return [a,b];
+ if(peers.length<2)return append([a,b]);
  const index=peers.findIndex(x=>x.id===h.id),offset=(index-(peers.length-1)/2)*4;
  const mean=(a.lat+b.lat)/2,dx=(b.lng-a.lng)*111320*Math.cos(mean*Math.PI/180),dy=(b.lat-a.lat)*111320,length=Math.hypot(dx,dy)||1;
- return [a,{lat:(a.lat+b.lat)/2+metersToLatDelta(dx/length*offset),lng:(a.lng+b.lng)/2+metersToLngDelta(-dy/length*offset,mean)},b];
+ return append([a,{lat:(a.lat+b.lat)/2+metersToLatDelta(dx/length*offset),lng:(a.lng+b.lng)/2+metersToLngDelta(-dy/length*offset,mean)},b]);
 }
 
 function makeGoogleMarker({position,text,className='hazard',draggable=false,title='',onDragEnd=null,onClick=null,zIndex=null}){
@@ -2226,15 +2234,16 @@ function renderMap(){
     const info=`<b>${escapeHtml(hoseSourceName)} ${escapeHtml(h.port||'')}</b><div class="meta">歸屬：${escapeHtml(h.owner||h.unit||'')}<br>目的地：${escapeHtml(h.targetName||'地圖點')}<br>性質：${escapeHtml(h.kind||'水線')}<br>任務：${escapeHtml(h.task||'')}</div><div class="popup-actions"><button data-map-action="editHose" data-id="${h.id}">修改</button><button data-map-action="deleteHose" data-id="${h.id}">刪除</button></div>`;
     poly.addListener('click',ev=>{ mapInfoWindow.setPosition(ev.latLng); mapInfoWindow.setContent(`<div class="google-info-card">${info}</div>`); mapInfoWindow.open({map,shouldFocus:false}); });
     const mid=path.length===3?path[1]:{lat:(path[0].lat+path[1].lat)/2,lng:(path[0].lng+path[1].lng)/2};
-    makeGoogleMarker({position:mid,text:`💧 ${hoseSourceName} ${h.port||''}｜${h.kind||'水線'}`,className:'hose-label',onClick:m=>openMapInfo(m,info),zIndex:40});
+    makeGoogleMarker({position:mid,text:`💧 ${h.port||''}｜${h.owner||hoseSourceName}`,className:'hose-label',onClick:m=>openMapInfo(m,info),zIndex:40});
     if(h.targetType==='map' && h.lat && h.lng){
       makeGoogleMarker({position:{lat:Number(h.lat),lng:Number(h.lng)},text:'💧 水線終點',className:'hose-label',draggable:true,zIndex:45,
         onDragEnd:async ll=>{ await updateMapItemWithUndo('hoses',h.id,{lat:ll.lat,lng:ll.lng,targetName:'地圖點 / 手動調整'},`水線終點：${hoseSourceName}`); await addLog('hose',`移動水線終點：${hoseSourceName}`); },
         onClick:m=>openMapInfo(m,info)});
     }
   });
+  tacticalZones31().forEach(z=>makeGoogleMarker({position:{lat:z.lat,lng:z.lng},text:z.label+'｜'+z.face,className:'zone31',zIndex:80,onClick:m=>openMapInfo(m,`<b>${escapeHtml(z.label)}</b><div>${escapeHtml(z.face)}｜依回報配置</div>`)}));
   live.vehicles.forEach(v=>{
-    const marker=makeGoogleMarker({position:{lat:Number(v.lat),lng:Number(v.lng)},text:`${vehEmoji(v.type)} ${vehicleDisplayName(v)}`,className:`veh ${vehClass(v.type)}`,draggable:true,zIndex:100,
+    const marker=makeGoogleMarker({position:{lat:Number(v.lat),lng:Number(v.lng)},text:`${vehEmoji(v.type)} ${vehicleDisplayName(v)}${Number.isFinite(v.heading31)?' '+(['↑','↗','→','↘','↓','↙','←','↖'][Math.round(v.heading31/45)%8]):''}${v.queueOrder===0?' 頭車':''}`,className:`veh ${vehClass(v.type)}`,draggable:true,zIndex:100,
       onDragEnd:async ll=>{ await updateMapItemWithUndo('vehicles',v.id,{lat:ll.lat,lng:ll.lng,staged:false},`移動${vehicleDisplayName(v)}`); await addLog('vehicle',`${vehicleDisplayName(v)} 部署位置更新`); },
       onClick:m=>{
         if(completeQuickHoseTarget('vehicle',v)) return;
@@ -2242,11 +2251,11 @@ function renderMap(){
       }});
   });
   live.crews.forEach(p=>{
-    makeGoogleMarker({position:{lat:Number(p.lat),lng:Number(p.lng)},text:`👥 ${p.unit}${p.leader}｜${p.count}人`,className:`person ${personClass(p.status)}`,draggable:true,zIndex:110,
+    makeGoogleMarker({position:{lat:Number(p.lat),lng:Number(p.lng)},text:`👥 ${p.unit}${p.leader||''}｜${crewCount31(p)}${p.interior?' · 建物內':''}`,className:`person ${personClass(p.status)}`,draggable:true,zIndex:110,
       onDragEnd:async ll=>handleCrewDragEnd(p,ll),
       onClick:m=>{
         if(completeQuickHoseTarget('crew',p)) return;
-        openMapInfo(m,`<b>${escapeHtml(p.unit)}${escapeHtml(p.leader)}</b><div class="meta">${p.count}人｜${escapeHtml(p.status)}<br>${escapeHtml(p.task)}</div><div class="popup-actions"><button data-map-action="editCrew" data-id="${p.id}">修改</button><button data-map-action="restCrew" data-mode="原地休息" data-id="${p.id}">原地休息</button><button data-map-action="restCrew" data-mode="移至休息區" data-id="${p.id}">移至休息區</button><button data-map-action="deleteCrew" data-id="${p.id}">刪除</button></div>`);
+        openMapInfo(m,`<b>${escapeHtml(p.unit)}${escapeHtml(p.leader)}</b><div class="meta">${crewCount31(p)}｜${escapeHtml(p.status)}<br>${escapeHtml(p.task)}${p.interior?'<br>建物內':''}${p.floor?'<br>樓層：'+escapeHtml(p.floor):''}</div><div class="popup-actions"><button data-map-action="editCrew" data-id="${p.id}">修改</button><button data-map-action="restCrew" data-mode="原地休息" data-id="${p.id}">原地休息</button><button data-map-action="restCrew" data-mode="移至休息區" data-id="${p.id}">移至休息區</button><button data-map-action="deleteCrew" data-id="${p.id}">刪除</button></div>`);
       }});
   });
   live.hazards.forEach(h=>{
@@ -2256,6 +2265,12 @@ function renderMap(){
   });
   renderDeploymentPalette();
 }
+function tacticalZones31(){
+ const zones=currentCase?.tacticalZones||{},result=Object.entries(zones).map(([id,z])=>({id:'zone31_'+id,...z}));
+ if(live.crews.some(p=>p.status==='待命')){const pt=tacticalPosition31(zones.command?.face||'第一面','standby',0);result.push({id:'zone31_standby',label:'待命區',face:zones.command?.face||'第一面',lat:pt.lat+metersToLatDelta(4),lng:pt.lng});}
+ return result;
+}
+function crewCount31(p){return p.countUnknown?'人數待補':p.count+'人';}
 function getHosePoints(h){
   const v = live.vehicles.find(x=>x.id===h.vehicleId);
   const schematic=h.supplyUnconfirmed?intakePosition28(h.sourceFace||h.targetName,live.hoses.indexOf(h)):null;
@@ -2377,7 +2392,7 @@ async function moveLinkedVehicles30(id,patch,label){
  const state=intakeSnapshot28(),anchor=state.vehicles.find(v=>v.id===id);if(!anchor)return;
  const group=FCIntake29.connectedVehicles(state,id),dlat=Number(patch.lat)-Number(anchor.lat),dlng=Number(patch.lng)-Number(anchor.lng),commandId=uid('chain');
  const face=mapFace30(patch.lat,patch.lng);
- const writes=stampWrites28(group.map(v=>({coll:'vehicles',id:v.id,before:v,after:{...v,...patch,lat:Number(v.lat)+dlat,lng:Number(v.lng)+dlng,face,anchorBuilding:true,staged:false}})),commandId);
+ const writes=stampWrites28(group.map(v=>({coll:'vehicles',id:v.id,before:v,after:{...v,...patch,positionManual:true,lat:Number(v.lat)+dlat,lng:Number(v.lng)+dlng,face,anchorBuilding:true,staged:false}})),commandId);
  const caseId=currentCaseId,event={id:commandId,caseId,kind:'apply',raw:'',corrected:'',corrections:[],writes,caseChanges:[],createdAt:Date.now(),authorUid:profile.id,operator:radioCallSign(),summary:`移動供水車組：${group.map(v=>v.name).join('、')}，${face}`};
  const result=await commitIntake28(event,intakeRevision28());
  if(caseId!==currentCaseId)return;
@@ -2387,7 +2402,7 @@ async function moveLinkedVehicles30(id,patch,label){
 
 async function updateMapItemWithUndo(coll,id,patch,label){
   if(coll==='vehicles'&&Number.isFinite(patch?.lat)&&Number.isFinite(patch?.lng)&&FCIntake29.connectedVehicles(intakeSnapshot28(),id).length>1)return moveLinkedVehicles30(id,patch,label);
-  if(['vehicles','crews'].includes(coll)&&Number.isFinite(patch?.lat)&&Number.isFinite(patch?.lng))patch={...patch,face:mapFace30(patch.lat,patch.lng)};
+  if(['vehicles','crews'].includes(coll)&&Number.isFinite(patch?.lat)&&Number.isFinite(patch?.lng))patch={...patch,positionManual:true,face:mapFace30(patch.lat,patch.lng)};
   const item=(live[coll]||[]).find(x=>x.id===id); if(!item) return;
   const before={}; Object.keys(patch||{}).forEach(k=>before[k]=item[k]);
   await updateItem(coll,id,patch);
@@ -2464,9 +2479,9 @@ async function deleteVehicle(id){
 async function editCrew(id){
   const p=live.crews.find(x=>x.id===id); if(!p) return;
   const statuses=['作業中','待命','休息','RIT','撤出'].map(x=>`<option ${p.status===x?'selected':''}>${x}</option>`).join('');
-  openActionSheet(`人員｜${p.unit}${p.leader}`,`<div class="field"><label>任務</label><input id="sheetCrewTask" value="${escapeHtml(p.task||'')}" /></div><div class="choice-row"><button class="action-option" data-fill-target="sheetCrewTask" data-fill-value="第一面內攻">第一面內攻</button><button class="action-option" data-fill-target="sheetCrewTask" data-fill-value="人命搜救">人命搜救</button><button class="action-option" data-fill-target="sheetCrewTask" data-fill-value="RIT待命">RIT待命</button><button class="action-option" data-fill-target="sheetCrewTask" data-fill-value="佔據水源">佔據水源</button></div><div class="two-col"><div class="field"><label>狀態</label><select id="sheetCrewStatus">${statuses}</select></div><div class="field"><label>人數</label><input id="sheetCrewCount" type="number" min="1" value="${Number(p.count)||4}" /></div></div><div class="button-row"><button id="saveCrewSheetBtn" class="btn primary">儲存</button><button id="deleteCrewSheetBtn" class="btn ghost">刪除編組</button></div>`);
+  openActionSheet(`人員｜${p.unit}${p.leader}`,`<div class="field"><label>任務</label><input id="sheetCrewTask" value="${escapeHtml(p.task||'')}" /></div><div class="choice-row"><button class="action-option" data-fill-target="sheetCrewTask" data-fill-value="第一面內攻">第一面內攻</button><button class="action-option" data-fill-target="sheetCrewTask" data-fill-value="人命搜救">人命搜救</button><button class="action-option" data-fill-target="sheetCrewTask" data-fill-value="RIT待命">RIT待命</button><button class="action-option" data-fill-target="sheetCrewTask" data-fill-value="佔據水源">佔據水源</button></div><div class="field"><label>樓層／位置</label><input id="sheetCrewFloor31" value="${escapeHtml(p.floor||'')}" placeholder="例如3樓；俯視圖位置不變" /></div><div class="two-col"><div class="field"><label>狀態</label><select id="sheetCrewStatus">${statuses}</select></div><div class="field"><label>人數</label><input id="sheetCrewCount" type="number" min="1" placeholder="人數待補" value="${p.countUnknown?'':Number(p.count)||0}" /></div></div><div class="button-row"><button id="saveCrewSheetBtn" class="btn primary">儲存</button><button id="deleteCrewSheetBtn" class="btn ghost">刪除編組</button></div>`);
   bindQuickFillButtons($('appActionBody'));
-  $('saveCrewSheetBtn').onclick=async()=>{ const patch={task:$('sheetCrewTask').value.trim()||p.task,status:$('sheetCrewStatus').value,count:Number($('sheetCrewCount').value)||p.count}; await updateItem('crews',id,patch); await addLog('crew',`修改人員：${p.unit}${p.leader}｜${patch.status}｜${patch.task}`); closeActionSheet(); };
+  $('saveCrewSheetBtn').onclick=async()=>{ const patch={floor:$('sheetCrewFloor31').value.trim(),task:$('sheetCrewTask').value.trim()||p.task,status:$('sheetCrewStatus').value,count:$('sheetCrewCount').value===''?p.count:Number($('sheetCrewCount').value),countUnknown:$('sheetCrewCount').value===''?!!p.countUnknown:false}; await updateItem('crews',id,patch); await addLog('crew',`修改人員：${p.unit}${p.leader}｜${patch.status}｜${patch.task}`); closeActionSheet(); };
   $('deleteCrewSheetBtn').onclick=()=>{ closeActionSheet(); deleteCrew(id); };
 }
 async function deleteCrew(id){
@@ -2519,6 +2534,7 @@ function normalizeVehicleCodeValue(value=''){
   return String(value||'').trim().replace(/\s+/g,'');
 }
 function vehicleDisplayName(item={}){
+  const canonical=FCIntake29.tactics.vehicleName(item.unit,item.name||item.vehicleName);if(canonical)return canonical;
   const name=String(item.name||item.vehicleName||'').trim();
   const unit=String(item.unit||'').trim();
   if(!name) return unit||'未命名車輛';
@@ -2527,6 +2543,7 @@ function vehicleDisplayName(item={}){
   return name;
 }
 function formatUnitVehicleName(unit,code){
+  const canonical=FCIntake29.tactics.vehicleName(unit,code);if(canonical)return canonical;
   const clean=normalizeVehicleCodeValue(code);
   if(!clean) return '';
   if(unit && clean.startsWith(unit)) return clean;
@@ -2551,10 +2568,7 @@ function addPendingDeploymentVehicle(){
   toast(`已加入車輛代號 ${code}`);
 }
 function stagingPosition(index=0,column=0){
-  const box=getBuildingBox();
-  const eastMeters=(Number(box.widthM)||40)/2+55+(column*22);
-  const northMeters=42-(index%12)*17;
-  return {lat:Number(box.lat)+metersToLatDelta(northMeters),lng:Number(box.lng)+metersToLngDelta(eastMeters,box.lat)};
+ return tacticalPosition31(column?(currentCase?.tacticalZones?.command?.face||'第一面'):'第一面',column?'standby':'vehicle',index);
 }
 async function addDeploymentGroup(){
   if(!currentCase) return;
@@ -2570,7 +2584,7 @@ async function addDeploymentGroup(){
   const createdRecords=[];
   if(count>0){
     const pos=stagingPosition(baseIndex,1);
-    const crewId=await addItem('crews',{brigade,unit,leader,count,status,task,groupId,dispatchCount:status==='作業中'?1:0,startAt:Date.now(),lat:pos.lat,lng:pos.lng,staged:true});
+    const crewId=await addItem('crews',{brigade,unit,leader,count,status,task,groupId,dispatchCount:status==='作業中'?1:0,startAt:Date.now(),lat:pos.lat,lng:pos.lng,staged:true,layout31:true});
     createdRecords.push({coll:'crews',id:crewId});
   }
   for(let i=0;i<pendingDeploymentVehicles.length;i++){
@@ -2578,7 +2592,7 @@ async function addDeploymentGroup(){
     const name=formatUnitVehicleName(unit,code);
     const type=vehicleType(code);
     const pos=stagingPosition(baseIndex+i,0);
-    const vehicleId=await addItem('vehicles',{brigade,unit,name,vehicleCode:code,type:type.label,canHose:type.canHose,task,status:'待命',groupId,lat:pos.lat,lng:pos.lng,staged:true});
+    const vehicleId=await addItem('vehicles',{brigade,unit,name,vehicleCode:code,type:type.label,canHose:type.canHose,task,status:'待命',groupId,lat:pos.lat,lng:pos.lng,staged:true,layout31:true});
     createdRecords.push({coll:'vehicles',id:vehicleId});
   }
   if(createdRecords.length){
@@ -2588,23 +2602,23 @@ async function addDeploymentGroup(){
   pendingDeploymentVehicles=[];
   renderPendingDeploymentVehicles();
   if($('deploymentTask')) $('deploymentTask').value='';
-  toast(`${unit}人員與車輛已加入地圖右側待命區`,3800);
+  toast(`${unit}人員與車輛已加入部署圖；人員待命位置與指揮站連動`,3800);
 }
 async function addVehicle(){
   if(!currentCase) return;
   const brigade = $('vehicleBrigade').value, unit = $('vehicleUnit').value;
-  const name = $('vehicleName').value.trim() || `${unit}11`;
+  const name = FCIntake29.tactics.vehicleName(unit,$('vehicleName').value.trim());if(!name){toast('請填車輛編號，例如11、111');return;}
   const type = vehicleType(name);
-  const offset = (live.vehicles.length + 1) * 0.00016;
-  await addItem('vehicles', { brigade, unit, name, type:type.label, canHose:type.canHose, task:$('vehicleTask').value.trim()||'待命', status:'部署', lat:Number(currentCase.lat)+offset, lng:Number(currentCase.lng)+offset*1.1 });
+  const pos=stagingPosition(live.vehicles.length,0);
+  await addItem('vehicles', { brigade, unit, name, type:type.label, canHose:type.canHose, task:$('vehicleTask').value.trim()||'待命', status:'部署', lat:pos.lat,lng:pos.lng,layout31:true });
   await addLog('vehicle', `新增車輛：${unit} ${name}｜${type.label}`);
   $('vehicleName').value=''; $('vehicleTask').value=''; toast('車輛已加入地圖');
 }
 async function addCrew(){
   if(!currentCase) return;
-  const offset = (live.crews.length + 1) * 0.00016;
+  const pos=stagingPosition(live.crews.length,1);
   const brigade = $('crewBrigade').value, unit = $('crewUnit').value, leader = $('crewLeader').value, count = Number($('crewCount').value)||4, status=$('crewStatus').value;
-  await addItem('crews', { brigade, unit, leader, count, status, task:$('crewTask').value.trim()||status, dispatchCount: status==='作業中'?1:0, startAt:Date.now(), lat:Number(currentCase.lat)-offset, lng:Number(currentCase.lng)+offset });
+  await addItem('crews', { brigade, unit, leader, count, status, task:$('crewTask').value.trim()||status, dispatchCount: status==='作業中'?1:0, startAt:Date.now(), lat:pos.lat,lng:pos.lng,layout31:true,staged:true });
   await addLog('crew', `新增人員：${unit}${leader}｜${count}人｜${status}`);
   $('crewTask').value=''; toast('人員已加入地圖');
 }
@@ -2924,10 +2938,10 @@ function renderDashboard(){
   const vehicleTypes = countBy(live.vehicles,'type'); const crewStatus = countBy(live.crews,'status');
   $('statusCards').innerHTML = `
     <button type="button" class="mini-card stat-action" data-jump-panel="vehicle"><div class="metric">${live.vehicles.length}</div><div class="metric-label">車輛</div><div class="subline">${entriesText(vehicleTypes) || '尚無'}｜點選展開</div></button>
-    <button type="button" class="mini-card stat-action" data-jump-panel="crew"><div class="metric">${sum(live.crews,'count')}</div><div class="metric-label">人員</div><div class="subline">${entriesText(crewStatus) || '尚無'}｜點選展開</div></button>
+    <button type="button" class="mini-card stat-action" data-jump-panel="crew"><div class="metric">${sum(live.crews,'count')}${live.crews.some(p=>p.countUnknown)?'+?':''}</div><div class="metric-label">已知人員</div><div class="subline">${entriesText(crewStatus) || '尚無'}｜點選展開</div></button>
     <button type="button" class="mini-card stat-action" data-jump-panel="hose"><div class="metric">${live.hoses.length}</div><div class="metric-label">水線</div><div class="subline">進攻 / 供水 / 防護｜點選部署圖</div></button>
     <button type="button" class="mini-card stat-action" data-jump-panel="hazard"><div class="metric">${live.hazards.length}</div><div class="metric-label">標示</div><div class="subline">火點、危害、指揮站｜點選部署圖</div></button>`;
-  $('crewCards').innerHTML = live.crews.length ? live.crews.map(p=>`<div class="mini-card wide"><span class="tag ${p.status==='RIT'?'amber':(p.status==='休息'||p.status==='待命')?'green':'red'}">${escapeHtml(p.status)}</span><h3>${escapeHtml(p.unit)}${escapeHtml(p.leader)}</h3><div class="metric">${p.count}</div><div class="metric-label">人員</div><div class="subline">任務：${escapeHtml(p.task)}<br>派遣：${p.dispatchCount||0}次｜作業：${Math.max(0,Math.round((Date.now()-(p.startAt||Date.now()))/60000))}分</div><div class="button-row compact-actions"><button class="btn small ghost" data-rest-crew="${p.id}" data-rest-mode="原地休息">原地休息</button><button class="btn small ghost" data-rest-crew="${p.id}" data-rest-mode="移至休息區">移至休息區</button><button class="btn small ghost" data-delete-crew="${p.id}">刪除</button></div></div>`).join('') : '<div class="empty">尚無人員資料。</div>';
+  $('crewCards').innerHTML = live.crews.length ? live.crews.map(p=>`<div class="mini-card wide"><span class="tag ${p.status==='RIT'?'amber':(p.status==='休息'||p.status==='待命')?'green':'red'}">${escapeHtml(p.status)}</span><h3>${escapeHtml(p.unit)}${escapeHtml(p.leader)}</h3><div class="metric">${p.countUnknown?'待補':p.count}</div><div class="metric-label">人員</div><div class="subline">任務：${escapeHtml(p.task)}<br>派遣：${p.dispatchCount||0}次｜作業：${Math.max(0,Math.round((Date.now()-(p.startAt||Date.now()))/60000))}分</div><div class="button-row compact-actions"><button class="btn small ghost" data-rest-crew="${p.id}" data-rest-mode="原地休息">原地休息</button><button class="btn small ghost" data-rest-crew="${p.id}" data-rest-mode="移至休息區">移至休息區</button><button class="btn small ghost" data-delete-crew="${p.id}">刪除</button></div></div>`).join('') : '<div class="empty">尚無人員資料。</div>';
   $('vehicleCards').innerHTML = live.vehicles.length ? live.vehicles.map(v=>`<div class="mini-card wide"><span class="tag blue">${escapeHtml(v.type)}</span><h3>${escapeHtml(v.name)}</h3><div class="metric-label">${escapeHtml(v.unit)}</div><div class="subline">任務：${escapeHtml(v.task)}<br>水線：${live.hoses.filter(h=>h.vehicleId===v.id).length}/${v.canHose?4:0}</div><button class="btn small ghost full" data-delete-vehicle="${v.id}">刪除車輛</button></div>`).join('') : '<div class="empty">尚無車輛資料。</div>';
   document.querySelectorAll('[data-jump-panel]').forEach(btn=>btn.onclick=()=>jumpFromStatus(btn.dataset.jumpPanel));
   document.querySelectorAll('[data-delete-crew]').forEach(btn=>btn.onclick=()=>{ const p=live.crews.find(x=>x.id===btn.dataset.deleteCrew); if(p && confirm(`確認刪除 ${p.unit}${p.leader}？`)) deleteItem('crews', p.id, `${p.unit}${p.leader}`); });
@@ -2972,7 +2986,7 @@ function renderRules(){
   if((c.trapped==='有'||c.trappedCount>0)&&!c.ritSet) a.push(['red','已登錄受困資訊，請確認搜救任務、RIT 與 PAR。']);
   if(/工廠|倉庫/.test((c.type||'')+(c.purpose||''))&&!c.hazardChecked) a.push(['red','工廠/倉庫火災，請詢問危險物品並考慮台電、瓦斯、毒災應變隊。']);
   if(c.fireStatus==='黑煙') a.push(['amber','黑煙可能代表高熱或高可燃物負荷，請注意內攻安全與氣量。']);
-  if(!live.hazards.some(h=>h.type==='指揮站')) a.push(['blue','尚未在地圖標示指揮站位置。']);
+  if(!live.hazards.some(h=>h.type==='指揮站')&&!currentCase?.tacticalZones?.command) a.push(['blue','尚未在地圖標示指揮站位置。']);
   if(live.hazards.some(h=>h.type==='瓦斯')) a.push(['red','已標示瓦斯危害，請確認瓦斯單位與管線關閉。']);
   const ruleEl = $('ruleAlerts'); if(ruleEl) ruleEl.innerHTML = (a.length?a:[['green','目前沒有重大未完成提示。']]).map(([cls,msg])=>`<div class="tag ${cls}">${escapeHtml(msg)}</div>`).join('');
   if(!currentCase?.aiLastAdvice) setAiAdviceText(localTacticalAdviceText());
@@ -2992,7 +3006,7 @@ function deploymentStatsLines(){
   const crewStatus = countBy(live.crews,'status');
   const hoseKinds = countBy(live.hoses,'kind');
   const unitPeople = live.crews.reduce((m,p)=>{ const k=p.unit||'未登錄'; m[k]=(m[k]||0)+(Number(p.count)||0); return m; },{});
-  const workRows = live.crews.map(p=>`- ${p.unit}${p.leader}｜${p.count}人｜${p.status}｜${p.task||'未登錄'}｜作業 ${formatDurationMinutes(crewWorkMinutes(p))}`).join('\n') || '- 尚無人員作業資料';
+  const workRows = live.crews.map(p=>`- ${p.unit}${p.leader}｜${crewCount31(p)}｜${p.status}｜${p.task||'未登錄'}｜作業 ${formatDurationMinutes(crewWorkMinutes(p))}`).join('\n') || '- 尚無人員作業資料';
   return [
     ...(effectiveDeploymentSummary()?[`部署文字／圖面摘要：${effectiveDeploymentSummary()}`]:[]),
     `車輛類型：${entriesText(vehicleTypes) || '尚無'}`,
@@ -3284,11 +3298,12 @@ function deploymentSchematicHtml(){
     const a=Number(lat), b=Number(lng); if(Number.isFinite(a)&&Number.isFinite(b)) points.push({lat:a,lng:b,kind,label:String(label||''),id});
   };
   add(c.lat,c.lng,'incident','案件中心','incident');
+  tacticalZones31().forEach(z=>add(z.lat,z.lng,'zone',z.label,z.id));
   live.vehicles.forEach(v=>add(v.lat,v.lng,'vehicle',vehicleDisplayName(v),v.id));
-  live.crews.forEach(x=>add(x.lat,x.lng,'crew',`${x.unit||''}${x.leader||''}`,x.id));
+  live.crews.forEach(x=>add(x.lat,x.lng,'crew',`${x.unit||''}${x.leader||''}${x.floor?' · '+x.floor:''}`,x.id));
   live.hazards.forEach(h=>add(h.lat,h.lng,'hazard',h.type||'危害',h.id));
   live.hoses.forEach(h=>{ if(h.targetType==='map' && h.lat && h.lng) add(h.lat,h.lng,'hoseEnd',h.targetName||'水線終點',`hose_${h.id}`); });
-  const box=c.buildingBox?getBuildingBox():null;
+  const box=getBuildingBox();
   const corners=box?buildingBoxCorners(box):[];
   const faces=box?buildingBoxSidePoints(box):[];
   corners.forEach((pt,i)=>add(pt.lat,pt.lng,'hidden','',`box_corner_${i}`));
@@ -3311,21 +3326,22 @@ function deploymentSchematicHtml(){
     else b=pointMap.get(`hose_${h.id}`);
     if(!a||!b) return '';
     const source=vehicleDisplayName({name:h.vehicleName,unit:h.unit});
-    const label=`${source}${h.port?` ${h.port}`:''}`;
-    return `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" class="scheme-hose"/><text x="${((a.x+b.x)/2).toFixed(1)}" y="${((a.y+b.y)/2-6).toFixed(1)}" class="scheme-hose-label">${escapeHtml(label)}</text>`;
+    const label=h.targetType==='vehicle'?'供水':`${h.port||'進攻線'} · ${h.owner||h.unit||''}`;
+    const path=hosePath30(h,[a.lat,a.lng],[b.lat,b.lng]).map(p=>xy(p.lat,p.lng));return `<polyline points="${path.map(p=>p.x.toFixed(1)+','+p.y.toFixed(1)).join(' ')}" fill="none" class="scheme-hose"/><text x="${((a.x+b.x)/2).toFixed(1)}" y="${((a.y+b.y)/2-8-(h.lineNo||0)*12).toFixed(1)}" class="scheme-hose-label">${escapeHtml(label)}</text>`;
   }).join('');
   const building=(()=>{
     if(!box||!corners.length) return '';
     const polygon=corners.map(pt=>{const p=xy(pt.lat,pt.lng);return `${p.x.toFixed(1)},${p.y.toFixed(1)}`;}).join(' ');
     const center=xy(box.lat,box.lng);
-    const labels=faces.map(face=>{const p=xy(face.lat,face.lng);return `<text x="${p.x.toFixed(1)}" y="${(p.y-8).toFixed(1)}" class="scheme-face-label">${escapeHtml(face.name)}</text>`;}).join('');
-    return `<polygon points="${polygon}" class="scheme-building"/><text x="${center.x.toFixed(1)}" y="${(center.y+4).toFixed(1)}" class="scheme-building-label">火場建物｜${Math.round(normalizeRotationDeg(box.rotationDeg||0))}°</text>${labels}`;
+    const labels=faces.map(face=>{const p=xy(face.lat,face.lng);return `<text x="${p.x.toFixed(1)}" y="${(p.y+(face.id==='face1'?22:-8)).toFixed(1)}" class="scheme-face-label">${escapeHtml(face.name)}</text>`;}).join('');
+    return `<polygon points="${polygon}" class="scheme-building"/><text x="${center.x.toFixed(1)}" y="${(center.y-15).toFixed(1)}" class="scheme-building-label">火場建物</text>${labels}`;
   })();
-  const nodes=points.filter(p=>!['hidden','buildingFace'].includes(p.kind)).map(p=>{
+  const nodes=points.filter(p=>!['hidden','buildingFace',...(box?['incident']:[])].includes(p.kind)).map(p=>{
     const {x,y}=xy(p.lat,p.lng);
     const cls=`scheme-node ${p.kind}`;
-    const icon=p.kind==='vehicle'?'🚒':p.kind==='crew'?'人':p.kind==='hazard'?'⚠':p.kind==='incident'?'指':'●';
-    return `<g class="${cls}"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${p.kind==='incident'?18:15}"/><text x="${x.toFixed(1)}" y="${(y+5).toFixed(1)}" class="scheme-icon">${escapeHtml(icon)}</text><text x="${x.toFixed(1)}" y="${(y+34).toFixed(1)}" class="scheme-label">${escapeHtml(p.label)}</text></g>`;
+    if(p.kind==='zone')return `<text x="${x.toFixed(1)}" y="${(y-16).toFixed(1)}" class="scheme-zone-label31">${escapeHtml(p.label)}</text>`;
+    const icon=p.kind==='vehicle'?(live.vehicles.find(v=>v.id===p.id)?.type.includes('救護')?'救':'車'):p.kind==='crew'?'人':p.kind==='hazard'?'⚠':p.kind==='incident'?'火':p.kind==='zone'?'區':'●';
+    const head=live.vehicles.find(v=>v.id===p.id),isHead=p.kind==='vehicle'&&head?.queueOrder===0;const headArrow=['↑','↗','→','↘','↓','↙','←','↖'][Math.round((head?.heading31||0)/45)%8];return `<g class="${cls}">${isHead?`<text x="${x.toFixed(1)}" y="${(y-22).toFixed(1)}" class="scheme-label">${headArrow} 頭車</text>`:''}<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${p.kind==='incident'?18:15}"/><text x="${x.toFixed(1)}" y="${(y+5).toFixed(1)}" class="scheme-icon">${escapeHtml(icon)}</text><text x="${x.toFixed(1)}" y="${(y+34).toFixed(1)}" class="scheme-label">${escapeHtml(p.label)}</text></g>`;
   }).join('');
   return `<div class="report-schematic-card"><div class="report-schematic-head"><strong>外部戰術部署示意圖</strong><span>非導航底圖，依系統座標相對呈現</span></div><svg class="report-schematic" viewBox="0 0 ${W} ${H}" role="img" aria-label="火場外部戰術部署示意圖"><rect width="${W}" height="${H}" class="scheme-bg"/><path d="M0 ${H*.5} H${W} M${W*.5} 0 V${H}" class="scheme-axis"/>${building}${hoseLines}${nodes}</svg></div>`;
 }
@@ -3561,7 +3577,7 @@ function toggleBuildingFullscreen(){
 function renderParCrewChecklist(){
   const wrap = $('parCrewChecklist'); if(!wrap) return;
   const checked = currentCase?.parCrewChecked || {};
-  wrap.innerHTML = live.crews.length ? live.crews.map(p=>`<label class="check slim par-row"><input type="checkbox" data-par-crew="${p.id}" ${checked[p.id]?'checked':''} /> ${escapeHtml(p.unit)}${escapeHtml(p.leader||'')}｜${p.count||0}人｜${escapeHtml(p.task||p.status||'')}</label>`).join('') : '<div class="empty">尚無登錄分隊。請先在人員部署新增各分隊。</div>';
+  wrap.innerHTML = live.crews.length ? live.crews.map(p=>`<label class="check slim par-row"><input type="checkbox" data-par-crew="${p.id}" ${checked[p.id]?'checked':''} /> ${escapeHtml(p.unit)}${escapeHtml(p.leader||'')}｜${crewCount31(p)}｜${escapeHtml(p.task||p.status||'')}</label>`).join('') : '<div class="empty">尚無登錄分隊。請先在人員部署新增各分隊。</div>';
   wrap.querySelectorAll('[data-par-crew]').forEach(ch => ch.addEventListener('change', async () => {
     currentCase.parCrewChecked = currentCase.parCrewChecked || {}; currentCase.parCrewChecked[ch.dataset.parCrew] = ch.checked;
     $('parCheck') && ($('parCheck').checked = Object.values(currentCase.parCrewChecked).some(Boolean));
@@ -4093,7 +4109,7 @@ function hasDeploymentDrawing(){
 function deploymentMapSummary(){
   const lines=[];
   if(live.crews.length){
-    lines.push(...live.crews.map(x=>`${x.face?`${x.face}由`:''}${x.unit||'未具名單位'}${x.leader?`${x.leader}`:''}${Number(x.count)?`（${Number(x.count)}人）`:''}${x.task?`執行${x.task}`:x.status?`為${x.status}`:''}`));
+    lines.push(...live.crews.map(x=>`${x.face?`${x.face}由`:''}${x.unit||'未具名單位'}${x.leader?`${x.leader}`:''}${x.countUnknown?'（人數待補）':Number(x.count)?`（${Number(x.count)}人）`:''}${x.task?`執行${x.task}`:x.status?`為${x.status}`:''}`));
   }
   if(live.vehicles.length){
     lines.push(...live.vehicles.map(x=>`${vehicleDisplayName(x)}${x.face?'於'+x.face:''}${x.task?`執行${x.task}`:x.status?`為${x.status}`:''}`));
@@ -4229,13 +4245,13 @@ async function generateAiDeploymentSummary(){
 }
 function renderDeploymentSopSummary(){
   const el=$('deploymentSopSummary');if(!el)return;
-  const crew=live.crews.length?live.crews.map(x=>`<div class="deployment-sop-row"><b>${escapeHtml(x.face||'未分面')}｜${escapeHtml(x.unit||'人員')}</b><span>${escapeHtml(x.task||x.status||'任務未填')}｜${Number(x.count)||0}人</span></div>`).join(''):'<div class="empty">尚無人員部署。</div>';
+  const crew=live.crews.length?live.crews.map(x=>`<div class="deployment-sop-row"><b>${escapeHtml(x.face||'未分面')}｜${escapeHtml(x.unit||'人員')}</b><span>${escapeHtml(x.task||x.status||'任務未填')}｜${crewCount31(x)}</span></div>`).join(''):'<div class="empty">尚無人員部署。</div>';
   const vehicles=live.vehicles.length?live.vehicles.map(x=>`<div class="deployment-sop-row"><b>${escapeHtml(x.name||x.unit||'車輛')}</b><span>${escapeHtml(x.task||'任務未填')}</span></div>`).join(''):'<div class="empty">尚無車輛部署。</div>';
   const hoses=live.hoses.length?`<div class="deployment-sop-row"><b>水線</b><span>${live.hoses.length} 條</span></div>`:'';
   const text=effectiveDeploymentSummary();
   const textGroup=text?`<div class="deployment-sop-group deployment-sop-text"><h4>部署文字／圖面摘要</h4><p>${escapeHtml(text)}</p></div>`:'';
   const opened=new Set([...el.querySelectorAll('details[open]')].map(x=>x.dataset.summary));
-  el.innerHTML=`<p class="deployment-count29">${live.crews.reduce((n,c)=>n+Number(c.count||0),0)} 人 · ${live.vehicles.length} 車 · ${live.hoses.length} 條水線</p><details data-summary="text" ${opened.has('text')?'open':''}><summary>目前部署與情資摘要</summary>${textGroup||'<p class="hint">尚未登錄</p>'}</details><details data-summary="crews" ${opened.has('crews')?'open':''}><summary>人員明細</summary>${crew}</details><details data-summary="vehicles" ${opened.has('vehicles')?'open':''}><summary>車輛／水線明細</summary>${vehicles}${hoses}</details>`;
+  el.innerHTML=`<p class="deployment-count29">${live.crews.reduce((n,c)=>n+Number(c.count||0),0)} 已知人數${live.crews.some(p=>p.countUnknown)?'（另有編組待補人數）':''} · ${live.vehicles.length} 車 · ${live.hoses.length} 條水線</p><details data-summary="text" ${opened.has('text')?'open':''}><summary>目前部署與情資摘要</summary>${textGroup||'<p class="hint">尚未登錄</p>'}</details><details data-summary="crews" ${opened.has('crews')?'open':''}><summary>人員明細</summary>${crew}</details><details data-summary="vehicles" ${opened.has('vehicles')?'open':''}><summary>車輛／水線明細</summary>${vehicles}${hoses}</details>`;
 
 }
 function stageCompletion(stage){

@@ -1,6 +1,7 @@
 /* v29 shared semantic contract. Both AI providers return drafts; only reviewed drafts become writes. */
 (function(root){'use strict';
 const Core=root.FCIntake||(typeof require==='function'?require('./intake-core.js'):null);
+const T=root.FCTactics31||(typeof require==='function'?require('./tactics31.js'):null);
 const kinds=['crew','vehicle','hose','command','firstSide','support','note'];
 const fields={kind:{type:'string',enum:kinds},unit:{type:'string'},group:{type:'string'},vehicle:{type:'string'},number:{type:['integer','null']},quantityMode:{type:'string',enum:['set','add','subtract']},face:{type:'string'},target:{type:'string'},task:{type:'string'},text:{type:'string'},evidence:{type:'string'},uncertainty:{type:'string'}};
 const schema={type:'object',additionalProperties:false,properties:{correctedText:{type:'string'},items:{type:'array',items:{type:'object',additionalProperties:false,properties:fields,required:Object.keys(fields)}}},required:['correctedText','items']};
@@ -50,7 +51,7 @@ function enrich(items,source,roster){
  }
  // Merge an unnumbered positional follow-up into the same unambiguous crew draft.
  for(const i of [...items])if(i.kind==='crew'&&i.number===null){const peers=items.filter(x=>x!==i&&x.kind==='crew'&&x.unit===i.unit&&x.group===i.group&&x.number!==null);if(peers.length===1){const peer=peers[0];if(i.face)peer.face=i.face;if(i.task)peer.task=i.task;peer.evidence=[peer.evidence,i.evidence].filter(Boolean).join('；');items.splice(items.indexOf(i),1);}}
- return items;
+ return T.augment(items,norm,roster,item);
 }
 function connectedVehicles(state,id){
  const seen=new Set([id]),queue=[id];
@@ -119,7 +120,7 @@ function sanitize(raw,source,roster){
  });
  return {correctedText:text,corrections:normalized.corrections,items:enrich(items,source,roster)};
 }
-const caseKeys=['commandTransfer','commandState','commandSituation','firstSideSet','firstSideState','firstSideMode','firstSideName','supportNeeded','supportState','supportDetails','supports','intakeNotes'];
+const caseKeys=['commandTransfer','commandState','commandSituation','firstSideSet','firstSideState','firstSideMode','firstSideName','supportNeeded','supportState','supportDetails','supports','intakeNotes','tacticalZones','drawingRuleVersion'];
 function compile(items,state,caseData,roster,options={}){
  const before=clone(state),working=clone(state),nextCase=clone(caseData),errors=[],previews=[];
  const addError=(x,msg)=>errors.push({id:x.id,message:msg});
@@ -129,6 +130,8 @@ function compile(items,state,caseData,roster,options={}){
  const order={crew:0,vehicle:1,hose:2,command:3,firstSide:3,support:3,note:4};
  for(const original of selected.slice().sort((a,b)=>order[a.kind]-order[b.kind])){
   const i={...original,face:canonicalFace(original.face),target:canonicalFace(original.target)};
+  if(['vehicle','hose'].includes(i.kind))i.vehicle=T.vehicleName(i.unit,i.vehicle)||i.vehicle;
+  if(i.kind==='hose'&&i.useHead&&!i.vehicle){const heads=working.vehicles.filter(v=>v.face===(i.target||i.face)&&v.headVehicle===v.name&&v.canHose);if(heads.length===1)i.vehicle=heads[0].name;}
   if(i.kind==='hose'&&i.target)i.face=Core.faces.includes(i.target)?i.target:'';
   if(!kinds.includes(i.kind)||!['set','add','subtract'].includes(i.quantityMode)){addError(i,'請選有效類型及數量意思');continue;}
   if(i.kind==='hose'&&i.target)i.target=normalize(i.target,roster).text;
@@ -141,9 +144,9 @@ function compile(items,state,caseData,roster,options={}){
    if(i.face&&!Core.faces.includes(i.face)){addError(i,'面向請選第一至第四面');continue;}
    if(i.kind==='crew'){
     if(num!==null&&(!Number.isInteger(num)||num<0||num>99)){addError(i,'人數請填0–99，支援中文數字');continue;}
-    intent={kind:'crew',key:i.id,line:i.evidence||'',unit:i.unit,brigade,group:i.group||'',count:num===null?undefined:num,mode:i.quantityMode||'set',face:i.face||undefined,task:i.task||undefined,status:i.task&&/內攻|進入|搜救|滅火|供水|警戒/.test(i.task)?'作業中':undefined,targetId:i.targetId||undefined};
+    intent={kind:'crew',key:i.id,line:i.evidence||'',unit:i.unit,brigade,group:i.group||'',count:num===null?undefined:num,mode:i.quantityMode||'set',face:i.face||undefined,task:i.task||undefined,status:i.task&&/內攻|進入|搜救|滅火|供水|警戒/.test(i.task)?'作業中':undefined,targetId:i.targetId||undefined,allowUnknown:!!i.allowUnknown,interior:!!i.interior};
    }else if(i.kind==='vehicle'){
-    const vehicle=(i.vehicle||'').replace(/\s/g,'');if(!vehicle.startsWith(i.unit)||!/^\d{2,3}$/.test(vehicle.slice(i.unit.length))){addError(i,'請填完整車號，例如淡水11；未報車號不猜車輛');continue;}
+    const vehicle=(i.vehicle||'').replace(/\s/g,'');if(!vehicle.startsWith(i.unit)||!/^\d{2,3}$/.test(vehicle.slice(i.unit.length))){addError(i,'請填車輛編號，例如11或111；分隊會自動加上，完整車號也可');continue;}
     intent={kind:'vehicle',key:i.id,line:i.evidence,unit:i.unit,brigade,name:vehicle,face:i.face||undefined};
    }else{
     if(!Number.isInteger(num)||num<0||num>6){addError(i,'水線條數請填0–6');continue;}
@@ -157,21 +160,21 @@ function compile(items,state,caseData,roster,options={}){
       if(pending.length&&confirmed.length){addError(i,'同時有已連接與待確認水線，請在圖面逐線確認來源，避免重複');continue;}
       if(pending.length){adoptedBefore=clone(working.hoses);for(const h of pending)Object.assign(h,{vehicleId:v.id,vehicleName:v.name,supplyUnconfirmed:false,status:'使用中'});}
      }
-     intent={kind:'hose',key:i.id,line:i.evidence,source:vehicle,target,count:num,task:i.task||undefined,mode:i.quantityMode||'set',rewire:/改接/.test(i.text||i.evidence)};
+     intent={kind:'hose',key:i.id,line:i.evidence,source:vehicle,target,count:num,task:i.task||undefined,mode:i.quantityMode||'set',rewire:/改接/.test(i.text||i.evidence),lineNo:i.lineNo,owner:i.unit,useHead:i.useHead};
     }
     else{
      if(!Core.faces.includes(target)){addError(i,'未提供來源車號時，請先選建物面向，或補填已登錄的來源車號');continue;}
-     const existing=working.hoses.filter(h=>h.supplyUnconfirmed&&h.unit===i.unit&&h.targetName===target);
+     const existing=working.hoses.filter(h=>h.supplyUnconfirmed&&h.unit===i.unit&&h.targetName===target&&(!i.lineNo||h.lineNo===i.lineNo));
      const count=i.quantityMode==='add'?existing.length+num:i.quantityMode==='subtract'?existing.length-num:num;
      if(count<0||count>6){addError(i,'修正後水線需為0–6條');continue;}
-     for(let n=0;n<count;n++)if(!existing[n])working.hoses.push({id:'unit_line_'+encodeURIComponent(i.unit+'|'+target+'|'+n),unit:i.unit,owner:i.unit,vehicleId:'',vehicleName:'',sourceFace:target,supplyUnconfirmed:true,targetType:'buildingFace',targetId:'face'+(Core.faces.indexOf(target)+1),targetName:target,port:'第'+(n+1)+'線',task:i.task||'部署水線',kind:i.task||'進攻水線',status:'供水起點待確認'});
+     for(let n=0;n<count;n++)if(!existing[n])working.hoses.push({id:'unit_line_'+encodeURIComponent(i.unit+'|'+target+'|'+(i.lineNo||n)),unit:i.unit,owner:i.unit,vehicleId:'',vehicleName:'',sourceFace:target,supplyUnconfirmed:true,targetType:'buildingFace',targetId:'face'+(Core.faces.indexOf(target)+1),targetName:target,port:'第'+(i.lineNo||n+1)+'線',lineNo:i.lineNo||n+1,useHead:!!i.useHead,task:i.task||'部署水線',kind:i.task||'進攻水線',status:'供水起點待確認'});
      const deleted=new Set(existing.slice(count).map(h=>h.id));working.hoses=working.hoses.filter(h=>!deleted.has(h.id));
      previews.push({id:i.id,before:`${existing.length}條`,after:`${i.unit} → ${target} ${count}條（供水起點待確認）`});continue;
     }
    }
    const result=Core.plan({intents:[intent],issues:[],corrections:[]},working,options);
    if(result.issues.length){if(adoptedBefore)working.hoses=adoptedBefore;for(const e of result.issues)addError(i,e.message);continue;}
-   Object.assign(working,result.after);previews.push({id:i.id,before:result.writes.map(w=>w.before?.count??w.before?.face??(w.before?'既有':'新增')).join('、')||'已相同',after:i.kind==='crew'?`${i.unit} ${result.after.crews.filter(c=>c.unit===i.unit).reduce((n,c)=>n+Number(c.count||0),0)}人 ${i.face||''} ${i.task||''}`:i.kind==='vehicle'?`${i.vehicle} ${i.face||'待部署'}`:`${i.vehicle} → ${i.target||i.face} ${num}條`});
+   Object.assign(working,result.after);previews.push({id:i.id,before:result.writes.map(w=>w.before?.count??w.before?.face??(w.before?'既有':'新增')).join('、')||'已相同',after:i.kind==='crew'?`${i.unit} ${result.after.crews.some(c=>c.unit===i.unit&&c.countUnknown)?'人數待補':result.after.crews.filter(c=>c.unit===i.unit).reduce((n,c)=>n+Number(c.count||0),0)+'人'} ${i.face||''} ${i.task||''}`:i.kind==='vehicle'?`${i.vehicle} ${i.face||'待部署'}`:`${i.vehicle} → ${i.target||i.face} ${num}條`});
   }else if(i.kind==='command'){
    putCase('commandTransfer',true);putCase('commandState','transferred');putCase('commandSituation',i.text||i.evidence);previews.push({id:i.id,after:'SOP：已完成指揮權轉移'});
   }else if(i.kind==='firstSide'){
@@ -188,11 +191,12 @@ function compile(items,state,caseData,roster,options={}){
    const text=(i.text||i.evidence||'').trim();if(!text){addError(i,'請輸入情資內容');continue;}append('intakeNotes',text);previews.push({id:i.id,after:'情資紀錄：'+text});
   }
  }
+ if(!errors.length)T.apply(selected,before,working,nextCase,options);
  const writes=[];for(const coll of Core.collections){const ids=new Set([...(before[coll]||[]),...(working[coll]||[])].map(x=>x.id));for(const id of ids){const a=(before[coll]||[]).find(x=>x.id===id)||null,b=(working[coll]||[]).find(x=>x.id===id)||null;if(Core.fingerprint(a)!==Core.fingerprint(b))writes.push({coll,id,before:a,after:b});}}
  const caseChanges=caseKeys.filter(k=>Core.fingerprint(caseData[k]??null)!==Core.fingerprint(nextCase[k]??null)).map(key=>({key,before:caseData[key]??null,after:nextCase[key]??null}));
  if(writes.length>100)errors.push({id:'all',message:'本次超過100筆變更，請分次確認'});
  return {writes,caseChanges,issues:errors,previews,totalBefore:(before.crews||[]).reduce((n,c)=>n+Number(c.count||0),0),totalAfter:(working.crews||[]).reduce((n,c)=>n+Number(c.count||0),0),after:working};
 }
 function assertCaseFresh(changes,current){for(const c of changes||[]){if(!caseKeys.includes(c.key))throw Error('不允許的案件欄位');if(Core.fingerprint(current[c.key]??null)!==Core.fingerprint(c.before))throw Error('SOP資料已更新，請重新核對');}}
-root.FCIntake29={schema,kinds,labels,number,normalize,local,sanitize,item,compile,assertCaseFresh,caseKeys,canonicalFace,enrich,connectedVehicles};if(typeof module!=='undefined')module.exports=root.FCIntake29;
+root.FCIntake29={schema,kinds,labels,number,normalize,local,sanitize,item,compile,assertCaseFresh,caseKeys,canonicalFace,enrich,connectedVehicles,tactics:T};if(typeof module!=='undefined')module.exports=root.FCIntake29;
 })(typeof window==='undefined'?globalThis:window);
