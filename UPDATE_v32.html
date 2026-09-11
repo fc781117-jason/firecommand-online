@@ -1,0 +1,14 @@
+<!doctype html><html lang="zh-Hant"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FireCommand v32 更新操作</title><style>body{max-width:900px;margin:30px auto;padding:0 20px;font:18px/1.8 system-ui,sans-serif;color:#153d53;background:#f6fafc}h1,h2{line-height:1.4}li{margin:10px 0}a{color:#006990}</style><h1>FireCommand v32｜繪圖更新與操作</h1>
+<p>這版接續 v31。正式網站尚未更新；完整更新包可直接更新原專案。</p>
+<h2>更新方式</h2><ol><li>解壓 firecommand_v32_online_release.zip。將內容更新至原 FireCommand 專案根目錄，包括 index.html、assets、api；不要多包一層資料夾。</li><li>保留原本正確的 Firebase 與 Vercel 環境設定。若原專案 firebase/firebase-config.js 已有自行調整，更新前先備份並保留您的設定。</li><li>在原本的部署流程提交更新，進入 <a href="https://vercel.com/dashboard">Vercel Dashboard</a>，開啟 FireCommand 專案 → Deployments，確認 Production 部署完成。</li><li>重新開啟固定正式網址，確認頁首顯示 v32。若仍為 v31，重新整理並確認正在瀏覽最新 Production 網址。</li></ol>
+<h2>圖面怎麼使用</h2><ul><li>「部署全景」查看完整圖；「10m近距離」放大後可在圖內左右、上下平移。</li><li>總覽、部署示意圖與底圖使用相同的位置及水線路徑。底圖保留地理背景；示意圖採簡化符號。</li><li>點車輛、人員、水線即可修改。人員詳情保留樓層、狀態與任務。</li><li>拖曳車輛會連同串接車組移動，水線跟隨。人工調整的位置優先保留。</li><li>遠處標記先列在「畫面外」，不會把整個火場縮小；按「顯示遠處資料」查看。</li><li>已選分隊時，車號輸入 11 即可，顯示淡水11；輸入完整車號也不會重複加分隊。</li></ul>
+<h2>依道路排車</h2><ol><li>進入「部署」→「道路對齊與底圖定位」，選第一至第四面。</li><li>按「在底圖點兩點」：先點實際頭車位置，再點同側車隊後方，兩點應涵蓋整條車隊。</li><li>檢查黃色候選線與方向；必要時「反轉車流」，再按「套用道路排列」。人工移位的車輛不會被重新排列。</li><li>若車隊超出已指定道路長度，畫面會提示，請重新選較長的線段。</li></ol>
+<p>自動排列的車距、建物大小與安全間距屬示意，須依實際現場校正；比例尺不是現場測量或安全距離判定。</p>
+<h2>選用：啟用自動道路比對</h2>
+<p>手動點選不需要新增 Roads API 設定。「辨識鄰近道路」需額外啟用 Google Roads API，並使用付費服務配額。</p>
+<ol><li>登入 <a href="https://console.cloud.google.com/">Google Cloud Console</a>，選擇您供 FireCommand 使用的專案。</li><li>開啟「API 和服務 → 程式庫」，搜尋 Roads API 並啟用；依 Google 要求設定專案計費。</li><li>在「API 和服務 → 憑證」建立供伺服器使用的 API key，API 限制選 Roads API。不要將伺服器 key 放在前端檔案，也不要使用只接受網站來源的瀏覽器 key。</li><li>到 Vercel 專案 → Settings → Environment Variables，新增 GOOGLE_ROADS_API_KEY，值填入上述 key，套用 Production，再重新部署。</li><li>回到道路工具按「辨識鄰近道路」，檢查黃色候選線。服務提供的是可能道路中心線，不能辨識實際可停車的路邊、車道方向或障礙物；需要時改用兩點校正停車侧，再套用。</li></ol>
+<p>依據 <a href="https://developers.google.com/maps/documentation/roads/snap">Google Roads API 官方說明</a>，本功能將位置序列比對到可能道路。這次尚未用您正式站的金鑰驗證自動比對。</p>
+<h2>回報與SOP如何併入</h2><p>已登錄的車隊順序、出水車、水線所屬分隊、進入面向、入室狀態、指揮站、救護集結区及人工標示共同決定圖面。SOP指揮站欄位若有明確面向，會加入該面；已確認回報中明確說「第三面成立前進指揮所」亦會呈現。只有位置不明或預定成立的內容，保留待補提示，不自行猜地點。RIT指派保留在人員詳情中。</p>
+<h2>上線後驗收</h2><ol><li>同車畫2條以上攻擊線，修改成相同來源，應仍看得到不同出水點與路徑。</li><li>確認總覽與部署示意圖位置一致，底圖車組方向符合實際道路。</li><li>將指揮站移位；未指派且未人工定位的人員應在附近待命。</li><li>入室編組位於框內，撤出後不再自動放回建物內；點選查看樓層。</li><li>在 iPhone 上測試放大、平移、拖移、復原與兩帳號同步。</li></ol>
+<p>121項自動測試通過；另已檢查共用繪圖產生的PNG、程式語法與更新包。測試瀏覽器無法連入本機頁面；尚未完成iPhone、正式Google底圖、道路付費API及多帳號線上實測。</p>
+<p><a href="DRAWING_PREVIEW_v32.html">開啟實際共用繪圖程式產生的範例</a></p></html>

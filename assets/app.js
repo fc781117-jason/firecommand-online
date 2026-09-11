@@ -2104,9 +2104,10 @@ async function initMap(force=false){
     clearMapOverlays();
     map = new google.maps.Map(el, {
       center:{lat:Number(currentCase?.lat||DEFAULT_CENTER.lat),lng:Number(currentCase?.lng||DEFAULT_CENTER.lng)},
-      zoom:17,
+      zoom:20,
       mapTypeId:'roadmap',
-      mapTypeControl:true,
+      mapTypeControl:false,
+      scaleControl:true,
       streetViewControl:false,
       fullscreenControl:true,
       clickableIcons:false,
@@ -2290,6 +2291,7 @@ function fitMapToIncident(){
 }
 async function handleMapClick(e){
   const ll=e?.latLng?{lat:e.latLng.lat(),lng:e.latLng.lng()}:e;
+  if(ll&&typeof acceptRoadClick32==='function'&&acceptRoadClick32(ll))return;
   if(!ll || !pendingTool) return;
   if(pendingTool.type==='hazard') await addHazardAt(pendingTool.hazardType,ll.lat,ll.lng);
   else if(pendingTool.type==='hose' || pendingTool.type==='hoseConnect'){
@@ -4472,6 +4474,7 @@ async function processTrainingAssistance(){
   else await addItem('practiceMessages',record);
  }finally{trainingAssistBusy=false;}
 }
+installScene32();
 init();
 initV27();
 initV28();

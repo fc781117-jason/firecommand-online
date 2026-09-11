@@ -120,7 +120,7 @@ function sanitize(raw,source,roster){
  });
  return {correctedText:text,corrections:normalized.corrections,items:enrich(items,source,roster)};
 }
-const caseKeys=['commandTransfer','commandState','commandSituation','firstSideSet','firstSideState','firstSideMode','firstSideName','supportNeeded','supportState','supportDetails','supports','intakeNotes','tacticalZones','drawingRuleVersion'];
+const caseKeys=['commandTransfer','commandState','commandSituation','firstSideSet','firstSideState','firstSideMode','firstSideName','supportNeeded','supportState','supportDetails','supports','intakeNotes','tacticalZones','drawingRuleVersion','deploymentRoads32'];
 function compile(items,state,caseData,roster,options={}){
  const before=clone(state),working=clone(state),nextCase=clone(caseData),errors=[],previews=[];
  const addError=(x,msg)=>errors.push({id:x.id,message:msg});
