@@ -51,7 +51,7 @@ async function parseIntake28(local=false){
  $('intakeMessage28').textContent='辨識完成，逐筆按確認即可；有疑問的資料可修改或稍後處理。';
  renderIntakePlan28();
 }
-function describeIntakeRecord28(coll,x){if(!x)return '無';if(coll==='crews')return `${x.unit}${x.voiceGroup?' '+x.voiceGroup+'組':''} · ${x.count} 人 · ${x.face||'待部署'} · ${x.task||x.status||''}`;if(coll==='vehicles')return `${x.name} · ${x.face||'待部署'} · ${x.task||x.status||''}`;return `${x.vehicleName||x.unit+'（供水起點待確認）'} → ${x.targetName} · ${x.port||'水線'}`;}
+function describeIntakeRecord28(coll,x){if(!x)return '無';if(coll==='crews')return `${x.unit}${x.voiceGroup?' '+x.voiceGroup+'組':''} · ${x.countUnknown||x.count==null?'人數待補':x.count+' 人'} · ${x.face||'待部署'} · ${x.task||x.status||'未指定'}`;if(coll==='vehicles')return `${x.name} · ${x.face||'待部署'} · ${x.task||x.status||''}`;return `${x.vehicleName||x.unit+'（供水起點待確認）'} → ${x.targetName} · ${x.port||'水線'}`;}
 function buildPlan29(){const s=intake28;if(!s?.base)return null;s.plan=FCIntake29.compile(s.items,s.base,s.caseBase,FCIntake.roster(UNIT_TREE),{locate:intakePosition28,vehicleType,tacticalPosition:tacticalPosition31});return s.plan;}
 function field29(i,key,label,type='text'){
  const id='edit29_'+i.id+'_'+key,v=i[key]??'';
@@ -118,7 +118,7 @@ function renderIntakePlan28(){
 function updateIntakeSummary29(){
  const s=intake28,p=buildPlan29();if(!p)return;$('intakeConfirm28').checked=false;
  const pending=s.items.filter(i=>!i.committed),done=s.items.length-pending.length;
- $('intakeTotal28').textContent=`在冊 ${s.base.crews.reduce((n,c)=>n+Number(c.count||0),0)} 人 · 已登錄 ${done} 項 · 待處理 ${pending.length} 項`;
+ $('intakeTotal28').textContent=`已確認人數小計 ${s.base.crews.reduce((n,c)=>n+(c.countUnknown||c.count==null?0:Number(c.count)||0),0)} 人${s.base.crews.some(c=>c.countUnknown||c.count==null)?` · ${s.base.crews.filter(c=>c.countUnknown||c.count==null).length} 筆待補`:''} · 已登錄 ${done} 項 · 待處理 ${pending.length} 項`;
  $('intakeIssues28').textContent='';
  $('intakeChanges28').querySelectorAll('[data-item]').forEach(card=>{
   const i=pending.find(x=>x.id===card.dataset.item);if(!i)return;const row=rowPlan30(i);

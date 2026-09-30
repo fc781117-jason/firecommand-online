@@ -60,11 +60,10 @@ function parse(raw,units,choices={}){
   residual=residual.replace(/第[一二三四]面/g,'').replace(/[A-Za-z0-9一二三四五六]+(?:小組|編組|組)/g,'').replace(/[0-9零〇一二兩三四五六七八九十]+/g,'');
   residual=residual.replace(/分隊|小組|編組|總人數|人數|修正為|修正成|修正|更正為|更正|改為|改成|調整為|調整|供水給|供水至|連接|接至|接給|改接|改至|出水線|水線|防護水線|進攻水線|新增|增加|減少|減為|再到|再來|加派|補上|報到|抵達|到場|移至|移到|停在|停靠|部署在|部署至|部署|目前|現在|已經|已|搜救|搜索|救護|警戒|供水|滅火|排煙|人命救助|防護|待命|人員|總共|合計|全隊|共計|共|人|名|位|個|的|從|為|在|到|於|請|再出|再拉|出|拉|條|線|了|\s/g,'');
   if(residual){issues.push({key:'detail:'+key,line,message:'部分描述尚未支援（'+residual+'），請分段補說或用原有表單登錄'});return;}
-  if(count!==undefined||(!vehicles.length&&(face||task||/報到|抵達|人數/.test(body)))){
+  if(count!==undefined||(!vehicles.length&&(face||task||/報到|抵達|到場|人數/.test(body)))){
    if(count!==undefined&&(!Number.isInteger(count)||count<0||count>99)){issues.push({key:'count:'+key,line,message:'請確認 0–99 人的數字'});return;}
    const mode=/新增|增加|再到|再來|加派|補上/.test(body)?'add':/減少/.test(body)?'subtract':'set';
-   if(count===undefined&&/報到|抵達|人數/.test(body)){issues.push({key:'count:'+key,line,message:'未提供人數；請補說人數，不會預設為 4 人'});return;}
-   intents.push({kind:'crew',key,line,unit,brigade,group,count,mode,face,task,status,targetId:choices['target:'+key]});
+   intents.push({kind:'crew',key,line,unit,brigade,group,count,mode,face,task,status,targetId:choices['target:'+key],allowUnknown:count===undefined});
   }
   if(vehicles.length){
    const hoseBody=body.replace(/^\s*\d{2,3}/,'');
@@ -100,7 +99,7 @@ function plan(parsed,state,options={}){
     if((i.count===undefined&&!i.allowUnknown)||i.mode==='subtract'){fail(i,'尚無此編組的報到資料；請先提供完整人數');continue;}
     const id=newId('crew',i.brigade+'|'+i.unit+'|'+i.group);
     if(working.crews.some(x=>x.id===id)){fail(i,'編組識別重複，請在原編組修改');continue;}
-    c={id,unit:i.unit,brigade:i.brigade,voiceGroup:i.group,leader:i.group,count:0,...(i.count===undefined?{countUnknown:true}:{}),status:'待命',task:'待部署',...locate(i.face,working.crews.length)};working.crews.push(c);
+    c={id,unit:i.unit,brigade:i.brigade,voiceGroup:i.group,leader:i.group,count:i.count===undefined?null:0,...(i.count===undefined?{countUnknown:true}:{}),status:'未指定',task:'',...locate(i.face,working.crews.length)};working.crews.push(c);
    }
    if(i.count!==undefined){const n=i.mode==='add'?Number(c.count||0)+i.count:i.mode==='subtract'?Number(c.count||0)-i.count:i.count;if(n<0||n>99){fail(i,'修正後人數需在 0–99 人之間');continue;}c.count=n;c.countUnknown=false;}
    if(i.face&&i.face!==c.face){Object.assign(c,locate(i.face,working.crews.indexOf(c)),{face:i.face,staged:false});}

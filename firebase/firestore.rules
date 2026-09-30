@@ -164,8 +164,21 @@ service cloud.firestore {
       }
       match /{subCollection}/{docId} {
         allow read: if scope();
+        function validCrewCount() {
+          return !request.resource.data.keys().hasAny(['count'])
+            || request.resource.data.count == null
+            || (request.resource.data.count is int
+              && request.resource.data.count >= 0
+              && request.resource.data.count <= 99);
+        }
         // Explicit exclusions prevent the generic collaboration rule from bypassing instructor privileges.
-        allow create, update, delete: if !(subCollection in ['players','simulationEvents','practiceResponses','practiceMessages','intakeEvents'])
+        allow create: if !(subCollection in ['players','simulationEvents','practiceResponses','practiceMessages','intakeEvents'])
+          && (subCollection != 'crews' || validCrewCount())
+          && scope() && ((!practice() && canWrite(room().brigade)) || (practice() && participant()));
+        allow update: if !(subCollection in ['players','simulationEvents','practiceResponses','practiceMessages','intakeEvents'])
+          && (subCollection != 'crews' || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['count','countUnknown']) || validCrewCount())
+          && scope() && ((!practice() && canWrite(room().brigade)) || (practice() && participant()));
+        allow delete: if !(subCollection in ['players','simulationEvents','practiceResponses','practiceMessages','intakeEvents'])
           && scope() && ((!practice() && canWrite(room().brigade)) || (practice() && participant()));
       }
     }
