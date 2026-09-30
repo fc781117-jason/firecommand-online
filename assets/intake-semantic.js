@@ -75,6 +75,20 @@ function local(raw,roster){
  const clauses=normalized.text.split(/[，,；;。\n]/).map(x=>x.trim()).filter(Boolean);
  const add=(kind,data)=>items.push(item(kind,{...data,id:'item'+items.length}));
  for(const line of clauses){let handled=false;
+  // An exact roster-only roll call can be separated without guessing headcount.
+  const compact=line.replace(/\s|分隊/g,'');
+  if(unitRE&&/^(?:(?:[^\d]*)(?:\d{1,2}人)?)+$/.test(compact)&&!/(?:還沒|未到|尚未|預計|建議|可能|將|一六)/.test(line)){
+   const parts=[],re=new RegExp('('+unitRE+')(\\d{1,2}人)?','g');let match;
+   while((match=re.exec(compact))){parts.push({unit:match[1],number:match[2]?Number(match[2].slice(0,-1)):null});}
+   if(parts.length&&parts.map(p=>p.unit+(p.number===null?'':p.number+'人')).join('')===compact){
+    for(const part of parts)add('crew',{unit:part.unit,number:part.number,allowUnknown:part.number===null,evidence:line});
+    continue;
+   }
+  }
+  if(unitRE&&/到場|報到|抵達/.test(line)&&!/(?:還沒|未到|尚未|預計|建議|可能|將)/.test(line)){
+    const arrived=names.filter(unit=>line===unit+'到場'||line===unit+'報到'||line===unit+'抵達');
+    if(arrived.length===1){add('crew',{unit:arrived[0],number:null,allowUnknown:true,evidence:line});continue;}
+  }
   if(/指揮權.*(?:轉移|移轉|交接)/.test(line)){add(/(?:已|完成|進行).*指揮權.*(?:轉移|移轉|交接)|指揮權.*(?:轉移|移轉|交接).*完成/.test(line)&&!/未|尚未|準備|將|預計/.test(line)?'command':'note',{text:line,evidence:line});handled=true;}
   if(/(?:正面.*第一面|第一面(?:為|是|當作)第一面)/.test(line)){add('firstSide',{text:'現場正面為第一面',evidence:line});handled=true;}
   if(/支援|增援/.test(line)){const m=line.match(/(\d+)台(水庫車|水車|雲梯車|救護車)/);add('support',{text:line,number:m?Number(m[1]):null,task:m?.[2]||(/水庫車/.test(line)?'水庫車':/大隊/.test(line)?'大隊支援':''),evidence:line,uncertainty:/[^\d]台水庫車/.test(line)?'請確認需要幾台水庫車；原文數量不明，不自動猜成十台':''});continue;}
@@ -144,7 +158,7 @@ function compile(items,state,caseData,roster,options={}){
    if(i.face&&!Core.faces.includes(i.face)){addError(i,'面向請選第一至第四面');continue;}
    if(i.kind==='crew'){
     if(num!==null&&(!Number.isInteger(num)||num<0||num>99)){addError(i,'人數請填0–99，支援中文數字');continue;}
-    intent={kind:'crew',key:i.id,line:i.evidence||'',unit:i.unit,brigade,group:i.group||'',count:num===null?undefined:num,mode:i.quantityMode||'set',face:i.face||undefined,task:i.task||undefined,status:i.task&&/內攻|進入|搜救|滅火|供水|警戒/.test(i.task)?'作業中':undefined,targetId:i.targetId||undefined,allowUnknown:!!i.allowUnknown,interior:!!i.interior};
+    intent={kind:'crew',key:i.id,line:i.evidence||'',unit:i.unit,brigade,group:i.group||'',count:num===null?undefined:num,mode:i.quantityMode||'set',face:i.face||undefined,task:i.task||undefined,status:i.task&&/內攻|進入|搜救|滅火|供水|警戒/.test(i.task)?'作業中':undefined,targetId:i.targetId||undefined,allowUnknown:!!i.allowUnknown||num===null&&/到場|報到|抵達/.test(i.evidence)&&!/未到|還沒|尚未|預計|建議|可能/.test(i.evidence),interior:!!i.interior};
    }else if(i.kind==='vehicle'){
     const vehicle=(i.vehicle||'').replace(/\s/g,'');if(!vehicle.startsWith(i.unit)||!/^\d{2,3}$/.test(vehicle.slice(i.unit.length))){addError(i,'請填車輛編號，例如11或111；分隊會自動加上，完整車號也可');continue;}
     intent={kind:'vehicle',key:i.id,line:i.evidence,unit:i.unit,brigade,name:vehicle,face:i.face||undefined};

@@ -343,9 +343,10 @@ function bindEvents(){
   $('demoLoginBtn')?.addEventListener('click', loginDemo);
   $('logoutBtn').addEventListener('click', logout);
   $('approvalLogoutBtn')?.addEventListener('click', logout);
-  $('adminManageBtn')?.addEventListener('click', () => { if($('adminSection')) { $('adminSection').hidden = false; $('adminSection').scrollIntoView({behavior:'smooth'}); } loadUsersForAdmin(); });
+  $('adminManageBtn')?.addEventListener('click', () => { if(!isSuperAdmin())return; const section=$('adminSection'); if(section){section.hidden=false;section.scrollIntoView({behavior:'smooth'});} if(!adminUsersLoaded)loadUsersForAdmin(); });
   $('profileQuickEditBtn')?.addEventListener('click', openProfileQuickEdit);
   $('refreshUsersBtn')?.addEventListener('click', loadUsersForAdmin);
+  bindAccountAdminControls();
   $('profileForm').addEventListener('submit', saveProfile);
   $('caseForm').addEventListener('submit', createCase);
   $('caseType')?.addEventListener('change', syncCasePurposeFromType);
@@ -412,6 +413,7 @@ function bindEvents(){
   $('deploymentVehicleCode')?.addEventListener('change', syncDeploymentVehicleManualField);
   $('addPendingVehicleBtn')?.addEventListener('click', addPendingDeploymentVehicle);
   $('addDeploymentGroupBtn')?.addEventListener('click', addDeploymentGroup);
+  initFieldEntryControls();
   document.querySelectorAll('.hazard-btn').forEach(btn => btn.addEventListener('click', () => startHazardTool(btn.dataset.hazard)));
   $('generateReportBtn')?.addEventListener('click', () => generateAIReport(true));
   $('saveExtraBtn')?.addEventListener('click', saveExtraNotes);
@@ -594,7 +596,9 @@ function getTrappedCount(){
 }
 
 async function initFirebase(){
+  const isolatedPreview=FCFieldEntry.isolatedPreviewHost(window.location?.hostname);
   firebaseEnabled = Boolean(
+    !isolatedPreview &&
     typeof firebase !== 'undefined' &&
     window.FIRECOMMAND_FIREBASE_ENABLED === true &&
     window.FIRECOMMAND_FIREBASE_CONFIG &&
@@ -602,12 +606,12 @@ async function initFirebase(){
     !String(window.FIRECOMMAND_FIREBASE_CONFIG.apiKey || '').includes('PASTE_')
   );
   const demoBtn = $('demoLoginBtn');
-  if(demoBtn) demoBtn.hidden = true;
+  if(demoBtn) demoBtn.hidden = !isolatedPreview;
   if(!firebaseEnabled){
     const loginBtn = $('googleLoginBtn');
     if(loginBtn){
       loginBtn.disabled = true;
-      loginBtn.textContent = '系統連線尚未完成，請聯絡管理員';
+      loginBtn.textContent = isolatedPreview?'Preview 隔離模式：請使用示範進入':'系統連線尚未完成，請聯絡管理員';
     }
     show('authScreen');
     return;
@@ -706,6 +710,7 @@ function prefillProfile(user){
 async function logout(){
   clearIntake28();window.google?.accounts?.id?.disableAutoSelect();
   cleanupSubscriptions(); currentCaseId=null; currentCase=null;
+  adminUsers=[];adminUsersLoaded=false;setAdminPendingBadge(0);
   if(firebaseEnabled) await auth.signOut();
   else { fbUser=null; profile=null; show('authScreen'); }
 }
@@ -743,6 +748,7 @@ function enterApp(){
   const admin = isSuperAdmin();
   $('adminManageBtn') && ($('adminManageBtn').hidden = !admin);
   $('adminSection') && ($('adminSection').hidden = true);
+  if($('accountAdminDetails'))$('accountAdminDetails').open=false;
   if($('deploymentBrigade')){
     $('deploymentBrigade').value = profile.brigade || '第三大隊';
     $('deploymentBrigade').dispatchEvent(new Event('change'));
@@ -757,6 +763,7 @@ function enterApp(){
   setSitrepNow(); setPatientNow(); setHomeMode(homeMode,false);
   $('createCaseDetails').open = false;
   subscribeCases();
+  if(admin)watchUsersForAdmin();
   if(!profile.fireCallSign) setTimeout(()=>{toast('請先設定火場／無線電代號，回報稿將固定沿用。',4200);openProfileQuickEdit();},350);
 }
 
@@ -1652,7 +1659,7 @@ function buildExecutiveSummaryText(c=currentCase){
   if(command.length) sentences.push(`${command.join('，')}。`);
   if(live.vehicles.length || live.crews.length || live.hoses.length){
     const tasks=[...new Set(live.crews.map(x=>x.task).filter(Boolean))].slice(0,4);
-    sentences.push(`現場已登錄車輛${live.vehicles.length}台、人員${sum(live.crews,'count')}人及水線${live.hoses.length}條${tasks.length?`，主要任務包含${tasks.join('、')}`:''}。`);
+    sentences.push(`現場已登錄車輛${live.vehicles.length}台、${crewSummaryText()}及水線${live.hoses.length}條${tasks.length?`，主要任務包含${tasks.join('、')}`:''}。`);
   }else if(effectiveDeploymentSummary()){
     sentences.push(`目前部署紀錄：${effectiveDeploymentSummary().replace(/[。；]+$/,'')}。`);
   }
@@ -1701,7 +1708,7 @@ function renderSummaryCards(){
     <button type="button" class="mini-card summary-link-card" data-summary-page="arrivalSection" data-summary-stage="建"><div class="metric">${c.floors||'?'}</div><div class="metric-label">建物樓層</div><div class="subline">起火：${escapeHtml(floorText(c.fireFloor))}｜點選查看</div></button>
     <button type="button" class="mini-card summary-link-card" data-summary-page="arrivalSection" data-summary-stage="人"><div class="metric">${c.trapped==='有'?'有':c.trapped==='無'?'無':'?'}</div><div class="metric-label">受困狀況</div><div class="subline">${c.trapped==='有'?`${c.trappedCount||0} 人`:c.trapped==='無'?'確認無人受困':'尚未確認'}｜點選查看</div></button>
     <button type="button" class="mini-card summary-link-card" data-summary-page="dashboardSection"><div class="metric">${live.vehicles.length}</div><div class="metric-label">車輛</div><div class="subline">部署與任務細節</div></button>
-    <button type="button" class="mini-card summary-link-card" data-summary-page="dashboardSection"><div class="metric">${sum(live.crews,'count')}${live.crews.some(p=>p.countUnknown)?'+?':''}</div><div class="metric-label">已知人員</div><div class="subline">作業／待命／休息</div></button>
+    <button type="button" class="mini-card summary-link-card" data-summary-page="dashboardSection"><div class="metric">${FCFieldEntry.summary(live.crews).known}${FCFieldEntry.summary(live.crews).pending?'+?':''}</div><div class="metric-label">已確認人數小計</div><div class="subline">${FCFieldEntry.summary(live.crews).pending} 筆待補｜點選查看</div></button>
     <button type="button" class="mini-card summary-link-card" data-summary-page="tacticalMapSection"><div class="metric">${live.hoses.length}</div><div class="metric-label">水線</div><div class="subline">連接與部署細節</div></button>
     <button type="button" class="mini-card summary-link-card" data-summary-page="sitrepSection"><div class="metric">${live.sitreps.length}</div><div class="metric-label">戰情</div><div class="subline">查看最新回報</div></button>`;
   wrap.querySelectorAll('[data-summary-page]').forEach(btn=>btn.addEventListener('click',()=>{switchCasePage(btn.dataset.summaryPage);if(btn.dataset.summaryStage)selectCommandStage(btn.dataset.summaryStage);}));
@@ -1711,7 +1718,7 @@ function renderLiveParts(){
   renderIntakeHistory28();
   renderSds27();
   if(!currentCase) return;
-  renderSummaryCards(); renderToolOptions(); renderDeploymentPalette(); renderDeploymentTextReference(); scheduleDerivedSummaryPersist(); renderMap(); renderLocationControl(); renderDashboard(); renderRules(); renderSitreps(); renderLogs(); renderCommandGuide(); renderBuildingOps(); renderPracticeSession(); renderLocalTacticalAdvice(false); updateAiAdviceButton(); updateAssessmentAvailability(); renderParCrewChecklist(); generateReport(false);
+  renderSummaryCards(); renderToolOptions(); renderFieldEntries(); renderDeploymentPalette(); renderDeploymentTextReference(); scheduleDerivedSummaryPersist(); renderMap(); renderLocationControl(); renderDashboard(); renderRules(); renderSitreps(); renderLogs(); renderCommandGuide(); renderBuildingOps(); renderPracticeSession(); renderLocalTacticalAdvice(false); updateAiAdviceButton(); updateAssessmentAvailability(); renderParCrewChecklist(); generateReport(false);
 }
 function renderToolOptions(){
   renderPendingDeploymentVehicles();
@@ -2271,7 +2278,7 @@ function tacticalZones31(){
  if(live.crews.some(p=>p.status==='待命')){const pt=tacticalPosition31(zones.command?.face||'第一面','standby',0);result.push({id:'zone31_standby',label:'待命區',face:zones.command?.face||'第一面',lat:pt.lat+metersToLatDelta(4),lng:pt.lng});}
  return result;
 }
-function crewCount31(p){return p.countUnknown?'人數待補':p.count+'人';}
+function crewCount31(p){return FCFieldEntry.countLabel(p);}
 function getHosePoints(h){
   const v = live.vehicles.find(x=>x.id===h.vehicleId);
   const schematic=h.supplyUnconfirmed?intakePosition28(h.sourceFace||h.targetName,live.hoses.indexOf(h)):null;
@@ -2481,9 +2488,9 @@ async function deleteVehicle(id){
 async function editCrew(id){
   const p=live.crews.find(x=>x.id===id); if(!p) return;
   const statuses=['作業中','待命','休息','RIT','撤出'].map(x=>`<option ${p.status===x?'selected':''}>${x}</option>`).join('');
-  openActionSheet(`人員｜${p.unit}${p.leader}`,`<div class="field"><label>任務</label><input id="sheetCrewTask" value="${escapeHtml(p.task||'')}" /></div><div class="choice-row"><button class="action-option" data-fill-target="sheetCrewTask" data-fill-value="第一面內攻">第一面內攻</button><button class="action-option" data-fill-target="sheetCrewTask" data-fill-value="人命搜救">人命搜救</button><button class="action-option" data-fill-target="sheetCrewTask" data-fill-value="RIT待命">RIT待命</button><button class="action-option" data-fill-target="sheetCrewTask" data-fill-value="佔據水源">佔據水源</button></div><div class="field"><label>樓層／位置</label><input id="sheetCrewFloor31" value="${escapeHtml(p.floor||'')}" placeholder="例如3樓；俯視圖位置不變" /></div><div class="two-col"><div class="field"><label>狀態</label><select id="sheetCrewStatus">${statuses}</select></div><div class="field"><label>人數</label><input id="sheetCrewCount" type="number" min="1" placeholder="人數待補" value="${p.countUnknown?'':Number(p.count)||0}" /></div></div><div class="button-row"><button id="saveCrewSheetBtn" class="btn primary">儲存</button><button id="deleteCrewSheetBtn" class="btn ghost">刪除編組</button></div>`);
+  openActionSheet(`人員｜${p.unit}${p.leader}`,`<div class="field"><label>任務</label><input id="sheetCrewTask" value="${escapeHtml(p.task||'')}" /></div><div class="choice-row"><button class="action-option" data-fill-target="sheetCrewTask" data-fill-value="第一面內攻">第一面內攻</button><button class="action-option" data-fill-target="sheetCrewTask" data-fill-value="人命搜救">人命搜救</button><button class="action-option" data-fill-target="sheetCrewTask" data-fill-value="RIT待命">RIT待命</button><button class="action-option" data-fill-target="sheetCrewTask" data-fill-value="佔據水源">佔據水源</button></div><div class="field"><label>樓層／位置</label><input id="sheetCrewFloor31" value="${escapeHtml(p.floor||'')}" placeholder="例如3樓；俯視圖位置不變" /></div><div class="two-col"><div class="field"><label>狀態</label><select id="sheetCrewStatus">${statuses}</select></div><div class="field"><label>人數</label><input id="sheetCrewCount" type="number" min="0" step="1" placeholder="人數待補" value="${FCFieldEntry.unknown(p)?'':escapeHtml(p.count)}" /></div></div><div class="button-row"><button id="saveCrewSheetBtn" class="btn primary">儲存</button><button id="deleteCrewSheetBtn" class="btn ghost">刪除編組</button></div>`);
   bindQuickFillButtons($('appActionBody'));
-  $('saveCrewSheetBtn').onclick=async()=>{ const patch={floor:$('sheetCrewFloor31').value.trim(),task:$('sheetCrewTask').value.trim()||p.task,status:$('sheetCrewStatus').value,count:$('sheetCrewCount').value===''?p.count:Number($('sheetCrewCount').value),countUnknown:$('sheetCrewCount').value===''?!!p.countUnknown:false}; await updateItem('crews',id,patch); await addLog('crew',`修改人員：${p.unit}${p.leader}｜${patch.status}｜${patch.task}`); closeActionSheet(); };
+  $('saveCrewSheetBtn').onclick=async()=>{const parsed=FCFieldEntry.parseCount($('sheetCrewCount').value);if(!parsed.valid){toast('人數只接受空白或 0–99 整數');return;}const patch={floor:$('sheetCrewFloor31').value.trim(),task:$('sheetCrewTask').value.trim()||p.task,status:$('sheetCrewStatus').value,count:parsed.count,countUnknown:parsed.count===null};await updateItem('crews',id,patch);await addLog('crew',`修改人員：${p.unit}${p.leader}｜${patch.status}｜${patch.task}`);closeActionSheet();};
   $('deleteCrewSheetBtn').onclick=()=>{ closeActionSheet(); deleteCrew(id); };
 }
 async function deleteCrew(id){
@@ -2571,6 +2578,113 @@ function addPendingDeploymentVehicle(){
 }
 function stagingPosition(index=0,column=0){
  return tacticalPosition31(column?(currentCase?.tacticalZones?.command?.face||'第一面'):'第一面',column?'standby':'vehicle',index);
+}
+let fieldCrewExpected=null,fieldCrewDirty=false;
+function fieldEntryStatus(id,message){const el=$(id);if(el)el.textContent=message;}
+function fillFieldUnitOptions(brigadeId,unitId){
+  const brigade=$(brigadeId),unit=$(unitId);if(!brigade||!unit)return;
+  const previous=brigade.value||profile?.brigade||'第三大隊';
+  brigade.innerHTML=Object.keys(UNIT_TREE).map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join('');
+  brigade.value=UNIT_TREE[previous]?previous:'第三大隊';
+  const update=()=>{
+    const old=unit.value,groups=FCFieldEntry.unitOptions(UNIT_TREE,brigade.value);
+    unit.innerHTML=groups.map(({company,units})=>`<optgroup label="${escapeHtml(company)}">${units.map(value=>`<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join('')}</optgroup>`).join('');
+    if(FCFieldEntry.validUnit(UNIT_TREE,brigade.value,old))unit.value=old;
+    if(unitId==='fieldCrewUnit')loadSelectedCrew();
+  };
+  brigade.addEventListener('change',()=>{unit.value='';update();fieldEntryStatus(unitId==='fieldCrewUnit'?'fieldCrewSaveStatus':'fieldVehicleSaveStatus','尚未儲存');});
+  unit.addEventListener('change',()=>{if(unitId==='fieldCrewUnit')loadSelectedCrew();});
+  update();
+}
+function selectedFieldCrew(){
+  const brigade=$('fieldCrewBrigade')?.value,unit=$('fieldCrewUnit')?.value;
+  return live.crews.filter(c=>c.brigade===brigade&&c.unit===unit&&!c.voiceGroup&&!c.leader);
+}
+function loadSelectedCrew(){
+  const matches=selectedFieldCrew(),crew=matches.length===1?matches[0]:null;
+  fieldCrewExpected=crew?{id:crew.id,updatedAt:crew.updatedAt||null}:null;
+  fieldCrewDirty=false;
+  if($('fieldCrewCount'))$('fieldCrewCount').value=crew&&!FCFieldEntry.unknown(crew)?String(crew.count):'';
+  if($('fieldCrewTask'))$('fieldCrewTask').value=crew?.task&&[...$('fieldCrewTask').options].some(o=>o.value===crew.task)?crew.task:'';
+  fieldEntryStatus('fieldCrewSaveStatus',crew?'目前顯示已存資料；修改後請確認儲存':'尚未儲存');
+}
+function initFieldEntryControls(){
+  fillFieldUnitOptions('fieldCrewBrigade','fieldCrewUnit');
+  fillFieldUnitOptions('fieldVehicleBrigade','fieldVehicleUnit');
+  $('fieldCrewSaveBtn')?.addEventListener('click',saveFieldCrew);
+  $('fieldVehicleSaveBtn')?.addEventListener('click',saveFieldVehicle);
+  for(const id of ['fieldCrewCount','fieldCrewTask'])$(id)?.addEventListener('input',()=>{fieldCrewDirty=true;fieldEntryStatus('fieldCrewSaveStatus','尚未儲存');});
+  $('fieldCrewDetails')?.addEventListener('toggle',()=>{if($('fieldCrewDetails').open&&!fieldCrewDirty)loadSelectedCrew();});
+  $('fieldVehicleCode')?.addEventListener('change',()=>fieldEntryStatus('fieldVehicleSaveStatus','尚未儲存'));
+  document.querySelectorAll('[data-field-map-tool]').forEach(button=>button.addEventListener('click',()=>{
+    $('deploymentMapDetails').open=true;setDeploymentMode(button.dataset.fieldMapTool);
+    $('deploymentMapDetails').scrollIntoView({behavior:'smooth'});setTimeout(refreshMapSize,220);
+  }));
+  $('fieldCrewList')?.addEventListener('click',event=>{
+    const button=event.target.closest('[data-field-crew]');if(!button)return;
+    const crew=live.crews.find(c=>c.id===button.dataset.fieldCrew);if(!crew)return;
+    if(UNIT_TREE[crew.brigade]){$('fieldCrewBrigade').value=crew.brigade;$('fieldCrewBrigade').dispatchEvent(new Event('change'));}
+    if(FCFieldEntry.validUnit(UNIT_TREE,crew.brigade,crew.unit))$('fieldCrewUnit').value=crew.unit;
+    loadSelectedCrew();$('fieldCrewDetails').open=true;$('fieldCrewCount').focus();
+  });
+}
+function renderFieldEntries(){
+  if(!currentCase||!$('fieldCrewSummary'))return;
+  if(!fieldCrewDirty&&!fieldCrewExpected&&selectedFieldCrew().length===1)loadSelectedCrew();
+  const s=FCFieldEntry.summary(live.crews);
+  $('fieldCrewSummary').textContent=`${s.units} 筆｜已確認小計 ${s.known} 人${s.pending?`｜${s.pending} 筆人數待補`:''}`;
+  $('fieldVehicleSummary').textContent=`${live.vehicles.length} 台｜新車先列待定位`;
+  $('fieldCrewList').innerHTML=live.crews.map(c=>`<button type="button" data-field-crew="${escapeHtml(c.id)}">${escapeHtml(c.unit||'未辨識單位')}｜${FCFieldEntry.countLabel(c)}｜${escapeHtml(c.task||'未指定')}${c.leader?'｜編組 '+escapeHtml(c.leader):''}</button>`).join('')||'<span class="hint">尚無人員／單位紀錄</span>';
+  $('fieldVehicleList').innerHTML=live.vehicles.map(v=>`<span class="readonly-card">${escapeHtml(vehicleDisplayName(v))}｜${v.positionManual?'已人工定位':'待定位'}</span>`).join('')||'<span class="hint">尚無車輛紀錄</span>';
+}
+async function saveFieldCrew(){
+  if(!currentCase)return;
+  if(currentCase.mode==='practice'&&myTrainingRole()==='觀察員'&&!isPracticeHost()){fieldEntryStatus('fieldCrewSaveStatus','儲存失敗：觀察員僅可閱覽');return;}
+  const button=$('fieldCrewSaveBtn'),brigade=$('fieldCrewBrigade')?.value,unit=$('fieldCrewUnit')?.value;
+  if(!FCFieldEntry.validUnit(UNIT_TREE,brigade,unit)){fieldEntryStatus('fieldCrewSaveStatus','儲存失敗：請先選有效單位');return;}
+  const parsed=FCFieldEntry.parseCount($('fieldCrewCount')?.value);
+  if(!parsed.valid){fieldEntryStatus('fieldCrewSaveStatus','儲存失敗：人數只接受空白或 0–99 的整數');return;}
+  const matches=selectedFieldCrew();if(matches.length>1){fieldEntryStatus('fieldCrewSaveStatus','版本衝突待處理：此單位有多筆編組，請從既有明細選定');return;}
+  const existing=matches[0],id=existing?.id||FCFieldEntry.identity(brigade,unit),expected=fieldCrewExpected;
+  if((existing&&expected?.id!==existing.id)||(!existing&&expected&&expected.id!==id)){fieldEntryStatus('fieldCrewSaveStatus','版本衝突待處理：單位資料已更新，請重新選擇');return;}
+  const now=Date.now(),task=$('fieldCrewTask')?.value||'',count=parsed.count;
+  const patch={count,countUnknown:count===null,task,status:task==='休息'?'休息':task==='待命'?'待命':'未指定',updatedAt:now};
+  button.disabled=true;fieldEntryStatus('fieldCrewSaveStatus','儲存中');
+  try{
+    if(firebaseEnabled){
+      const parent=db.collection('cases').doc(currentCaseId),ref=parent.collection('crews').doc(id);
+      await db.runTransaction(async tx=>{
+        const snap=await tx.get(ref);
+        if((!snap.exists&&expected)||(snap.exists&&(!expected||expected.id!==id||Number(snap.data().updatedAt||0)!==Number(expected.updatedAt||0))))throw Error('版本衝突待處理：他人已修改這筆資料');
+        if(snap.exists)tx.update(ref,patch);
+        else {const pos=stagingPosition(live.crews.length,1);tx.set(ref,{brigade,unit,leader:'',...patch,createdAt:now,authorUid:profile?.id||fbUser?.uid,staged:true,layout31:true,lat:pos.lat,lng:pos.lng});}
+        tx.update(parent,{resourceRevision:firebase.firestore.FieldValue.increment(1)});
+      });
+    }else{
+      if(existing){if(Number(existing.updatedAt||0)!==Number(expected?.updatedAt||0))throw Error('版本衝突待處理');Object.assign(existing,patch);}
+      else {const pos=stagingPosition(live.crews.length,1);live.crews.push({id,brigade,unit,leader:'',...patch,createdAt:now,staged:true,layout31:true,lat:pos.lat,lng:pos.lng});}
+      currentCase.resourceRevision=(currentCase.resourceRevision||0)+1;saveLocalCase();renderLiveParts();
+    }
+    fieldCrewExpected={id,updatedAt:now};fieldCrewDirty=false;fieldEntryStatus('fieldCrewSaveStatus',firebaseEnabled?'已同步儲存':'已存本機（示範模式，未同步）');toast(`${unit}已儲存${count===null?'，人數待補':`，${count} 人`}`);
+  }catch(err){fieldEntryStatus('fieldCrewSaveStatus',/版本衝突/.test(err.message)?'版本衝突待處理':`儲存失敗：${err.message}`);}
+  finally{button.disabled=false;}
+}
+async function saveFieldVehicle(){
+  if(!currentCase)return;
+  if(currentCase.mode==='practice'&&myTrainingRole()==='觀察員'&&!isPracticeHost()){fieldEntryStatus('fieldVehicleSaveStatus','儲存失敗：觀察員僅可閱覽');return;}
+  const brigade=$('fieldVehicleBrigade')?.value,unit=$('fieldVehicleUnit')?.value,code=$('fieldVehicleCode')?.value,button=$('fieldVehicleSaveBtn');
+  if(!FCFieldEntry.validUnit(UNIT_TREE,brigade,unit)||!code){fieldEntryStatus('fieldVehicleSaveStatus','儲存失敗：請選大隊、單位及車號');return;}
+  const name=formatUnitVehicleName(unit,code),id='manual_vehicle_'+encodeURIComponent(brigade+'|'+name);
+  button.disabled=true;fieldEntryStatus('fieldVehicleSaveStatus','儲存中');
+  try{
+    if(live.vehicles.some(v=>vehicleDisplayName(v)===name&&v.brigade===brigade)){fieldEntryStatus('fieldVehicleSaveStatus','已同步儲存：這部車已登錄');return;}
+    const type=vehicleType(code),now=Date.now(),pos=stagingPosition(live.vehicles.length,0);
+    const data={brigade,unit,name,vehicleCode:code,type:type.label,canHose:type.canHose,task:'',status:'待定位',lat:pos.lat,lng:pos.lng,layout31:true,staged:true,createdAt:now};
+    if(firebaseEnabled){const parent=db.collection('cases').doc(currentCaseId),ref=parent.collection('vehicles').doc(id);await db.runTransaction(async tx=>{const snap=await tx.get(ref);if(snap.exists)return;tx.set(ref,data);tx.update(parent,{resourceRevision:firebase.firestore.FieldValue.increment(1)});});}
+    else {if(!live.vehicles.some(v=>v.id===id))live.vehicles.push({id,...data});currentCase.resourceRevision=(currentCase.resourceRevision||0)+1;saveLocalCase();renderLiveParts();}
+    fieldEntryStatus('fieldVehicleSaveStatus',firebaseEnabled?'已同步儲存':'已存本機（示範模式，未同步）');toast(`${name}已登錄，圖面待定位`);$('fieldVehicleCode').value='';
+  }catch(err){fieldEntryStatus('fieldVehicleSaveStatus',`儲存失敗：${err.message}`);}
+  finally{button.disabled=false;}
 }
 async function addDeploymentGroup(){
   if(!currentCase) return;
@@ -2940,10 +3054,10 @@ function renderDashboard(){
   const vehicleTypes = countBy(live.vehicles,'type'); const crewStatus = countBy(live.crews,'status');
   $('statusCards').innerHTML = `
     <button type="button" class="mini-card stat-action" data-jump-panel="vehicle"><div class="metric">${live.vehicles.length}</div><div class="metric-label">車輛</div><div class="subline">${entriesText(vehicleTypes) || '尚無'}｜點選展開</div></button>
-    <button type="button" class="mini-card stat-action" data-jump-panel="crew"><div class="metric">${sum(live.crews,'count')}${live.crews.some(p=>p.countUnknown)?'+?':''}</div><div class="metric-label">已知人員</div><div class="subline">${entriesText(crewStatus) || '尚無'}｜點選展開</div></button>
+    <button type="button" class="mini-card stat-action" data-jump-panel="crew"><div class="metric">${FCFieldEntry.summary(live.crews).known}${FCFieldEntry.summary(live.crews).pending?'+?':''}</div><div class="metric-label">已確認人數小計</div><div class="subline">${FCFieldEntry.summary(live.crews).pending} 筆待補｜點選展開</div></button>
     <button type="button" class="mini-card stat-action" data-jump-panel="hose"><div class="metric">${live.hoses.length}</div><div class="metric-label">水線</div><div class="subline">進攻 / 供水 / 防護｜點選部署圖</div></button>
     <button type="button" class="mini-card stat-action" data-jump-panel="hazard"><div class="metric">${live.hazards.length}</div><div class="metric-label">標示</div><div class="subline">火點、危害、指揮站｜點選部署圖</div></button>`;
-  $('crewCards').innerHTML = live.crews.length ? live.crews.map(p=>`<div class="mini-card wide"><span class="tag ${p.status==='RIT'?'amber':(p.status==='休息'||p.status==='待命')?'green':'red'}">${escapeHtml(p.status)}</span><h3>${escapeHtml(p.unit)}${escapeHtml(p.leader)}</h3><div class="metric">${p.countUnknown?'待補':p.count}</div><div class="metric-label">人員</div><div class="subline">任務：${escapeHtml(p.task)}<br>派遣：${p.dispatchCount||0}次｜作業：${Math.max(0,Math.round((Date.now()-(p.startAt||Date.now()))/60000))}分</div><div class="button-row compact-actions"><button class="btn small ghost" data-rest-crew="${p.id}" data-rest-mode="原地休息">原地休息</button><button class="btn small ghost" data-rest-crew="${p.id}" data-rest-mode="移至休息區">移至休息區</button><button class="btn small ghost" data-delete-crew="${p.id}">刪除</button></div></div>`).join('') : '<div class="empty">尚無人員資料。</div>';
+  $('crewCards').innerHTML = live.crews.length ? live.crews.map(p=>`<div class="mini-card wide"><span class="tag ${p.status==='RIT'?'amber':(p.status==='休息'||p.status==='待命')?'green':'red'}">${escapeHtml(p.status||'未指定')}</span><h3>${escapeHtml(p.unit)}${escapeHtml(p.leader||'')}</h3><div class="metric">${FCFieldEntry.unknown(p)?'待補':p.count}</div><div class="metric-label">人員</div><div class="subline">任務：${escapeHtml(p.task||'未指定')}<br>派遣：${p.dispatchCount||0}次｜作業：${Math.max(0,Math.round((Date.now()-(p.startAt||Date.now()))/60000))}分</div><div class="button-row compact-actions"><button class="btn small ghost" data-rest-crew="${p.id}" data-rest-mode="原地休息">原地休息</button><button class="btn small ghost" data-rest-crew="${p.id}" data-rest-mode="移至休息區">移至休息區</button><button class="btn small ghost" data-delete-crew="${p.id}">刪除</button></div></div>`).join('') : '<div class="empty">尚無人員資料。</div>';
   $('vehicleCards').innerHTML = live.vehicles.length ? live.vehicles.map(v=>`<div class="mini-card wide"><span class="tag blue">${escapeHtml(v.type)}</span><h3>${escapeHtml(v.name)}</h3><div class="metric-label">${escapeHtml(v.unit)}</div><div class="subline">任務：${escapeHtml(v.task)}<br>水線：${live.hoses.filter(h=>h.vehicleId===v.id).length}/${v.canHose?4:0}</div><button class="btn small ghost full" data-delete-vehicle="${v.id}">刪除車輛</button></div>`).join('') : '<div class="empty">尚無車輛資料。</div>';
   document.querySelectorAll('[data-jump-panel]').forEach(btn=>btn.onclick=()=>jumpFromStatus(btn.dataset.jumpPanel));
   document.querySelectorAll('[data-delete-crew]').forEach(btn=>btn.onclick=()=>{ const p=live.crews.find(x=>x.id===btn.dataset.deleteCrew); if(p && confirm(`確認刪除 ${p.unit}${p.leader}？`)) deleteItem('crews', p.id, `${p.unit}${p.leader}`); });
@@ -3007,13 +3121,13 @@ function deploymentStatsLines(){
   const vehicleTypes = countBy(live.vehicles,'type');
   const crewStatus = countBy(live.crews,'status');
   const hoseKinds = countBy(live.hoses,'kind');
-  const unitPeople = live.crews.reduce((m,p)=>{ const k=p.unit||'未登錄'; m[k]=(m[k]||0)+(Number(p.count)||0); return m; },{});
-  const workRows = live.crews.map(p=>`- ${p.unit}${p.leader}｜${crewCount31(p)}｜${p.status}｜${p.task||'未登錄'}｜作業 ${formatDurationMinutes(crewWorkMinutes(p))}`).join('\n') || '- 尚無人員作業資料';
+  const unitPeople=[...new Set(live.crews.map(p=>p.unit||'未登錄'))].map(unit=>{const s=FCFieldEntry.summary(live.crews.filter(p=>(p.unit||'未登錄')===unit));return `${unit}已確認小計${s.known}人${s.pending?`、${s.pending}筆待補`:''}`;}).join('、');
+  const workRows = live.crews.map(p=>`- ${p.unit}${p.leader||''}｜${crewCount31(p)}｜${p.status||'未指定'}｜${p.task||'未指定'}｜${p.status==='作業中'?`作業 ${formatDurationMinutes(crewWorkMinutes(p))}`:'尚未確認投入'}`).join('\n') || '- 尚無人員作業資料';
   return [
     ...(effectiveDeploymentSummary()?[`部署文字／圖面摘要：${effectiveDeploymentSummary()}`]:[]),
     `車輛類型：${entriesText(vehicleTypes) || '尚無'}`,
     `人員狀態：${entriesText(crewStatus) || '尚無'}`,
-    `單位人數：${entriesText(unitPeople) || '尚無'}`,
+    `單位人數：${unitPeople || '尚無'}`,
     `水線性質：${entriesText(hoseKinds) || '尚無'}`,
     `危害標示：${live.hazards.map(h=>h.type).join('、') || '尚無'}`,
     `人員作業時間：`,
@@ -3046,7 +3160,7 @@ function assessmentLocalText(){
     `案件：${currentCase?.caseNo || ''}｜${currentCase?.address || ''}`,
     '',
     '一、資料完整性評估',
-    `- 戰情回報：${live.sitreps.length} 筆；操作紀錄：${live.logs.length} 筆；車輛：${live.vehicles.length} 台；人員：${sum(live.crews,'count')} 人；水線：${live.hoses.length} 條。`,
+    `- 戰情回報：${live.sitreps.length} 筆；操作紀錄：${live.logs.length} 筆；車輛：${live.vehicles.length} 台；${crewSummaryText()}；水線：${live.hoses.length} 條。`,
     '- 建議檢查每一筆水線是否均有來源、歸屬、任務、目的地；每一組人員是否均有狀態、任務、作業起始時間。',
     '',
     '二、搶救部署與人車運用',
@@ -3116,7 +3230,7 @@ function formalAdviceLines(){
 }
 function reportDraftBase(){
   const c=currentCase || {};
-  const crews=sum(live.crews,'count');
+  const crews=crewSummaryText();
   const deploymentLines=deploymentStatsLines();
   const sitrepLines=sitrepSummaryLines();
   return sanitizeReportText([
@@ -3132,7 +3246,7 @@ function reportDraftBase(){
     '',
     '二、目前部署與戰力概況',
     '（一）戰力統計',
-    `現場目前登錄車輛${live.vehicles.length}台、人員${crews}人、水線${live.hoses.length}條及危害或區域標示${live.hazards.length}處。`,
+    `現場目前登錄車輛${live.vehicles.length}台、${crews}、水線${live.hoses.length}條及危害或區域標示${live.hazards.length}處。`,
     ...(deploymentLines.length?['（二）任務與部署概況',...deploymentLines]:[]),
     '',
     '三、各單位戰情及傷患者回報彙整',
@@ -3362,7 +3476,7 @@ function floorPlanSchematicHtml(){
 function reportHtmlFromText(text){
   const cleaned = sanitizeReportText(text);
   const {meta, sections} = parseReportText(cleaned);
-  const chips = [`車輛 ${live.vehicles.length} 台`,`人員 ${sum(live.crews,'count')} 人`,`水線 ${live.hoses.length} 條`,`戰情 ${live.sitreps.length} 筆`].map(x=>`<span class="report-chip">${escapeHtml(x)}</span>`).join('');
+  const chips = [`車輛 ${live.vehicles.length} 台`,crewSummaryText(),`水線 ${live.hoses.length} 條`,`戰情 ${live.sitreps.length} 筆`].map(x=>`<span class="report-chip">${escapeHtml(x)}</span>`).join('');
   const metaTable = `<table class="report-meta-table"><tbody>
     <tr><th>案件編號</th><td>${escapeHtml(meta['案件編號']||currentCase?.caseNo||'')}</td><th>地址</th><td>${escapeHtml(meta['地址']||currentCase?.address||'')}</td></tr>
     <tr><th>產出者</th><td>${escapeHtml(meta['產出者']||`${profile?.realName||profile?.callName||''}｜${profile?.brigade||''}/${profile?.unit||''}`)}</td><th>產出時間</th><td>${escapeHtml(meta['產出時間']||fmtTime(Date.now()))}</td></tr>
@@ -3608,7 +3722,7 @@ function renderArrivalStatusCards(){
     building: [null, buildingDone ? `${$('detailPurpose').value}${$('buildingStructure')?.value?`／${$('buildingStructure').value}`:''}｜${$('detailFloors').value}樓｜${floorText($('detailFireFloor').value)}` : '尚缺必要資料'],
     fire: [null, fireDone ? buildFireStatusFromSop() : '尚缺火煙資料'],
     trapped: [null, trappedState==='none'?'確認無人受困':trappedState==='has'?`受困 ${Number($('trappedCountArrival')?.value)||0} 人`:'尚未確認'],
-    deployment: [null, deploymentDone?(live.crews.length||live.vehicles.length||live.hoses.length?`${live.vehicles.length}車｜${sum(live.crews,'count')}人｜${live.hoses.length}線`:'已有文字部署紀錄'):'尚未部署'],
+    deployment: [null, deploymentDone?(live.crews.length||live.vehicles.length||live.hoses.length?`${live.vehicles.length}車｜${crewSummaryText()}｜${live.hoses.length}線`:'已有文字部署紀錄'):'尚未部署'],
     command: [$('commandCheck'), commandState==='transferred' ? '已完成轉移' : (commandState==='pending' ? '尚未完成' : '未確認')],
     contact: [$('contactCheck'), contactState==='found' ? (contacts.length ? `已找到 ${contacts.length} 位` : '已找到，待補資料') : (contactState==='notfound' ? '尚未找到' : '未確認')],
     rit: [$('ritCheck'), ritState==='assigned' ? ($('ritUnit')?.value || '已指派') : (ritState==='unassigned' ? '尚未指派' : '未確認')],
@@ -3712,6 +3826,7 @@ function commandBlocks(stage,c){
 }
 function countBy(arr,key){ return arr.reduce((m,x)=>{ const k=x[key]||'未分類'; m[k]=(m[k]||0)+1; return m; },{}); }
 function sum(arr,key){ return arr.reduce((s,x)=>s+(Number(x[key])||0),0); }
+function crewSummaryText(){const s=FCFieldEntry.summary(live.crews);return `單位／編組${s.units}筆、已確認人數小計${s.known}人${s.pending?`、${s.pending}筆人數待補`:''}`;}
 function entriesText(obj){ return Object.entries(obj).map(([k,v])=>`${k}${v}`).join('、'); }
 
 
@@ -3763,32 +3878,120 @@ function showApprovalScreen(){
   show('approvalScreen');
 }
 async function loadUsersForAdmin(){
-  if(!firebaseEnabled || !isSuperAdmin()){ toast('只有最高管理員可以管理帳號'); return; }
-  const snap = await db.collection('users').get();
-  const users = snap.docs.map(d=>({id:d.id, ...d.data()})).filter(u => !isSuperAdminEmail(u.email)).sort((a,b)=>String(a.status||'').localeCompare(String(b.status||'')) || String(a.brigade||'').localeCompare(String(b.brigade||'')));
-  const wrap = $('userAdminList'); if(!wrap) return;
-  wrap.innerHTML = users.map(u => `<div class="user-admin-card ${u.status||'pending'}">
-    <div><b>${escapeHtml(u.realName||u.callName||u.email||'未具名')}</b><div class="hint">${escapeHtml(u.email||'')}｜${escapeHtml(u.brigade||'')}/${escapeHtml(u.unit||'')}｜${roleLabel(u.role)}｜狀態：${escapeHtml(u.status||'pending')}</div></div>
-    <div class="button-row compact-actions">
-      <button class="btn small primary" data-user-action="active" data-user-id="${u.id}" ${u.email===SUPER_ADMIN_EMAIL?'disabled':''}>啟用</button>
-      <button class="btn small danger" data-user-action="suspended" data-user-id="${u.id}" ${u.email===SUPER_ADMIN_EMAIL?'disabled':''}>停權</button>
-      <button class="btn small ghost" data-user-action="pending" data-user-id="${u.id}" ${u.email===SUPER_ADMIN_EMAIL?'disabled':''}>待審</button>
-    </div>
-  </div>`).join('') || '<div class="empty">尚無使用者資料。</div>';
-  wrap.querySelectorAll('[data-user-action]').forEach(btn => btn.addEventListener('click', () => updateUserStatus(btn.dataset.userId, btn.dataset.userAction)));
+  if(!firebaseEnabled || !isSuperAdmin()){toast('只有最高管理員可以管理帳號');return;}
+  const refreshing=$('refreshUsersBtn');if(refreshing)refreshing.disabled=true;
+  try{
+    const snap=await db.collection('users').get();
+    if(!isSuperAdmin())return;
+    acceptAdminUsers(snap);
+  }catch(err){toast(`帳號讀取失敗：${err.message}`);}
+  finally{if(refreshing)refreshing.disabled=false;}
 }
-async function updateUserStatus(userId, status){
-  if(!firebaseEnabled || !isSuperAdmin()) return;
-  const ref = db.collection('users').doc(userId);
-  const snap = await ref.get();
-  const userData = snap.exists ? snap.data() : {};
-  if(isSuperAdminEmail(userData.email)){
-    toast('最高管理員帳號為系統固定帳號，不能停權、待審或刪除。');
-    return;
-  }
-  await ref.set({status, approvedBy:profile.email, approvedAt:Date.now(), updatedAt:Date.now(), lastAdminAction:{action:'status-update',status,operator:profile.email,at:Date.now()}},{merge:true});
-  console.info('FireCommand admin status update', {userId,status,operator:profile.email});
-  toast(`已更新帳號狀態：${status}`); loadUsersForAdmin();
+let adminUsers=[],adminUsersLoaded=false;
+const accountQuery={search:'',status:'',brigade:'',company:'',unit:'',role:'',sort:'newest'};
+const ACCOUNT_STATUSES={pending:'待審核',active:'已啟用',suspended:'已停權'};
+function setAdminPendingBadge(count){
+  for(const id of ['adminPendingBadge','adminManageBadge']){const badge=$(id);if(badge){badge.hidden=!count;badge.textContent=count?`待審 ${count}`:'';}}
+}
+function acceptAdminUsers(snap){
+  adminUsers=snap.docs.map(d=>({id:d.id,...d.data()})).filter(u=>!isSuperAdminEmail(u.email));
+  adminUsersLoaded=true;setAdminPendingBadge(FCAccountAdmin.totals(adminUsers).pending);
+  renderAdminUsers();
+}
+function watchUsersForAdmin(){
+  if(!firebaseEnabled||!isSuperAdmin())return;
+  const unsub=db.collection('users').onSnapshot(acceptAdminUsers,err=>{console.warn('帳號即時更新不可用',err);toast('帳號即時更新中斷，請按重新整理重試');});
+  unsubscribers.push(unsub);
+}
+function adminOptionHtml(values,current,placeholder){return `<option value="">${placeholder}</option>`+values.map(value=>`<option value="${escapeHtml(value)}" ${value===current?'selected':''}>${escapeHtml(value)}</option>`).join('');}
+function updateAccountFilterChoices(){
+  const opts=FCAccountAdmin.options(adminUsers,UNIT_TREE,accountQuery.brigade,accountQuery.company);
+  const set=(id,values,current,placeholder)=>{const el=$(id);if(el)el.innerHTML=adminOptionHtml(values,current,placeholder);};
+  set('accountBrigadeFilter',opts.brigades,accountQuery.brigade,'全部大隊');
+  set('accountCompanyFilter',opts.companies,accountQuery.company,'全部中隊');
+  set('accountStationFilter',opts.units,accountQuery.unit,'全部分隊');
+  const role=$('accountRoleFilter');if(role)role.innerHTML='<option value="">全部職稱／角色</option>'+opts.roles.map(value=>`<option value="${escapeHtml(value)}" ${value===accountQuery.role?'selected':''}>${escapeHtml(roleLabel(value))}</option>`).join('');
+}
+function renderAdminUsers(){
+  const wrap=$('userAdminList');if(!wrap||!isSuperAdmin())return;
+  const totals=FCAccountAdmin.totals(adminUsers);
+  const labels={all:'全部',...ACCOUNT_STATUSES};
+  const summary=$('accountSummary');if(summary)summary.innerHTML=['pending','active','suspended','all'].map(key=>`<button type="button" data-account-status="${key==='all'?'':key}" aria-pressed="${accountQuery.status===(key==='all'?'':key)}"><span>${labels[key]}</span><b>${totals[key]}</b></button>`).join('');
+  const chips=$('accountStatusFilters');if(chips)chips.innerHTML=['all','pending','active','suspended'].map(key=>`<button type="button" data-account-status="${key==='all'?'':key}" aria-pressed="${accountQuery.status===(key==='all'?'':key)}">${labels[key]}${key==='pending'?` ${totals.pending}`:''}</button>`).join('');
+  const filters=$('accountActiveFilters');if(filters){const active=[['status',ACCOUNT_STATUSES[accountQuery.status]],['brigade',accountQuery.brigade],['company',accountQuery.company],['unit',accountQuery.unit],['role',accountQuery.role&&roleLabel(accountQuery.role)]];filters.innerHTML=active.filter(([,v])=>v).map(([key,value])=>`<button type="button" data-account-clear="${key}" aria-label="清除 ${escapeHtml(value)} 篩選">${escapeHtml(value)} ×</button>`).join('')+(active.some(([,v])=>v)?'<button type="button" data-account-clear="all">清除全部</button>':'');}
+  $('accountUnitFilterBtn')?.classList.toggle('filter-active',!!(accountQuery.brigade||accountQuery.company||accountQuery.unit));
+  const roles=Object.fromEntries([...new Set(adminUsers.map(u=>u.role))].map(r=>[r,roleLabel(r)]));
+  const users=FCAccountAdmin.filter(adminUsers,{...accountQuery,roleLabels:roles},UNIT_TREE);
+  const counter=$('accountResultCount');if(counter)counter.textContent=`顯示 ${users.length}／${adminUsers.length} 個帳號`;
+  wrap.innerHTML=users.map(u=>{
+    const state=FCAccountAdmin.status(u),name=escapeHtml(u.realName||u.callName||u.email||'未具名'),id=escapeHtml(u.id),company=FCAccountAdmin.company(u,UNIT_TREE);
+    const action=state==='pending'?'<button class="btn small primary" data-user-action="active" data-user-id="'+id+'">核准啟用</button>':state==='active'?'<button class="btn small danger" data-user-action="suspended" data-user-id="'+id+'">停權</button>':'<button class="btn small primary" data-user-action="active" data-user-id="'+id+'">恢復啟用</button>';
+    return `<article class="user-admin-card ${state}"><div><div class="account-card-heading"><b>${name}</b><span class="account-status-label">${state==='pending'?'◉':state==='active'?'✓':'⊘'} ${ACCOUNT_STATUSES[state]}</span></div><div class="account-card-meta"><p>${escapeHtml([u.brigade,company,u.unit||u.station].filter((v,i,a)=>v&&a.indexOf(v)===i).join(' / ')||'未填單位')}</p><p>${escapeHtml(u.title||roleLabel(u.role))}｜${escapeHtml(roleLabel(u.role))}</p><p>${escapeHtml(u.email||'未填 Email')}</p>${state==='pending'?`<p>申請時間：${escapeHtml(u.createdAt?fmtTime(u.createdAt):'未記錄')}</p>`:''}</div></div><div class="button-row compact-actions"><button class="btn small ghost" data-user-detail="${id}" type="button">查看詳細</button>${action}</div></article>`;
+  }).join('')||`<div class="empty">${adminUsers.length?'找不到符合條件的帳號。請調整搜尋或清除篩選。':'尚無使用者資料。'} ${adminUsers.length?'<button type="button" class="btn small ghost" data-account-clear="all">清除條件</button>':''}</div>`;
+  updateAccountFilterChoices();
+}
+function bindAccountAdminControls(){
+  $('accountSearch')?.addEventListener('input',e=>{accountQuery.search=e.target.value;renderAdminUsers();});
+  $('accountSort')?.addEventListener('change',e=>{accountQuery.sort=e.target.value;renderAdminUsers();});
+  $('accountRoleFilter')?.addEventListener('change',e=>{accountQuery.role=e.target.value;renderAdminUsers();});
+  for(const id of ['accountSummary','accountStatusFilters','accountActiveFilters','userAdminList'])$(id)?.addEventListener('click',e=>{
+    const status=e.target.closest('[data-account-status]');if(status){accountQuery.status=status.dataset.accountStatus;renderAdminUsers();return;}
+    const clear=e.target.closest('[data-account-clear]');if(clear){const key=clear.dataset.accountClear;if(key==='all'){for(const part of ['search','status','brigade','company','unit','role'])accountQuery[part]='';if($('accountSearch'))$('accountSearch').value='';}else{accountQuery[key]='';if(key==='brigade'){accountQuery.company='';accountQuery.unit='';}if(key==='company')accountQuery.unit='';}renderAdminUsers();return;}
+    const detail=e.target.closest('[data-user-detail]');if(detail){showAccountDetail(detail.dataset.userDetail);return;}
+    const action=e.target.closest('[data-user-action]');if(action)requestUserStatusUpdate(action.dataset.userId,action.dataset.userAction);
+  });
+  $('accountUnitFilterBtn')?.addEventListener('click',()=>{updateAccountFilterChoices();$('accountUnitDialog')?.showModal();});
+  $('accountBrigadeFilter')?.addEventListener('change',()=>{
+    const opts=FCAccountAdmin.options(adminUsers,UNIT_TREE,$('accountBrigadeFilter').value);
+    $('accountCompanyFilter').innerHTML=adminOptionHtml(opts.companies,'','全部中隊');
+    $('accountStationFilter').innerHTML=adminOptionHtml(opts.units,'','全部分隊');
+  });
+  $('accountCompanyFilter')?.addEventListener('change',()=>{
+    const opts=FCAccountAdmin.options(adminUsers,UNIT_TREE,$('accountBrigadeFilter').value,$('accountCompanyFilter').value);
+    $('accountStationFilter').innerHTML=adminOptionHtml(opts.units,'','全部分隊');
+  });
+  $('accountClearUnit')?.addEventListener('click',()=>{for(const id of ['accountBrigadeFilter','accountCompanyFilter','accountStationFilter'])$(id).value='';});
+  $('accountUnitDialog')?.addEventListener('close',e=>{if(e.target.returnValue!=='apply')return;accountQuery.brigade=$('accountBrigadeFilter').value;accountQuery.company=$('accountCompanyFilter').value;accountQuery.unit=$('accountStationFilter').value;renderAdminUsers();});
+}
+function showAccountDetail(id){
+  const u=adminUsers.find(item=>item.id===id);if(!u)return;
+  const lines=[['姓名',u.realName||u.callName],['Email',u.email],['大隊',u.brigade],['中隊',FCAccountAdmin.company(u,UNIT_TREE)],['分隊／單位',u.unit||u.station],['職稱',u.title],['角色',roleLabel(u.role)],['狀態',ACCOUNT_STATUSES[FCAccountAdmin.status(u)]],['建立日期',u.createdAt&&fmtTime(u.createdAt)],['核准日期',u.approvedAt&&fmtTime(u.approvedAt)],['核准人',u.approvedBy],['最後修改',u.updatedAt&&fmtTime(u.updatedAt)]];
+  openActionSheet('帳號詳細資料',lines.map(([key,value])=>`<div class="readonly-card"><b>${key}</b><br>${escapeHtml(value||'未記錄')}</div>`).join(''));
+}
+function confirmAccountUpdate(user,next){
+  const dialog=$('accountConfirmDialog');if(!dialog)return Promise.resolve(false);
+  const verb=next==='suspended'?'停權':FCAccountAdmin.status(user)==='pending'?'核准':'恢復啟用';
+  $('accountConfirmTitle').textContent=`確認${verb}帳號？`;
+  $('accountConfirmBody').textContent=`${user.realName||user.callName||user.email||'未具名'}｜${user.brigade||''} / ${user.unit||''}｜${roleLabel(user.role)}。${next==='suspended'?'停權後此帳號將無法使用 FireCommand。':'請先核對單位、職稱與角色。'}`;
+  $('accountConfirmSubmit').textContent=`確認${verb}`;
+  return new Promise(resolve=>{
+    const done=()=>{resolve(dialog.returnValue==='confirm');dialog.removeEventListener('close',done);};
+    dialog.addEventListener('close',done);$('accountConfirmCancel').onclick=()=>dialog.close('cancel');$('accountConfirmSubmit').onclick=()=>dialog.close('confirm');dialog.showModal();
+  });
+}
+async function requestUserStatusUpdate(userId,next){
+  if(!firebaseEnabled||!isSuperAdmin())return;
+  const user=adminUsers.find(u=>u.id===userId);
+  if(!user||user.id===fbUser?.uid||!FCAccountAdmin.allowedTransition(user,next,SUPER_ADMIN_EMAIL)){toast('此帳號目前不允許這項操作');return;}
+  if(!await confirmAccountUpdate(user,next))return;
+  await updateUserStatus(userId,next);
+}
+async function updateUserStatus(userId,status){
+  if(!firebaseEnabled||!isSuperAdmin())return;
+  const ref=db.collection('users').doc(userId),operator=profile.email;
+  try{
+    await db.runTransaction(async transaction=>{
+      const snap=await transaction.get(ref);
+      if(!snap.exists||userId===fbUser?.uid||!FCAccountAdmin.allowedTransition(snap.data(),status,SUPER_ADMIN_EMAIL))throw Error('帳號狀態已變更，請重新整理後再操作');
+      const before=FCAccountAdmin.status(snap.data()),now=Date.now();
+      const patch={status,updatedAt:now,lastAdminAction:{action:'status-update',before,status,operator,at:now}};
+      if(before==='pending'&&status==='active'){patch.approvedAt=now;patch.approvedBy=operator;}
+      if(status==='suspended'){patch.suspendedAt=now;patch.suspendedBy=operator;}
+      transaction.update(ref,patch);
+    });
+    toast(`已更新帳號：${status==='suspended'?'停權':'啟用'}`);
+    if(!adminUsersLoaded)loadUsersForAdmin();
+  }catch(err){toast(`帳號操作未完成：${err.message}`,5000);}
 }
 
 function defaultBuildingOps(){ return { floorActions: [], planMarkers: [], levels:[3,2,1] }; }
@@ -4111,7 +4314,7 @@ function hasDeploymentDrawing(){
 function deploymentMapSummary(){
   const lines=[];
   if(live.crews.length){
-    lines.push(...live.crews.map(x=>`${x.face?`${x.face}由`:''}${x.unit||'未具名單位'}${x.leader?`${x.leader}`:''}${x.countUnknown?'（人數待補）':Number(x.count)?`（${Number(x.count)}人）`:''}${x.task?`執行${x.task}`:x.status?`為${x.status}`:''}`));
+    lines.push(...live.crews.map(x=>`${x.face?`${x.face}由`:''}${x.unit||'未具名單位'}${x.leader?`${x.leader}`:''}（${crewCount31(x).replace(' 人','人')}）${x.task?`指派${x.task}`:x.status&&x.status!=='未指定'?`為${x.status}`:'任務未指定'}`));
   }
   if(live.vehicles.length){
     lines.push(...live.vehicles.map(x=>`${vehicleDisplayName(x)}${x.face?'於'+x.face:''}${x.task?`執行${x.task}`:x.status?`為${x.status}`:''}`));
@@ -4253,7 +4456,7 @@ function renderDeploymentSopSummary(){
   const text=effectiveDeploymentSummary();
   const textGroup=text?`<div class="deployment-sop-group deployment-sop-text"><h4>部署文字／圖面摘要</h4><p>${escapeHtml(text)}</p></div>`:'';
   const opened=new Set([...el.querySelectorAll('details[open]')].map(x=>x.dataset.summary));
-  el.innerHTML=`<p class="deployment-count29">${live.crews.reduce((n,c)=>n+Number(c.count||0),0)} 已知人數${live.crews.some(p=>p.countUnknown)?'（另有編組待補人數）':''} · ${live.vehicles.length} 車 · ${live.hoses.length} 條水線</p><details data-summary="text" ${opened.has('text')?'open':''}><summary>目前部署與情資摘要</summary>${textGroup||'<p class="hint">尚未登錄</p>'}</details><details data-summary="crews" ${opened.has('crews')?'open':''}><summary>人員明細</summary>${crew}</details><details data-summary="vehicles" ${opened.has('vehicles')?'open':''}><summary>車輛／水線明細</summary>${vehicles}${hoses}</details>`;
+  el.innerHTML=`<p class="deployment-count29">${crewSummaryText()} · ${live.vehicles.length} 車 · ${live.hoses.length} 條水線</p><details data-summary="text" ${opened.has('text')?'open':''}><summary>目前部署與情資摘要</summary>${textGroup||'<p class="hint">尚未登錄</p>'}</details><details data-summary="crews" ${opened.has('crews')?'open':''}><summary>人員明細</summary>${crew}</details><details data-summary="vehicles" ${opened.has('vehicles')?'open':''}><summary>車輛／水線明細</summary>${vehicles}${hoses}</details>`;
 
 }
 function stageCompletion(stage){
@@ -4295,7 +4498,7 @@ function buildingReportLines(){
   if(!hasFloor && !hasPlan && !hasExternal && !text) return ['目前尚未建立建物內部作戰圖、外部戰術部署圖或文字部署紀錄。'];
   const parts=[];
   if(text) parts.push(`部署紀錄：${text.replace(/[。；]+$/,'')}`);
-  if(hasExternal) parts.push(`外部戰術部署已登錄車輛${live.vehicles.length}台、人員${sum(live.crews,'count')}人、水線${live.hoses.length}條及危害標示${live.hazards.length}處`);
+  if(hasExternal) parts.push(`外部戰術部署已登錄車輛${live.vehicles.length}台、${crewSummaryText()}、水線${live.hoses.length}條及危害標示${live.hazards.length}處`);
   if(hasFloor||hasPlan) parts.push('建物縱向剖面與水平俯視圖已依現場紀錄完成彙整');
   return [`${parts.join('；')}。詳細位置與圖示以本節附圖為準。`];
 }
@@ -4355,7 +4558,7 @@ function localTacticalAdviceText(){
   const rescue=c.trapped==='有'?'以人命搜救為優先，確認受困位置、搜救路徑與水線掩護。':'持續由關係人與各面偵查確認是否有人受困。';
   sections.push(`【人命搜救】${rescue}`);
   sections.push(`【水源水線】目前登錄水線${live.hoses.length}條；應確認來源車輛、供水穩定、接口、任務及終點均清楚可追溯。`);
-  sections.push(`【支援與回報】現場已登錄車輛${live.vehicles.length}台、人員${sum(live.crews,'count')}人；重要變化應立即向北海回報，並同步更新戰情與部署圖。`);
+  sections.push(`【支援與回報】現場已登錄車輛${live.vehicles.length}台、${crewSummaryText()}；重要變化應立即向北海回報，並同步更新戰情與部署圖。`);
   return sections.join('\n\n');
 }
 function renderLocalTacticalAdvice(showToast=false){
