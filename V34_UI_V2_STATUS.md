@@ -2,6 +2,8 @@
 
 基準：`fc781117-jason/firecommand-online` 的 `main`，`02803624e758d12e32657286a02cc2157f589b20`。施工分支：`feature/v34-ui-correction-v2`。Production HOLD；此紀錄不代表正式部署。
 
+功能分支已推送；首筆遠端 commit：`a6e779951ccf1d2900e4707510008da55c4e812c`。Draft PR：https://github.com/fc781117-jason/firecommand-online/pull/3 。PR 不得合併。
+
 此批只修改 FireCommand，原始交接 ZIP、病患／關係人照片與六張參考截圖均不提交公開儲存庫。
 
 | 需求 ID／參考截圖 | 實際入口／路由 | 本次修改 | 自動測試 | 修改後實拍 |
@@ -19,7 +21,7 @@
 - `node --test tests/*.test.cjs`：136/136 PASS（靜態、VM／模擬資料及既有回歸）；不等於 iPhone、Firebase Storage 或多裝置端到端驗收。
 - `git diff --check`：PASS。
 - 本機服務能啟動，但 `agent-browser` 不存在、Playwright 沒有已安裝的 Chromium，雲端瀏覽器阻擋本機網址；因此不能產生可信的六組「修改後」實際截圖。**不要用此測試結果當作真機 PASS。**
-- Vercel 連接目前未列出團隊／專案，沒有可核實的 Preview URL、部署 ID 或建置結果。
+- GitHub 的遠端 commit 顯示 Vercel 狀態 `success`，指向部署紀錄 `J3GeZTMLx93G3wW6isMoc4d2uNcQ`；但 Vercel 專案範圍回應 403、要求重新授權，所以**沒有可核實的實際 Preview 網址／環境詳情**。成功狀態不等於 SOP 實際操作通過。
 - 此版未查到 Service Worker 註冊或 Service Worker 原始檔；改動的 JS/CSS 已換查詢版本 `v=34.2`，不把這次修訂聲稱為新增離線 PWA。
 
 ## 資料與權限
