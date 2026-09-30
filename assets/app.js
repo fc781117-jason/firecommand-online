@@ -1930,7 +1930,7 @@ async function updateCaseSection(revisionKey,derive){
   if(caseId!==currentCaseId)return;
   Object.assign(currentCase,patch,{[revisionKey]:expected+1});
   if(!firebaseEnabled)saveLocalCase();
-  renderArrivalStatusCards();renderCommandGuide();
+  renderArrivalStatusCards();renderCommandGuide();renderOverviewContent();scheduleDerivedSummaryPersist();
 }
 function assertCaseEditor(){if(!currentCase||currentCase.status==='closed')throw Error('案件未開啟');if(currentCase.mode==='practice'&&myTrainingRole()==='觀察員')throw Error('觀察員僅可閱覽');}
 async function saveContactRecord(){const edit=contactEdit;if(!edit)return;const button=$('saveContactBtn'),file=$('contactPhotoInput')?.files[0];button.disabled=true;fieldEntryStatus('contactSaveStatus','儲存中');
