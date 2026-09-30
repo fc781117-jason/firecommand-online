@@ -1,14 +1,13 @@
-# FireCommand v31
+# FireCommand v34
 
-本版修正車號組合及口述部署繪圖。先看UPDATE_v31.html；繪圖定義見DRAWING_RULES_v31.md；測試限制見VALIDATION_v31.md。DRAWING_PREVIEW_v31.html可直接開啟檢視程式輸出的範例部署圖。
+本版加入人員與車輛分開登錄、人數可後補、部署入口收合、連續分隊語音預填，以及 v33 帳號管理優化。先開啟 `UPDATE_v34.html`，依其中步驟更新。
 
-## 更新
+## 更新重點
 
-1. 解壓縮更新包，使用原FireCommand專案更新程式，不需建立新的Firebase／Vercel專案。
-2. 更新index.html、assets資料夾、api/ai-advice.js及附帶文件。本包保留完整網站結構。
-3. 若正式專案另有修改，先保留備份並合併；不要用舊範例設定覆蓋目前有效的環境變數或firebase/firebase-config.js。
-4. 使用原有Git／Vercel部署流程發布新版本。這份更新包本身不會自動發布。
-5. 開站確認頁首v31，在練習案件貼入DRAWING_RULES_v31.md例句並逐筆確認。
-6. 既有案件不在開啟時強制重排；以新回報更新指定資源。人工拖過的位置在無關回報中保持。
+1. 解壓縮完整專案包，將內容上傳到原 FireCommand GitHub Repository；不需建立新的 Firebase 或 Vercel 專案。
+2. 保留原 Vercel 環境變數、Google OAuth、Firebase 專案及正式網域設定，不需要重新輸入登入參數。
+3. GitHub 更新後，原本與 GitHub 連動的 Vercel 會依現有流程部署。
+4. `firebase/firestore.rules` 加入人數欄位驗證。網站可先更新；完整後端保護仍需依 `UPDATE_v34.html` 發布 Rules。
+5. Production 更新後，先以練習案件驗收空白人數登錄、後補人數、車輛登錄及帳號搜尋，再使用正式案件。
 
-舊版文件保留作歷史參考；本次變更以v31文件為準。登入設定指南仍為SETUP_v30.html和login-help.html。
+舊版文件保留作歷史參考；本版限制及尚未施工項目見 `VALIDATION_v34.md`。

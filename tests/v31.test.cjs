@@ -37,11 +37,11 @@ test('樓層只作位置資訊：在建物內，點選與水線路徑可讀同�
  assert.equal(path.at(-1).lat,vm.runInContext('live.crews[0].lat',c));
  assert.match(vm.runInContext('deploymentSchematicHtml()',c),/三樓/);
 });
-test('救護車在第二面集結且不進供水車隊；未部署人員在指揮站附近待命',()=>{
+test('救護車在第二面集結且不進供水車隊；未指定任務不擅自標記待命',()=>{
  const p=compile(S.local(example+'；三芝五人報到',roster).items),zones=p.caseChanges.find(x=>x.key==='tacticalZones').after;
  assert.equal(zones.ambulance.face,'第二面');assert.equal(zones.command.face,'第一面');
  assert.ok(p.after.vehicles.filter(v=>/9\d$/.test(v.name)).every(v=>v.type==='救護車'&&!v.canHose&&v.face==='第二面'));
- const standby=p.after.crews.find(c=>c.unit==='三芝');assert.equal(standby.status,'待命');assert.ok(standby.staged);assert.ok(Math.abs(standby.lat-zones.command.lat)*111320<30);
+ const standby=p.after.crews.find(c=>c.unit==='三芝');assert.equal(standby.status,'未指定');assert.ok(standby.staged);
 });
 test('已確認人數後回報進入不歸零，重複語句不新增人車水線',()=>{
  const first=compile(S.local('淡水七人報到；竹圍六人報到',roster).items);

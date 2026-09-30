@@ -4,12 +4,14 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#ffffff" />
-  <title>FireCommand 火場指揮系統 v32</title>
+  <title>FireCommand 火場指揮系統 v34</title>
   <link rel="stylesheet" href="./assets/styles.css?v=32" />
   <link rel="stylesheet" href="./assets/v27.css?v=32" />
   <link rel="stylesheet" href="./assets/v28.css?v=32" />
   <link rel="stylesheet" href="./assets/v29.css?v=32" />
   <link rel="stylesheet" href="./assets/v32.css?v=32" />
+  <link rel="stylesheet" href="./assets/account-admin.css?v=33" />
+  <link rel="stylesheet" href="./assets/field-entry.css?v=34" />
   <link rel="stylesheet" href="./assets/v31.css?v=32" /><link rel="stylesheet" href="./assets/v30.css?v=32" />
 </head>
 <body>
@@ -30,6 +32,7 @@
       </div>
       <div id="identityButton28" hidden></div><p id="authMethod28" class="hint" aria-live="polite"></p>
       <button id="googleLoginBtn" class="btn primary full">使用 Google 登入</button>
+      <button id="demoLoginBtn" class="btn ghost full" type="button" hidden>Preview 隔離示範進入（僅本機資料）</button>
       <p class="hint">若停留在 firebaseapp.com 的舊登入頁，請關閉該頁，從正式系統首頁重新登入。</p><a class="auth-help-link" href="./login-help.html">登入設定與檢查</a>
     </div>
   </section>
@@ -87,10 +90,10 @@
   <section id="appScreen" class="screen app-screen" hidden>
     <header class="topbar">
       <div>
-        <div class="brand-mini">FireCommand <span class="app-version">v32</span></div>
+        <div class="brand-mini">FireCommand <span class="app-version">v34</span></div>
         <button id="profileQuickEditBtn" type="button" class="user-line user-profile-button" aria-label="開啟個人資訊及修改火場代號"><span id="userLine">—</span></button>
       </div>
-      <button id="adminManageBtn" class="btn small ghost" hidden>帳號管理</button><button id="logoutBtn" class="btn small ghost">登出</button>
+      <button id="adminManageBtn" class="btn small ghost" type="button" hidden>帳號管理 <span id="adminManageBadge" class="account-pending-badge" hidden></span></button><button id="logoutBtn" class="btn small ghost">登出</button>
     </header>
 
     <section class="page top-help-wrap" aria-label="常見故障排除">
@@ -146,15 +149,22 @@
 
 
       <section id="adminSection" class="stack" hidden>
-        <details class="accordion">
-          <summary><span>最高管理員｜帳號審核與停權</span><span class="chevron">›</span></summary>
-          <div class="accordion-body">
-            <div class="notice">最高管理員信箱固定為 fc781117@gmail.com。可審核、啟用、停權使用者；此設定寫死於程式與 Firestore Rules。</div>
-            <button id="refreshUsersBtn" type="button" class="btn small ghost">重新整理帳號</button>
-            <div id="userAdminList" class="user-admin-list"></div>
+        <details id="accountAdminDetails" class="accordion account-admin-accordion">
+          <summary><span>帳號管理 <span id="adminPendingBadge" class="account-pending-badge" hidden></span></span><span class="chevron">›</span></summary>
+          <div class="accordion-body account-admin-body">
+            <div id="accountSummary" class="account-summary" aria-label="帳號狀態總覽"></div>
+            <div class="account-search-row"><label class="sr-only" for="accountSearch">搜尋姓名、單位、職稱、Email</label><input id="accountSearch" type="search" autocomplete="off" placeholder="搜尋姓名、單位、職稱、Email" /><button id="refreshUsersBtn" type="button" class="btn small ghost" aria-label="重新整理帳號">↻ 重新整理</button></div>
+            <div id="accountStatusFilters" class="account-status-filters" aria-label="帳號狀態篩選"></div>
+            <div class="account-filter-row"><button id="accountUnitFilterBtn" class="btn small ghost" type="button">單位篩選</button><label class="sr-only" for="accountRoleFilter">職稱篩選</label><select id="accountRoleFilter" aria-label="職稱篩選"><option value="">全部職稱</option></select><label class="sr-only" for="accountSort">排序</label><select id="accountSort" aria-label="排序"><option value="newest">最新申請</option><option value="oldest">最早申請</option><option value="name">姓名</option><option value="brigade">大隊</option><option value="unit">分隊</option><option value="title">職稱</option></select></div>
+            <div id="accountActiveFilters" class="account-active-filters" aria-live="polite"></div>
+            <div id="accountResultCount" class="hint" aria-live="polite"></div>
+            <div id="userAdminList" class="user-admin-list" aria-live="polite"></div>
+            <details class="account-owner-note"><summary>🔒 最高管理員設定</summary><p>fc781117@gmail.com 為核心帳號，由既有程式與 Firestore Rules 保護，不會出現在可停權清單中。</p></details>
           </div>
         </details>
       </section>
+      <dialog id="accountUnitDialog" class="account-dialog" aria-labelledby="accountUnitTitle"><form method="dialog"><h3 id="accountUnitTitle">篩選單位</h3><label for="accountBrigadeFilter">大隊</label><select id="accountBrigadeFilter"><option value="">全部大隊</option></select><label for="accountCompanyFilter">中隊</label><select id="accountCompanyFilter"><option value="">全部中隊</option></select><label for="accountStationFilter">分隊／單位</label><select id="accountStationFilter"><option value="">全部分隊</option></select><div class="account-dialog-actions"><button id="accountClearUnit" class="btn ghost" type="button">清除單位</button><button class="btn primary" value="apply" type="submit">套用</button></div></form></dialog>
+      <dialog id="accountConfirmDialog" class="account-dialog" aria-labelledby="accountConfirmTitle"><div><h3 id="accountConfirmTitle">確認帳號操作</h3><p id="accountConfirmBody"></p><div class="account-dialog-actions"><button id="accountConfirmCancel" class="btn ghost" type="button">取消</button><button id="accountConfirmSubmit" class="btn danger" type="button">確認</button></div></div></dialog>
 
 
     <main id="homePage" class="page">
@@ -586,6 +596,19 @@
           <button id="fitMapBtn" class="btn small ghost">回到200m</button>
         </div>
 
+        <div class="field-entry-bars" aria-label="現場資源快速登錄">
+          <details id="fieldCrewDetails" class="field-entry-bar"><summary><span>人員登錄／確認</span><small id="fieldCrewSummary">可先登錄單位，人數待補</small></summary><div class="field-entry-body">
+            <div class="field-entry-grid"><label>大隊<select id="fieldCrewBrigade"></select></label><label>分隊／單位<select id="fieldCrewUnit"></select></label><label>人數（可留空）<input id="fieldCrewCount" type="number" inputmode="numeric" min="0" max="99" step="1" placeholder="人數待補" /></label><label>任務<select id="fieldCrewTask"><option value="">未指定</option><option>待命</option><option>攻擊</option><option>搜索</option><option>休息</option><option>RIT</option></select></label></div>
+            <div id="fieldCrewSaveStatus" class="hint" role="status">尚未儲存</div><button id="fieldCrewSaveBtn" type="button" class="btn primary full">確認儲存人員／單位</button><div id="fieldCrewList" class="field-entry-list"></div>
+          </div></details>
+          <details id="fieldVehicleDetails" class="field-entry-bar"><summary><span>車輛登錄／確認</span><small id="fieldVehicleSummary">只需大隊、單位、車號</small></summary><div class="field-entry-body">
+            <div class="field-entry-grid"><label>大隊<select id="fieldVehicleBrigade"></select></label><label>分隊／單位<select id="fieldVehicleUnit"></select></label><label>車號<select id="fieldVehicleCode"><option value="">選擇車號</option><option value="11">11</option><option value="12">12</option><option value="16">16</option><option value="17">17</option><option value="21">21</option><option value="31">31</option><option value="41">41</option><option value="51">51</option><option value="61">61</option><option value="71">71</option><option value="81">81</option><option value="91">91</option><option value="111">111</option></select></label><span class="field-entry-spacer" aria-hidden="true"></span></div>
+            <div id="fieldVehicleSaveStatus" class="hint" role="status">尚未儲存</div><button id="fieldVehicleSaveBtn" type="button" class="btn primary full">確認儲存車輛</button><div id="fieldVehicleList" class="field-entry-list"></div>
+          </div></details>
+          <button type="button" class="field-entry-link" data-field-map-tool="hazard">危害標示 <span>前往同一張戰術圖編輯</span></button>
+          <button type="button" class="field-entry-link" data-field-map-tool="hose">水線連接 <span>前往同一張戰術圖編輯</span></button>
+        </div>
+
         <div id="deploymentScene32"></div>
         <details class="road-tools32"><summary>道路對齊與底圖定位</summary><p>選擇部署面向，預覽道路後再套用。手動點選時，先點頭車、再點後方。</p><select id="roadFace32"><option>第一面</option><option>第二面</option><option>第三面</option><option>第四面</option></select><div class="button-row"><button id="suggestRoad32" type="button" class="btn small">辨識鄰近道路</button><button id="drawRoad32" type="button" class="btn small">在底圖點兩點</button><button id="reverseRoad32" type="button" class="btn small">反轉車流</button><button id="applyRoad32" type="button" class="btn small primary" disabled>套用道路排列</button></div><p id="roadMessage32" role="status"></p></details>
         <details class="deployment-text-capture"><summary>部署文字紀錄與圖文核對</summary>
@@ -601,7 +624,7 @@
         </details>
 
         <details id="deploymentMapDetails" class="accordion tool-accordion">
-          <summary><span>車輛 / 人員 / 危害標示 / 水線部署圖</span><span class="chevron">›</span></summary>
+          <summary><span>戰術部署圖｜平時檢視，展開編輯</span><span class="chevron">›</span></summary>
           <div class="accordion-body">
             <details id="incidentLocationDetails" class="sub-accordion location-control">
               <summary>案件中心精準定位｜Google 地址 / 現場 GPS / 手動校正</summary>
@@ -644,7 +667,7 @@
               <div id="deploymentActionHint" class="deployment-hose-instruction">水線建立：先點選可供水車輛的「拉水線」，再點另一台車、人員編組，或直接點建物第一、二、三、四面完成連接。</div>
             </div>
             <div class="tool-cards deployment-form-cards">
-              <div class="tool-card deployment-group-card">
+              <div class="tool-card deployment-group-card" hidden>
                 <h4>新增分隊 / 人員 / 車輛</h4>
                 <div class="notice compact">先選擇大隊與單位，再登錄帶隊官、人數、狀態與任務；車輛會沿用同一單位，不需重複填寫。新增後，車輛預設單列排列；待命人員置於指揮站附近，可直接拖曳調整。</div>
                 <div class="two-col compact-grid"><div class="field"><label>大隊</label><select id="deploymentBrigade"></select></div><div class="field"><label>單位</label><select id="deploymentUnit"></select></div></div>
@@ -821,6 +844,8 @@
   <script src="./assets/auth28.js?v=32"></script>
   <script src="./assets/scene32.js?v=32"></script>
   <script src="./assets/scene-ui32.js?v=32"></script>
-  <script src="./assets/app.js?v=32"></script>
+  <script src="./assets/account-admin-core.js?v=33"></script>
+  <script src="./assets/field-entry-core.js?v=34"></script>
+  <script src="./assets/app.js?v=34"></script>
 </body>
 </html>
