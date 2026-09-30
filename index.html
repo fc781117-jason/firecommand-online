@@ -4,14 +4,14 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#ffffff" />
-  <title>FireCommand 火場指揮系統 v34</title>
+  <title>FireCommand 火場指揮系統 v34.2</title>
   <link rel="stylesheet" href="./assets/styles.css?v=32" />
   <link rel="stylesheet" href="./assets/v27.css?v=32" />
   <link rel="stylesheet" href="./assets/v28.css?v=32" />
   <link rel="stylesheet" href="./assets/v29.css?v=32" />
   <link rel="stylesheet" href="./assets/v32.css?v=32" />
   <link rel="stylesheet" href="./assets/account-admin.css?v=33" />
-  <link rel="stylesheet" href="./assets/field-entry.css?v=34" />
+  <link rel="stylesheet" href="./assets/field-entry.css?v=34.2" />
   <link rel="stylesheet" href="./assets/v31.css?v=32" /><link rel="stylesheet" href="./assets/v30.css?v=32" />
 </head>
 <body>
@@ -90,7 +90,7 @@
   <section id="appScreen" class="screen app-screen" hidden>
     <header class="topbar">
       <div>
-        <div class="brand-mini">FireCommand <span class="app-version">v34</span></div>
+        <div class="brand-mini">FireCommand <span class="app-version">v34.2</span></div>
         <button id="profileQuickEditBtn" type="button" class="user-line user-profile-button" aria-label="開啟個人資訊及修改火場代號"><span id="userLine">—</span></button>
       </div>
       <button id="adminManageBtn" class="btn small ghost" type="button" hidden>帳號管理 <span id="adminManageBadge" class="account-pending-badge" hidden></span></button><button id="logoutBtn" class="btn small ghost">登出</button>
@@ -463,8 +463,10 @@
                   <label class="choice-chip"><input id="ritStateAssigned" class="arrival-detail-input" type="radio" name="ritState" value="assigned" /> 已指派 RIT 小組</label>
                 </div>
                 <div id="ritDetailFields" hidden>
-                  <div class="field"><label>RIT 單位</label><input id="ritUnit" class="arrival-detail-input" placeholder="例：鷺江分隊 / 蘆洲7" /></div>
-                  <div class="field"><label>RIT 待命位置 / 裝備</label><textarea id="ritNote" class="arrival-detail-input" rows="2" placeholder="例：第一面指揮站旁待命，攜熱顯像儀、備用氣瓶、破壞器材"></textarea></div>
+                  <div class="two-col compact-form"><div class="field"><label>大隊</label><select id="ritBrigade"></select></div><div class="field"><label>分隊／單位</label><select id="ritUnitSelect"></select></div></div>
+                  <input id="ritUnit" type="hidden" />
+                  <div class="field"><label>補充說明（選填）</label><textarea id="ritNote" rows="2" placeholder="位置、裝備或其他已確認資訊；留空不代表準備完成"></textarea></div>
+                  <div id="ritSaveStatus" class="hint" role="status">尚未儲存</div><button id="ritSaveBtn" type="button" class="btn primary full">確認儲存 RIT</button>
                 </div>
               </div>
               <div class="arrival-detail-panel" data-arrival-panel="hazard" hidden>
@@ -480,6 +482,7 @@
                     <div class="field"><label>電話</label><input id="hazardPhone" class="arrival-detail-input" inputmode="tel" placeholder="例：09xx-xxx-xxx" /></div>
                   </div>
                   <div class="field"><label>關係人穿著 / 特徵</label><input id="hazardAppearance" class="arrival-detail-input" placeholder="例：紅色上衣、黑褲，位於第一面封鎖線外" /></div>
+                  <div id="hazardSavedCard"></div><div id="hazardEditFields"><label class="photo-input">拍照／更換照片<input id="hazardPhoto" type="file" accept="image/*" capture="environment" /></label><div id="hazardSaveStatus" class="hint" role="status">尚未儲存</div><button id="hazardSaveBtn" type="button" class="btn primary full">確認儲存危險物品</button></div>
                 </div>
               </div>
               <div class="arrival-detail-panel" data-arrival-panel="firstSide" hidden>
@@ -508,10 +511,13 @@
                   <label class="choice-chip"><input id="supportStateNeeded" class="arrival-detail-input" type="radio" name="supportState" value="needed" /> 需要支援</label>
                 </div>
                 <div id="supportDetailFields" hidden>
-                <div class="field"><label>需要支援</label><div class="chip-grid support-grid">
-                  <label><input type="checkbox" value="水車" /> 水車</label><label><input type="checkbox" value="水庫車" /> 水庫車</label><label><input type="checkbox" value="雲梯車" /> 雲梯車</label><label><input type="checkbox" value="救護車" /> 救護車</label><label><input type="checkbox" value="台電" /> 台電</label><label><input type="checkbox" value="瓦斯" /> 瓦斯</label><label><input type="checkbox" value="警察" /> 警察</label><label><input type="checkbox" value="台水" /> 台水</label><label><input type="checkbox" value="毒災應變隊" /> 毒災應變隊</label><label><input type="checkbox" value="排煙車" /> 排煙車</label><label><input type="checkbox" value="照明車" /> 照明車</label><label><input type="checkbox" value="大隊支援" /> 大隊支援</label>
+                <div class="support-kind-grid"><button type="button" data-support-kind="fire">消防支援</button><button type="button" data-support-kind="external">外單位支援</button></div>
+                <div id="fireSupportFields" hidden><div class="chip-grid support-grid">
+                  <label><input type="checkbox" value="水車" /> 水車</label><label><input type="checkbox" value="水庫車" /> 水庫車</label><label><input type="checkbox" value="雲梯車" /> 雲梯車</label><label><input type="checkbox" value="救護車" /> 救護車</label><label><input type="checkbox" value="排煙車" /> 排煙車</label><label><input type="checkbox" value="照明車" /> 照明車</label><label><input type="checkbox" value="大隊支援" /> 大隊支援</label>
                 </div></div>
-                <div class="field"><label>支援補充</label><textarea id="supportDetails" class="arrival-detail-input" rows="2" placeholder="例：請台電斷電、瓦斯公司到場關閉管線，警察協助交通管制"></textarea></div>
+                <div id="externalSupportFields" hidden><div id="externalSupportRows"></div><button id="addExternalSupportBtn" class="btn small ghost" type="button">＋新增外單位支援</button></div>
+                <div class="field"><label>支援補充（自由填寫）</label><textarea id="supportDetails" rows="2" placeholder="可補充需求，不代表已聯絡或完成"></textarea></div>
+                <div id="supportSaveStatus" class="hint" role="status">尚未儲存</div><button id="supportSaveBtn" class="btn primary full" type="button">儲存支援需求</button>
                 </div>
               </div>
               <div class="arrival-detail-panel" data-arrival-panel="breakDoor" hidden>
@@ -598,15 +604,14 @@
 
         <div class="field-entry-bars" aria-label="現場資源快速登錄">
           <details id="fieldCrewDetails" class="field-entry-bar"><summary><span>人員登錄／確認</span><small id="fieldCrewSummary">可先登錄單位，人數待補</small></summary><div class="field-entry-body">
-            <div class="field-entry-grid"><label>大隊<select id="fieldCrewBrigade"></select></label><label>分隊／單位<select id="fieldCrewUnit"></select></label><label>人數（可留空）<input id="fieldCrewCount" type="number" inputmode="numeric" min="0" max="99" step="1" placeholder="人數待補" /></label><label>任務<select id="fieldCrewTask"><option value="">未指定</option><option>待命</option><option>攻擊</option><option>搜索</option><option>休息</option><option>RIT</option></select></label></div>
+            <div class="field-entry-grid crew-grid-v2"><label>資料類型<select id="fieldCrewKind"><option value="crew">人員／單位</option></select></label><label>大隊<select id="fieldCrewBrigade"></select></label><label>出勤總人數<select id="fieldCrewCount"></select></label><label>分隊<select id="fieldCrewUnit"></select></label></div><div class="field-entry-grid crew-grid-v2"><label>面向<select id="fieldCrewFace"><option value="">未指定</option><option>第一面</option><option>第二面</option><option>第三面</option><option>第四面</option></select></label><label>任務<select id="fieldCrewTask"><option value="">未指定</option><option>待命</option><option>攻擊</option><option>搜索</option><option>休息</option><option>RIT</option></select></label></div>
             <div id="fieldCrewSaveStatus" class="hint" role="status">尚未儲存</div><button id="fieldCrewSaveBtn" type="button" class="btn primary full">確認儲存人員／單位</button><div id="fieldCrewList" class="field-entry-list"></div>
           </div></details>
           <details id="fieldVehicleDetails" class="field-entry-bar"><summary><span>車輛登錄／確認</span><small id="fieldVehicleSummary">只需大隊、單位、車號</small></summary><div class="field-entry-body">
-            <div class="field-entry-grid"><label>大隊<select id="fieldVehicleBrigade"></select></label><label>分隊／單位<select id="fieldVehicleUnit"></select></label><label>車號<select id="fieldVehicleCode"><option value="">選擇車號</option><option value="11">11</option><option value="12">12</option><option value="16">16</option><option value="17">17</option><option value="21">21</option><option value="31">31</option><option value="41">41</option><option value="51">51</option><option value="61">61</option><option value="71">71</option><option value="81">81</option><option value="91">91</option><option value="111">111</option></select></label><span class="field-entry-spacer" aria-hidden="true"></span></div>
+            <div class="field-entry-grid"><label>大隊<select id="fieldVehicleBrigade"></select></label><label>分隊／單位<select id="fieldVehicleUnit"></select></label><label>車號<select id="fieldVehicleCode"><option value="">選擇車號</option><option value="11">11</option><option value="12">12</option><option value="16">16</option><option value="17">17</option><option value="21">21</option><option value="31">31</option><option value="41">41</option><option value="51">51</option><option value="61">61</option><option value="71">71</option><option value="81">81</option><option value="91">91</option><option value="custom">＋新增車號</option></select></label><span class="field-entry-spacer" aria-hidden="true"></span></div><label id="fieldVehicleCustomWrap" hidden>借車／特殊編號<input id="fieldVehicleCustomCode" maxlength="40" placeholder="輸入車輛編號；分隊名稱會自動加在前面" /></label>
             <div id="fieldVehicleSaveStatus" class="hint" role="status">尚未儲存</div><button id="fieldVehicleSaveBtn" type="button" class="btn primary full">確認儲存車輛</button><div id="fieldVehicleList" class="field-entry-list"></div>
           </div></details>
-          <button type="button" class="field-entry-link" data-field-map-tool="hazard">危害標示 <span>前往同一張戰術圖編輯</span></button>
-          <button type="button" class="field-entry-link" data-field-map-tool="hose">水線連接 <span>前往同一張戰術圖編輯</span></button>
+          <details id="fieldMapDetails" class="field-entry-bar"><summary><span>圖面</span><small>戰術部署／建物繪圖</small></summary><div class="field-entry-body"><button type="button" class="field-entry-link" data-field-map-tool="select">戰術部署圖 <span>查看與編輯</span></button><button type="button" class="field-entry-link" id="openBuildingDrawing">建物繪圖 <span>進入同一案件的建物圖</span></button></div></details>
         </div>
 
         <div id="deploymentScene32"></div>
@@ -659,6 +664,7 @@
                 <button type="button" class="btn small primary" data-deploy-mode="select">選取 / 移動</button>
                 <button type="button" class="btn small ghost" data-deploy-mode="hose">水線連接</button>
                 <button type="button" class="btn small ghost" data-deploy-mode="hazard">危害標示</button>
+                <button id="cancelHoseSelection" type="button" class="btn small ghost">取消選取</button>
                 <button id="mapUndoBtn" type="button" class="btn small ghost" disabled>↶ 回復上一步</button>
                 <button id="mapBuildingUnlockBtn" type="button" class="btn small ghost">調整建物框</button>
                 <button id="mapBuildingLockBtn" type="button" class="btn small ghost">鎖定建物框</button>
@@ -674,15 +680,16 @@
                 <div class="three-col compact-grid"><div class="field"><label>帶隊官號</label><select id="deploymentLeader"><option>6</option><option>7</option><option>8</option><option>9</option></select></div><div class="field"><label>人數</label><select id="deploymentCrewCount" aria-label="編組人數"></select></div><div class="field"><label>狀態</label><select id="deploymentStatus"><option>作業中</option><option>待命</option><option>休息</option><option>RIT</option><option>撤出</option></select></div></div>
                 <div class="field"><label>任務</label><input id="deploymentTask" placeholder="例：第一面人命搜救 / RIT 待命 / 佔據水源" /></div>
                 <div class="deployment-vehicle-builder">
-                  <div class="two-col compact-grid"><div class="field"><label>車輛代號</label><select id="deploymentVehicleCode"><option value="manual">手動輸入／借用車輛</option><option value="11" selected>11｜水車</option><option value="12">12｜水車</option><option value="16">16｜水車</option><option value="17">17｜水車</option><option value="21">21｜直線雲梯車</option><option value="31">31｜曲折雲梯車</option><option value="41">41｜指揮／後勤車</option><option value="51">51｜化學車</option><option value="61">61｜水庫車</option><option value="71">71｜救助車</option><option value="81">81｜照明／排煙車</option><option value="91">91｜救護車</option></select></div><div class="field" id="deploymentVehicleManualField" hidden><label>手動車號</label><input id="deploymentVehicleManual" placeholder="例：借用12／淡水備用車" /></div></div>
+                  <div class="two-col compact-grid"><div class="field"><label>車輛代號</label><select id="deploymentVehicleCode"><option value="manual" selected>＋新增車號／借用車輛</option><option value="11">11｜水車</option><option value="12">12｜水車</option><option value="16">16｜水車</option><option value="17">17｜水車</option><option value="21">21｜直線雲梯車</option><option value="31">31｜曲折雲梯車</option><option value="41">41｜指揮／後勤車</option><option value="51">51｜化學車</option><option value="61">61｜水庫車</option><option value="71">71｜救助車</option><option value="81">81｜照明／排煙車</option><option value="91">91｜救護車</option></select></div><div class="field" id="deploymentVehicleManualField" hidden><label>手動車號</label><input id="deploymentVehicleManual" placeholder="例：借用12／淡水備用車" /></div></div>
                   <button id="addPendingVehicleBtn" type="button" class="btn small ghost full">＋ 加入此分隊車輛</button>
                   <div id="pendingDeploymentVehicles" class="pending-vehicle-list"><div class="empty">尚未加入車輛；可只登錄人員編組。</div></div>
                 </div>
                 <button id="addDeploymentGroupBtn" type="button" class="btn primary full">新增分隊 / 人員 / 車輛</button>
               </div>
-              <div class="tool-card">
-                <h4>危害 / 區域標示</h4>
-                <div class="hazard-grid">
+            </div>
+          </div>
+          <div id="mapShell" class="map-shell">
+            <details id="hazardPaletteV2" class="hazard-palette-v2"><summary>⚠ 危害圖示</summary><div class="hazard-grid">
                   <button class="btn small ghost hazard-btn" data-hazard="起火點">🔥 起火點</button>
                   <button class="btn small ghost hazard-btn" data-hazard="瓦斯">🔥 瓦斯</button>
                   <button class="btn small ghost hazard-btn" data-hazard="高壓電">⚡ 高壓電</button>
@@ -690,11 +697,7 @@
                   <button class="btn small ghost hazard-btn" data-hazard="指揮站">🎙️ 指揮站</button>
                   <button class="btn small ghost hazard-btn" data-hazard="前進指揮所">🚩 前進指揮所</button>
                   <button class="btn small ghost hazard-btn" data-hazard="休息區">🟢 休息區</button>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div id="mapShell" class="map-shell">
+                </div></details>
             <div id="map" class="map google-map" aria-label="Google 戰術地圖"></div>
             <div id="mapLocationWarning" class="map-location-warning" hidden>目前僅有行政區備援中心，並非精準火場位置。請使用 Google 地址候選、現場 GPS 或手動點選後鎖定案件中心。</div>
             <div id="mapUnavailablePanel" class="map-unavailable-panel" hidden>
@@ -834,18 +837,19 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-storage-compat.js"></script>
   <script src="./firebase/firebase-config.js"></script>
   <script src="./assets/training-core.js?v=32"></script>
   <script src="./assets/deployment-core.js?v=32"></script>
   <script src="./assets/intake-core.js?v=32"></script>
   <script src="./assets/tactics31.js?v=32"></script>
   <script src="./assets/intake-semantic.js?v=32"></script>
-  <script src="./assets/intake-ui.js?v=32"></script>
+  <script src="./assets/intake-ui.js?v=34.2"></script>
   <script src="./assets/auth28.js?v=32"></script>
   <script src="./assets/scene32.js?v=32"></script>
   <script src="./assets/scene-ui32.js?v=32"></script>
   <script src="./assets/account-admin-core.js?v=33"></script>
   <script src="./assets/field-entry-core.js?v=34"></script>
-  <script src="./assets/app.js?v=34"></script>
+  <script src="./assets/app.js?v=34.2"></script>
 </body>
 </html>

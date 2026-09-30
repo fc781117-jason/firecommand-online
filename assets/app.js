@@ -363,7 +363,7 @@ function bindEvents(){
   $('practiceSourceFile')?.addEventListener('change', handlePracticeSourceFile);
   document.querySelectorAll('input[name="practiceSource"]').forEach(el=>el.addEventListener('change', updatePracticeSourceFields));
   $('backHomeBtn').addEventListener('click', backHome);
-  $('saveCaseInfoBtn').addEventListener('click', saveCaseInfo);
+  $('saveCaseInfoBtn').addEventListener('click', () => saveCaseInfo(true,true,true));
   $('caseFloors')?.addEventListener('change',()=>fillFloorLocationSelect('caseFireFloor',$('caseFloors').value||50,$('caseFireFloor').value));
   $('detailFloors')?.addEventListener('change',()=>{
     fillFloorLocationSelect('detailFireFloor',$('detailFloors').value||50,$('detailFireFloor').value);
@@ -405,9 +405,10 @@ function bindEvents(){
   document.querySelectorAll('[data-case-page]').forEach(btn => btn.addEventListener('click', () => switchCasePage(btn.dataset.casePage)));
   document.querySelectorAll('[data-case-page-jump]').forEach(btn => btn.addEventListener('click', () => switchCasePage(btn.dataset.casePageJump)));
   document.addEventListener('click', handleGlobalActionClick);
-  document.querySelectorAll('.support-grid input').forEach(ch => ch.addEventListener('change', () => { updateSupportStatus(); renderCommandGuide(); saveCaseInfo(false,false); }));
+  document.querySelectorAll('.support-grid input').forEach(ch => ch.addEventListener('change', () => { updateSupportStatus(); fieldEntryStatus('supportSaveStatus','尚未儲存'); }));
   $('fitMapBtn').addEventListener('click', fitMapToIncident);
   $('mapUndoBtn')?.addEventListener('click', undoLastMapAction);
+  $('cancelHoseSelection')?.addEventListener('click',()=>{pendingTool=null;selectedMapResource=null;setDeploymentMode('select');toast('已取消水線選取');});
   $('mapBuildingUnlockBtn')?.addEventListener('click', () => setBuildingBoxLock(false));
   $('mapBuildingLockBtn')?.addEventListener('click', () => setBuildingBoxLock(true));
   $('deploymentVehicleCode')?.addEventListener('change', syncDeploymentVehicleManualField);
@@ -452,8 +453,16 @@ function bindEvents(){
   document.querySelectorAll('[data-floor-tool]').forEach(btn => { btn.addEventListener('dragstart', ev => ev.dataTransfer.setData('text/plain', btn.dataset.floorTool)); btn.addEventListener('click', () => selectFloorTool(btn.dataset.floorTool)); });
   $('aiAdviceBtn')?.addEventListener('click', requestAiAdvice);
   $('localRuleAdviceBtn')?.addEventListener('click', () => renderLocalTacticalAdvice(true));
-  $('addContactBtn')?.addEventListener('click', () => { addContactRow(); renderArrivalStatusCards(); });
-  document.querySelectorAll('.arrival-detail-input').forEach(el => el.addEventListener('change', () => { renderArrivalStatusCards(); renderCommandGuide(); saveCaseInfo(false,false); }));
+  $('addContactBtn')?.addEventListener('click', addContactRow);
+  $('hazardSaveBtn')?.addEventListener('click', saveHazardRecord);
+  $('hazardPhoto')?.addEventListener('change',()=>fieldEntryStatus('hazardSaveStatus','尚未儲存'));
+  ['hazardItems','hazardContact','hazardPhone','hazardAppearance'].forEach(id=>$(id)?.addEventListener('input',()=>fieldEntryStatus('hazardSaveStatus','尚未儲存')));
+  $('supportSaveBtn')?.addEventListener('click',saveSupportRequests);
+  $('supportDetails')?.addEventListener('input',()=>fieldEntryStatus('supportSaveStatus','尚未儲存'));
+  document.querySelectorAll('[data-support-kind]').forEach(btn=>btn.addEventListener('click',()=>{$(btn.dataset.supportKind==='fire'?'fireSupportFields':'externalSupportFields').hidden=false;btn.classList.add('selected');}));
+  $('addExternalSupportBtn')?.addEventListener('click',()=>addExternalSupportRow());
+  $('ritSaveBtn')?.addEventListener('click',saveRitUnit);
+  document.querySelectorAll('.arrival-detail-input').forEach(el => el.addEventListener('change', () => { renderArrivalStatusCards(); renderCommandGuide(); if(!['contactState','ritState','hazardState','supportState'].includes(el.name))saveCaseInfo(false,false); }));
   ['detailPurpose','detailFireStatus','detailNotes','buildingStructure','detailFloors','detailFireFloor','fireObservedFloor','fireObservedSide','fireSmokeColor','fireSmokeVolume','fireFlameState','fireObservation','trappedCountArrival','arrivalAddressInput','firstSideCustom'].forEach(id => $(id)?.addEventListener('change', () => { syncSopDerivedFields(); renderCommandGuide(); saveCaseInfo(false,false); }));
   bindExclusiveDetails(['deploymentMapDetails','buildingOpsDetails']);
   bindExclusiveDetails(['crewStatusDetails','vehicleStatusDetails']);
@@ -1561,6 +1570,7 @@ function renderDetail(){
   $('contactFoundCheck') && ($('contactFoundCheck').checked = !!currentCase.contactFound);
   setRadioValue('contactState', currentCase.contactState || (currentCase.contactFound ? 'found' : ''));
   renderContactRows(currentCase.contacts || []);
+  renderHazardRecord();renderSupportRequests();renderRitUnit();
   $('commandSituation') && ($('commandSituation').value = currentCase.commandSituation || '');
   setRadioValue('ritState', currentCase.ritState || (currentCase.ritSet ? 'assigned' : ''));
   $('ritUnit') && ($('ritUnit').value = currentCase.ritUnit || '');
@@ -1750,6 +1760,7 @@ function renderDeploymentPalette(){
 function selectMapResource(coll,id){
   const item=(live[coll]||[]).find(x=>x.id===id); if(!item) return;
   if(deploymentMode==='hose' && coll==='vehicles'){
+    if(pendingTool?.type==='hoseConnect'){completeQuickHoseTarget('vehicle',item);return;}
     if(!item.canHose){ toast('此車輛類型不可建立水線'); return; }
     beginQuickHose(id); return;
   }
@@ -1818,25 +1829,23 @@ async function movePendingResourceTo(ll,label='指定位置'){
 }
 
 
-async function saveCaseInfo(showToast=true, logChange=true){
+async function saveCaseInfo(showToast=true, logChange=true, commitSectionStates=false){
   if(!currentCase) return;
-  const supports = getRadioValue('supportState') === 'needed' ? readSupports() : [];
   const patch = {
     arrived:!!$('addressConfirmCheck')?.checked,
     commandState:getRadioValue('commandState') || '',
     commandTransfer:getRadioValue('commandState') === 'transferred',
-    contactState: getRadioValue('contactState') || '',
-    contactFound: getRadioValue('contactState') === 'found',
-    contacts: getRadioValue('contactState') === 'found' ? readContacts() : [],
-    ritState: getRadioValue('ritState') || '',
-    ritSet:getRadioValue('ritState') === 'assigned',
-    hazardState: getRadioValue('hazardState') || '',
-    hazardChecked:getRadioValue('hazardState') === 'has' || getRadioValue('hazardState') === 'none',
+    contactState: commitSectionStates ? getRadioValue('contactState') : currentCase.contactState||'',
+    contactFound: commitSectionStates ? getRadioValue('contactState')==='found' : !!currentCase.contactFound,
+    ritState: commitSectionStates ? getRadioValue('ritState') : currentCase.ritState||'',
+    ritSet:commitSectionStates ? getRadioValue('ritState')==='assigned' : !!currentCase.ritSet,
+    hazardState: commitSectionStates ? getRadioValue('hazardState') : currentCase.hazardState||'',
+    hazardChecked:commitSectionStates ? ['has','none'].includes(getRadioValue('hazardState')) : !!currentCase.hazardChecked,
     firstSideState:getRadioValue('firstSideState') || '',
     firstSideSet:getRadioValue('firstSideState') === 'set',
     parRequested:$('parCheck').checked,
-    supportState:getRadioValue('supportState') || '',
-    supportNeeded:getRadioValue('supportState') === 'needed',
+    supportState:commitSectionStates ? getRadioValue('supportState') : currentCase.supportState||'',
+    supportNeeded:commitSectionStates ? getRadioValue('supportState')==='needed' : !!currentCase.supportNeeded,
     breakDoorState:getRadioValue('breakDoorState') || '',
     breakDoor:getRadioValue('breakDoorState') === 'required',
     breakDoorCommanderReport: $('breakDoorCommanderReport')?.checked || false,
@@ -1855,18 +1864,11 @@ async function saveCaseInfo(showToast=true, logChange=true){
     addressConfirmed:$('addressConfirmCheck')?.checked || false,
     arrivalAddressNote:$('arrivalAddressNote')?.value || '',
     commandSituation:$('commandSituation')?.value || '',
-    ritUnit:$('ritUnit')?.value || '',
-    ritNote:$('ritNote')?.value || '',
-    hazardItems:$('hazardItems')?.value || '',
-    hazardContact:$('hazardContact')?.value || '',
-    hazardPhone:$('hazardPhone')?.value || '',
-    hazardAppearance:$('hazardAppearance')?.value || '',
     firstSideMode:getRadioValue('firstSideMode') || '',
     firstSideCustom:$('firstSideCustom')?.value || '',
     firstSideName:getRadioValue('firstSideMode')==='custom' ? ($('firstSideCustom')?.value || '第一面') : '建物正面',
     firstSideNote:$('firstSideNote')?.value || '',
     parDetails:$('parDetails')?.value || '',
-    supportDetails:$('supportDetails')?.value || '',
     purpose:$('detailPurpose')?.value || '',
     buildingStructure:$('buildingStructure')?.value || '',
     floors:Number($('detailFloors')?.value)||Number(currentCase.floors)||0,
@@ -1880,7 +1882,6 @@ async function saveCaseInfo(showToast=true, logChange=true){
     fireStatus:buildFireStatusFromSop(),
     trapped:getRadioValue('trappedState')==='has'?'有':getRadioValue('trappedState')==='none'?'無':'未知',
     trappedCount:getRadioValue('trappedState')==='has' ? (Number($('trappedCountArrival')?.value)||0) : 0,
-    supports,
     notes:$('detailNotes')?.value || '',
     updatedAt:Date.now()
   };
@@ -1905,28 +1906,77 @@ async function saveSummaryInfo(){ toast('案件概要由流程 SOP、戰情與�
 function readSupports(){ return Array.from(document.querySelectorAll('.support-grid input:checked')).map(x=>x.value); }
 function applySupportValues(values=[]){ document.querySelectorAll('.support-grid input').forEach(x=>{ x.checked = values.includes(x.value); }); }
 
-function emptyContact(){ return {name:'', phone:'', appearance:'', note:''}; }
+let contactEdit=null;
+function readContacts(){return currentCase?.contacts||[];}
+function contactKey(row,index){return row.id||`legacy_${index}`;}
 function renderContactRows(rows=[]){
-  const wrap = $('contactRows'); if(!wrap) return;
-  const list = (rows && rows.length ? rows : [emptyContact()]);
-  wrap.innerHTML = list.map((r,i)=>`<div class="contact-row" data-contact-index="${i}">
-    <div class="two-col compact-form"><div class="field"><label>姓名</label><input class="arrival-detail-input contact-name" value="${escapeHtml(r.name||'')}" placeholder="例：屋主王先生" /></div><div class="field"><label>電話</label><input class="arrival-detail-input contact-phone" value="${escapeHtml(r.phone||'')}" inputmode="tel" placeholder="09xx-xxx-xxx" /></div></div>
-    <div class="field"><label>穿著 / 特徵</label><input class="arrival-detail-input contact-appearance" value="${escapeHtml(r.appearance||'')}" placeholder="例：紅色上衣、黑褲，位於第一面封鎖線外" /></div>
-    <div class="field"><label>補充</label><input class="arrival-detail-input contact-note" value="${escapeHtml(r.note||'')}" placeholder="關係人說明、鑰匙、樓層、住戶資訊" /></div>
-    <button type="button" class="btn small ghost" data-delete-contact="${i}">刪除此關係人</button>
-  </div>`).join('');
-  wrap.querySelectorAll('[data-delete-contact]').forEach(btn => btn.addEventListener('click', () => { const arr = readContacts(); arr.splice(Number(btn.dataset.deleteContact),1); renderContactRows(arr); saveCaseInfo(false,false); }));
-  wrap.querySelectorAll('input').forEach(el => el.addEventListener('change', () => { $('contactCheck') && ($('contactCheck').checked = getRadioValue('contactState')==='found' || getRadioValue('contactState')==='notfound'); renderArrivalStatusCards(); renderCommandGuide(); saveCaseInfo(false,false); }));
+  const wrap=$('contactRows');if(!wrap)return;
+  if(contactEdit?.caseId!==currentCaseId)contactEdit=null;
+  wrap.innerHTML=rows.map((r,index)=>`<article class="contact-row saved-record" data-contact-index="${index}"><div class="private-photo" data-photo-path="${escapeHtml(r.photoPath||'')}"></div><strong>${escapeHtml(r.name||'姓名待補')}</strong><p>${escapeHtml(r.phone||'電話待補')}｜${escapeHtml(r.appearance||'特徵待補')}</p><p>${escapeHtml(r.note||'')}</p><div class="record-actions"><button type="button" class="btn small ghost" data-edit-contact="${index}">修改</button><button type="button" class="btn small danger" data-delete-contact="${index}">刪除</button></div></article>`).join('');
+  if(contactEdit){const r=contactEdit.data;wrap.insertAdjacentHTML('beforeend',`<div class="contact-row contact-editor"><div class="two-col compact-form"><div class="field"><label>姓名<input data-contact-field="name" value="${escapeHtml(r.name||'')}" /></label></div><div class="field"><label>電話<input data-contact-field="phone" inputmode="tel" value="${escapeHtml(r.phone||'')}" /></label></div></div><div class="field"><label>穿著／特徵<input data-contact-field="appearance" value="${escapeHtml(r.appearance||'')}" /></label></div><div class="field"><label>補充<input data-contact-field="note" value="${escapeHtml(r.note||'')}" /></label></div><label class="photo-input">拍照／更換照片<input id="contactPhotoInput" type="file" accept="image/*" capture="environment" /></label><div id="contactSaveStatus" class="hint" role="status">尚未儲存</div><div class="record-actions"><button type="button" class="btn small ghost" id="cancelContactEdit">取消</button><button type="button" class="btn primary" id="saveContactBtn">確認儲存</button></div></div>`);}
+  wrap.querySelectorAll('[data-edit-contact]').forEach(btn=>btn.onclick=()=>{const index=Number(btn.dataset.editContact);contactEdit={caseId:currentCaseId,key:contactKey(rows[index],index),data:{...rows[index]}};renderContactRows(rows);});
+  wrap.querySelectorAll('[data-delete-contact]').forEach(btn=>btn.onclick=()=>deleteContact(Number(btn.dataset.deleteContact)));
+  wrap.querySelectorAll('[data-contact-field]').forEach(input=>input.oninput=()=>{contactEdit.data[input.dataset.contactField]=input.value;fieldEntryStatus('contactSaveStatus','尚未儲存');});
+  $('contactPhotoInput')?.addEventListener('change',()=>fieldEntryStatus('contactSaveStatus','尚未儲存'));
+  if($('cancelContactEdit'))$('cancelContactEdit').onclick=()=>{contactEdit=null;renderContactRows(currentCase.contacts||[]);};
+  if($('saveContactBtn'))$('saveContactBtn').onclick=saveContactRecord;
+  loadPrivatePhotos(wrap);
 }
-function addContactRow(){ const arr = readContacts(); arr.push(emptyContact()); renderContactRows(arr); }
-function readContacts(){
-  return Array.from(document.querySelectorAll('#contactRows .contact-row')).map(row => ({
-    name: row.querySelector('.contact-name')?.value.trim() || '',
-    phone: row.querySelector('.contact-phone')?.value.trim() || '',
-    appearance: row.querySelector('.contact-appearance')?.value.trim() || '',
-    note: row.querySelector('.contact-note')?.value.trim() || ''
-  })).filter(x => x.name || x.phone || x.appearance || x.note);
+function addContactRow(){contactEdit={caseId:currentCaseId,key:null,data:{name:'',phone:'',appearance:'',note:''}};renderContactRows(currentCase?.contacts||[]);}
+async function updateCaseSection(revisionKey,derive){
+  if(!currentCase)return;const caseId=currentCaseId,expected=Number(currentCase[revisionKey]||0);let patch;
+  if(firebaseEnabled){const ref=db.collection('cases').doc(caseId);await db.runTransaction(async tx=>{const snap=await tx.get(ref);if(!snap.exists||Number(snap.data()[revisionKey]||0)!==expected)throw Error('版本衝突待處理：請重新載入並核對資料');patch=derive(snap.data());tx.update(ref,{...patch,[revisionKey]:expected+1,updatedAt:Date.now()});});}
+  else patch=derive(currentCase);
+  if(caseId!==currentCaseId)return;
+  Object.assign(currentCase,patch,{[revisionKey]:expected+1});
+  if(!firebaseEnabled)saveLocalCase();
+  renderArrivalStatusCards();renderCommandGuide();
 }
+function assertCaseEditor(){if(!currentCase||currentCase.status==='closed')throw Error('案件未開啟');if(currentCase.mode==='practice'&&myTrainingRole()==='觀察員')throw Error('觀察員僅可閱覽');}
+async function saveContactRecord(){const edit=contactEdit;if(!edit)return;const button=$('saveContactBtn'),file=$('contactPhotoInput')?.files[0];button.disabled=true;fieldEntryStatus('contactSaveStatus','儲存中');
+ try{assertCaseEditor();const data=Object.fromEntries(['name','phone','appearance','note'].map(k=>[k,String(edit.data[k]||'').trim()]));if(!Object.values(data).some(Boolean))throw Error('請至少填一項關係人資訊');const key=edit.key||uid('contact');
+  await updateCaseSection('contactsRevision',c=>{const rows=[...(c.contacts||[])],index=rows.findIndex((r,n)=>contactKey(r,n)===key);if(edit.key&&index<0)throw Error('版本衝突待處理：此關係人已被移除');const row={...(index>=0?rows[index]:{}),...data,id:index>=0?(rows[index].id||key):key};if(index<0)rows.push(row);else rows[index]=row;return {contacts:rows,contactFound:true,contactState:'found'};});contactEdit=null;renderContactRows(currentCase.contacts||[]);
+  if(file){try{const photoPath=await uploadCasePhoto('contacts',key,file);await updateCaseSection('contactsRevision',c=>({contacts:(c.contacts||[]).map((r,n)=>contactKey(r,n)===key?{...r,photoPath}:r)}));renderContactRows(currentCase.contacts||[]);toast('關係人與照片已同步儲存');}catch(err){toast(`文字已儲存；照片未完成：${err.message}。請修改後重試。`,6500);contactEdit={caseId:currentCaseId,key,data};renderContactRows(currentCase.contacts||[]);fieldEntryStatus('contactSaveStatus','文字已同步儲存；照片失敗，請重試');return;}}
+  else toast('關係人已同步儲存');setRadioValue('contactState','found');
+ }catch(err){fieldEntryStatus('contactSaveStatus',`儲存失敗：${err.message}`);}finally{if(button.isConnected)button.disabled=false;}}
+async function deleteContact(index){const row=currentCase?.contacts?.[index];if(!row||!confirm(`確認刪除關係人「${row.name||'未命名'}」？`))return;const key=contactKey(row,index);try{assertCaseEditor();await updateCaseSection('contactsRevision',c=>({contacts:(c.contacts||[]).filter((r,n)=>contactKey(r,n)!==key)}));contactEdit=null;renderContactRows(currentCase.contacts||[]);try{await removeCasePhoto(row.photoPath);}catch{toast('關係人已刪除；舊照片清理失敗，請交由管理員檢查');return;}toast('已刪除關係人');}catch(err){toast(`刪除失敗：${err.message}`);}}
+async function removeCasePhoto(path){if(path&&firebaseEnabled&&path.startsWith(`case-private/${currentCaseId}/`))await firebase.storage().ref(path).delete();}
+async function uploadCasePhoto(folder,key,file){
+ if(!firebaseEnabled||!firebase.storage)throw Error('照片需在已連線且具有案件權限的環境上傳');
+ if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>5*1024*1024)throw Error('請使用 5 MB 以下的 JPG、PNG 或 WebP');
+ const path=`case-private/${currentCaseId}/${folder}/${encodeURIComponent(key)}-${uid('photo')}`;
+ await firebase.storage().ref(path).put(file,{contentType:file.type,customMetadata:{caseId:currentCaseId}});
+ return path;
+}
+async function loadPrivatePhotos(root){
+ if(!firebaseEnabled||!fbUser||!window.FIRECOMMAND_FIREBASE_CONFIG?.storageBucket)return;
+ const caseId=currentCaseId,bucket=window.FIRECOMMAND_FIREBASE_CONFIG.storageBucket;
+ for(const slot of root.querySelectorAll('[data-photo-path]')){
+  const path=slot.dataset.photoPath;if(!path||!path.startsWith(`case-private/${caseId}/`))continue;
+  try{const token=await fbUser.getIdToken();const response=await fetch(`https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(path)}?alt=media`,{headers:{Authorization:`Firebase ${token}`}});
+   if(!response.ok)throw Error(String(response.status));const url=URL.createObjectURL(await response.blob());if(caseId!==currentCaseId||!slot.isConnected){URL.revokeObjectURL(url);continue;}
+   const img=document.createElement('img');img.src=url;img.alt='案件附件照片，點擊可放大';img.onload=()=>{};img.onclick=()=>{const viewer=window.open();if(viewer){viewer.document.title='案件照片';const full=viewer.document.createElement('img');full.src=url;full.alt='案件照片';full.style.maxWidth='100%';viewer.document.body.appendChild(full);}};slot.appendChild(img);
+  }catch{slot.textContent='照片暫無法載入，請確認案件權限與 Storage CORS 設定';}
+ }
+}
+function renderHazardRecord(){
+ const el=$('hazardSavedCard');if(!el||!currentCase)return;
+ const r=currentCase.hazardRecord||((currentCase.hazardItems||currentCase.hazardContact)?{items:currentCase.hazardItems,contact:currentCase.hazardContact,phone:currentCase.hazardPhone,appearance:currentCase.hazardAppearance}:null);
+ el.innerHTML=r?`<article class="contact-row saved-record"><div class="private-photo" data-photo-path="${escapeHtml(r.photoPath||'')}"></div><strong>${escapeHtml(r.items||'危險物資訊待補')}</strong><p>${escapeHtml(r.contact||'')} ${escapeHtml(r.phone||'')} ${escapeHtml(r.appearance||'')}</p><div class="record-actions"><button class="btn small ghost" id="editHazardBtn" type="button">修改</button><button class="btn small danger" id="deleteHazardBtn" type="button">刪除</button></div></article>`:'';
+ $('editHazardBtn')?.addEventListener('click',()=>{$('hazardEditFields').hidden=false;$('hazardItems').focus();});
+ $('deleteHazardBtn')?.addEventListener('click',async()=>{if(!confirm('確認刪除這筆危險物品資訊？'))return;try{assertCaseEditor();await updateCaseSection('hazardRevision',()=>({hazardRecord:null,hazardItems:'',hazardContact:'',hazardPhone:'',hazardAppearance:'',hazardState:'',hazardChecked:false}));['hazardItems','hazardContact','hazardPhone','hazardAppearance'].forEach(id=>$(id).value='');renderHazardRecord();try{await removeCasePhoto(r.photoPath);}catch{toast('危險物品紀錄已刪；舊照片清理失敗，請交由管理員檢查');return;}toast('已刪除危險物品資訊');}catch(e){toast(`刪除失敗：${e.message}`);}});
+ $('hazardEditFields').hidden=!!r;$('hazardPhoto')&&($('hazardPhoto').value='');loadPrivatePhotos(el);
+}
+async function saveHazardRecord(){const button=$('hazardSaveBtn'),file=$('hazardPhoto')?.files[0];button.disabled=true;fieldEntryStatus('hazardSaveStatus','儲存中');try{assertCaseEditor();const data={items:$('hazardItems').value.trim(),contact:$('hazardContact').value.trim(),phone:$('hazardPhone').value.trim(),appearance:$('hazardAppearance').value.trim()};if(!Object.values(data).some(Boolean))throw Error('請先填寫危險物品資訊');await updateCaseSection('hazardRevision',c=>({hazardRecord:{...(c.hazardRecord||{}),...data},hazardItems:data.items,hazardContact:data.contact,hazardPhone:data.phone,hazardAppearance:data.appearance,hazardState:'has',hazardChecked:true}));
+ if(file){try{const path=await uploadCasePhoto('hazards','hazard',file);await updateCaseSection('hazardRevision',c=>({hazardRecord:{...(c.hazardRecord||{}),photoPath:path}}));toast('危險物品與照片已同步儲存');}catch(e){$('hazardEditFields').hidden=false;fieldEntryStatus('hazardSaveStatus','文字已同步儲存；照片失敗，請重試');toast(`文字已儲存；照片未完成：${e.message}`,6500);return;}}else toast('危險物品已同步儲存');setRadioValue('hazardState','has');renderHazardRecord();
+ }catch(e){fieldEntryStatus('hazardSaveStatus',`儲存失敗：${e.message}`);}finally{button.disabled=false;}}
+const externalSupportOptions={'台電':['斷電','其他'],'瓦斯單位':['斷瓦斯','其他'],'警察':['交通管制','其他'],'台水':['斷水','其他'],'毒災應變隊':['其他'],'其他單位':['其他']};
+function addExternalSupportRow(record={}){const wrap=$('externalSupportRows');if(!wrap)return;const div=document.createElement('div');div.className='external-support-row';div.innerHTML=`<select aria-label="外單位">${Object.keys(externalSupportOptions).map(v=>`<option ${v===record.unit?'selected':''}>${v}</option>`).join('')}</select><select aria-label="支援事項"></select><input aria-label="其他支援事項" placeholder="其他需求補充" value="${escapeHtml(record.detail||'')}" hidden /><button type="button" class="btn small ghost">移除</button>`;
+ const [unit,task,detail,remove]=div.children;const update=()=>{const values=externalSupportOptions[unit.value];task.innerHTML=values.map(v=>`<option ${v===record.task?'selected':''}>${v}</option>`).join('');detail.hidden=task.value!=='其他';};unit.onchange=()=>{record.task='';update();fieldEntryStatus('supportSaveStatus','尚未儲存');};task.onchange=()=>{detail.hidden=task.value!=='其他';fieldEntryStatus('supportSaveStatus','尚未儲存');};detail.oninput=()=>fieldEntryStatus('supportSaveStatus','尚未儲存');remove.onclick=()=>{div.remove();fieldEntryStatus('supportSaveStatus','尚未儲存');};update();wrap.appendChild(div);}
+function renderSupportRequests(){if(!$('externalSupportRows')||!currentCase)return;const legacy=(currentCase.supports||[]).filter(x=>!['水車','水庫車','雲梯車','救護車','排煙車','照明車','大隊支援'].includes(x)).map(x=>({kind:'external',unit:x==='瓦斯'?'瓦斯單位':x,task:'其他',detail:''}));const rows=currentCase.supportRequests||legacy;$('externalSupportRows').innerHTML='';rows.filter(r=>r.kind==='external').forEach(addExternalSupportRow);$('externalSupportFields').hidden=!rows.some(r=>r.kind==='external');}
+async function saveSupportRequests(){const btn=$('supportSaveBtn');btn.disabled=true;fieldEntryStatus('supportSaveStatus','儲存中');try{assertCaseEditor();const fire=readSupports(),external=[...document.querySelectorAll('.external-support-row')].map(row=>{const [unit,task,detail]=row.children;return {kind:'external',unit:unit.value,task:task.value,detail:task.value==='其他'?detail.value.trim():'',status:'requested'};});const requests=[...fire.map(unit=>({kind:'fire',unit,status:'requested'})),...external];const details=$('supportDetails').value.trim();await updateCaseSection('supportRevision',()=>({supports:[...fire,...external.map(r=>r.unit)],supportRequests:requests,supportDetails:details,supportState:requests.length||details?'needed':'none',supportNeeded:!!(requests.length||details)}));fieldEntryStatus('supportSaveStatus',firebaseEnabled?'已同步儲存':'已存本機（示範模式，未同步）');toast('支援需求已儲存；尚未標記聯絡或完成');}catch(e){fieldEntryStatus('supportSaveStatus',`儲存失敗：${e.message}`);}finally{btn.disabled=false;}}
+function renderRitUnit(){if(!$('ritBrigade')||!currentCase)return;const brigade=$('ritBrigade'),unit=$('ritUnitSelect');const name=currentCase.ritUnit||'';const match=Object.keys(UNIT_TREE).find(b=>FCFieldEntry.validUnit(UNIT_TREE,b,name));brigade.innerHTML=Object.keys(UNIT_TREE).map(b=>`<option ${b===(currentCase.ritBrigade||match)?'selected':''}>${escapeHtml(b)}</option>`).join('');const fill=()=>{unit.innerHTML=`<option value="">請選擇分隊／單位</option>`+FCFieldEntry.unitOptions(UNIT_TREE,brigade.value).flatMap(x=>x.units).map(x=>`<option ${x===name?'selected':''}>${escapeHtml(x)}</option>`).join('');if(name&&!match){unit.add(new Option(`${name}（歷史資料，請核對）`,name));unit.value=name;}};fill();brigade.onchange=()=>{unit.value='';fill();fieldEntryStatus('ritSaveStatus','尚未儲存');};unit.onchange=()=>fieldEntryStatus('ritSaveStatus','尚未儲存');$('ritNote').oninput=()=>fieldEntryStatus('ritSaveStatus','尚未儲存');}
+async function saveRitUnit(){const btn=$('ritSaveBtn'),brigade=$('ritBrigade').value,unit=$('ritUnitSelect').value;btn.disabled=true;fieldEntryStatus('ritSaveStatus','儲存中');try{assertCaseEditor();if(!FCFieldEntry.validUnit(UNIT_TREE,brigade,unit))throw Error('請選正確大隊及分隊');const note=$('ritNote').value.trim();await updateCaseSection('ritRevision',()=>({ritBrigade:brigade,ritUnit:unit,ritNote:note,ritState:'assigned',ritSet:true}));$('ritUnit').value=unit;fieldEntryStatus('ritSaveStatus',firebaseEnabled?'已同步儲存':'已存本機（示範模式，未同步）');toast('RIT 單位已儲存；補充說明不代表裝備已確認');}catch(e){fieldEntryStatus('ritSaveStatus',`儲存失敗：${e.message}`);}finally{btn.disabled=false;}}
 
 async function saveExtraNotes(){
   const el = $('extraNotes');
@@ -2604,7 +2654,8 @@ function loadSelectedCrew(){
   const matches=selectedFieldCrew(),crew=matches.length===1?matches[0]:null;
   fieldCrewExpected=crew?{id:crew.id,updatedAt:crew.updatedAt||null}:null;
   fieldCrewDirty=false;
-  if($('fieldCrewCount'))$('fieldCrewCount').value=crew&&!FCFieldEntry.unknown(crew)?String(crew.count):'';
+  if($('fieldCrewCount')){const input=$('fieldCrewCount'),value=crew&&!FCFieldEntry.unknown(crew)?String(crew.count):'';input.innerHTML=`<option value="">未知</option>`+Array.from({length:16},(_,n)=>`<option value="${n}">${n}</option>`).join('')+(value&&Number(value)>15?`<option value="${escapeHtml(value)}">${escapeHtml(value)}（既有資料）</option>`:'');input.value=value;}
+  if($('fieldCrewFace')){const face=$('fieldCrewFace');if(crew?.face&&![...face.options].some(o=>o.value===crew.face))face.add(new Option(`${crew.face}（既有資料）`,crew.face));face.value=crew?.face||'';}
   if($('fieldCrewTask'))$('fieldCrewTask').value=crew?.task&&[...$('fieldCrewTask').options].some(o=>o.value===crew.task)?crew.task:'';
   fieldEntryStatus('fieldCrewSaveStatus',crew?'目前顯示已存資料；修改後請確認儲存':'尚未儲存');
 }
@@ -2613,9 +2664,12 @@ function initFieldEntryControls(){
   fillFieldUnitOptions('fieldVehicleBrigade','fieldVehicleUnit');
   $('fieldCrewSaveBtn')?.addEventListener('click',saveFieldCrew);
   $('fieldVehicleSaveBtn')?.addEventListener('click',saveFieldVehicle);
-  for(const id of ['fieldCrewCount','fieldCrewTask'])$(id)?.addEventListener('input',()=>{fieldCrewDirty=true;fieldEntryStatus('fieldCrewSaveStatus','尚未儲存');});
+  for(const id of ['fieldCrewCount','fieldCrewFace','fieldCrewTask'])$(id)?.addEventListener('change',()=>{fieldCrewDirty=true;fieldEntryStatus('fieldCrewSaveStatus','尚未儲存');});
   $('fieldCrewDetails')?.addEventListener('toggle',()=>{if($('fieldCrewDetails').open&&!fieldCrewDirty)loadSelectedCrew();});
   $('fieldVehicleCode')?.addEventListener('change',()=>fieldEntryStatus('fieldVehicleSaveStatus','尚未儲存'));
+  $('fieldVehicleCode')?.addEventListener('change',()=>{$('fieldVehicleCustomWrap').hidden=$('fieldVehicleCode').value!=='custom';if(!$('fieldVehicleCustomWrap').hidden)$('fieldVehicleCustomCode').focus();});
+  $('fieldVehicleCustomCode')?.addEventListener('input',()=>fieldEntryStatus('fieldVehicleSaveStatus','尚未儲存'));
+  $('openBuildingDrawing')?.addEventListener('click',()=>{$('buildingOpsDetails').open=true;$('buildingOpsDetails').scrollIntoView({behavior:'smooth'});});
   document.querySelectorAll('[data-field-map-tool]').forEach(button=>button.addEventListener('click',()=>{
     $('deploymentMapDetails').open=true;setDeploymentMode(button.dataset.fieldMapTool);
     $('deploymentMapDetails').scrollIntoView({behavior:'smooth'});setTimeout(refreshMapSize,220);
@@ -2643,12 +2697,12 @@ async function saveFieldCrew(){
   const button=$('fieldCrewSaveBtn'),brigade=$('fieldCrewBrigade')?.value,unit=$('fieldCrewUnit')?.value;
   if(!FCFieldEntry.validUnit(UNIT_TREE,brigade,unit)){fieldEntryStatus('fieldCrewSaveStatus','儲存失敗：請先選有效單位');return;}
   const parsed=FCFieldEntry.parseCount($('fieldCrewCount')?.value);
-  if(!parsed.valid){fieldEntryStatus('fieldCrewSaveStatus','儲存失敗：人數只接受空白或 0–99 的整數');return;}
+  if(!parsed.valid){fieldEntryStatus('fieldCrewSaveStatus','儲存失敗：人數請選未知或有效整數');return;}
   const matches=selectedFieldCrew();if(matches.length>1){fieldEntryStatus('fieldCrewSaveStatus','版本衝突待處理：此單位有多筆編組，請從既有明細選定');return;}
   const existing=matches[0],id=existing?.id||FCFieldEntry.identity(brigade,unit),expected=fieldCrewExpected;
   if((existing&&expected?.id!==existing.id)||(!existing&&expected&&expected.id!==id)){fieldEntryStatus('fieldCrewSaveStatus','版本衝突待處理：單位資料已更新，請重新選擇');return;}
-  const now=Date.now(),task=$('fieldCrewTask')?.value||'',count=parsed.count;
-  const patch={count,countUnknown:count===null,task,status:task==='休息'?'休息':task==='待命'?'待命':'未指定',updatedAt:now};
+  const now=Date.now(),task=$('fieldCrewTask')?.value||'',face=$('fieldCrewFace')?.value||'',count=parsed.count;
+  const patch={count,countUnknown:count===null,task,face,status:task==='休息'?'休息':task==='待命'?'待命':'未指定',updatedAt:now};
   button.disabled=true;fieldEntryStatus('fieldCrewSaveStatus','儲存中');
   try{
     if(firebaseEnabled){
@@ -2672,17 +2726,17 @@ async function saveFieldCrew(){
 async function saveFieldVehicle(){
   if(!currentCase)return;
   if(currentCase.mode==='practice'&&myTrainingRole()==='觀察員'&&!isPracticeHost()){fieldEntryStatus('fieldVehicleSaveStatus','儲存失敗：觀察員僅可閱覽');return;}
-  const brigade=$('fieldVehicleBrigade')?.value,unit=$('fieldVehicleUnit')?.value,code=$('fieldVehicleCode')?.value,button=$('fieldVehicleSaveBtn');
-  if(!FCFieldEntry.validUnit(UNIT_TREE,brigade,unit)||!code){fieldEntryStatus('fieldVehicleSaveStatus','儲存失敗：請選大隊、單位及車號');return;}
+  const brigade=$('fieldVehicleBrigade')?.value,unit=$('fieldVehicleUnit')?.value,selectedCode=$('fieldVehicleCode')?.value,code=selectedCode==='custom'?$('fieldVehicleCustomCode')?.value.trim():selectedCode,button=$('fieldVehicleSaveBtn');
+  if(!FCFieldEntry.validUnit(UNIT_TREE,brigade,unit)||!code||!/^[\p{L}\p{N}-]{1,40}$/u.test(code)){fieldEntryStatus('fieldVehicleSaveStatus','儲存失敗：請選大隊、單位及有效車號');return;}
   const name=formatUnitVehicleName(unit,code),id='manual_vehicle_'+encodeURIComponent(brigade+'|'+name);
   button.disabled=true;fieldEntryStatus('fieldVehicleSaveStatus','儲存中');
   try{
     if(live.vehicles.some(v=>vehicleDisplayName(v)===name&&v.brigade===brigade)){fieldEntryStatus('fieldVehicleSaveStatus','已同步儲存：這部車已登錄');return;}
-    const type=vehicleType(code),now=Date.now(),pos=stagingPosition(live.vehicles.length,0);
+    const type=selectedCode==='custom'?{label:'車種待確認',canHose:false}:vehicleType(code),now=Date.now(),pos=stagingPosition(live.vehicles.length,0);
     const data={brigade,unit,name,vehicleCode:code,type:type.label,canHose:type.canHose,task:'',status:'待定位',lat:pos.lat,lng:pos.lng,layout31:true,staged:true,createdAt:now};
     if(firebaseEnabled){const parent=db.collection('cases').doc(currentCaseId),ref=parent.collection('vehicles').doc(id);await db.runTransaction(async tx=>{const snap=await tx.get(ref);if(snap.exists)return;tx.set(ref,data);tx.update(parent,{resourceRevision:firebase.firestore.FieldValue.increment(1)});});}
     else {if(!live.vehicles.some(v=>v.id===id))live.vehicles.push({id,...data});currentCase.resourceRevision=(currentCase.resourceRevision||0)+1;saveLocalCase();renderLiveParts();}
-    fieldEntryStatus('fieldVehicleSaveStatus',firebaseEnabled?'已同步儲存':'已存本機（示範模式，未同步）');toast(`${name}已登錄，圖面待定位`);$('fieldVehicleCode').value='';
+    fieldEntryStatus('fieldVehicleSaveStatus',firebaseEnabled?'已同步儲存':'已存本機（示範模式，未同步）');toast(`${name}已登錄，圖面待定位`);$('fieldVehicleCode').value='';$('fieldVehicleCustomCode').value='';$('fieldVehicleCustomWrap').hidden=true;
   }catch(err){fieldEntryStatus('fieldVehicleSaveStatus',`儲存失敗：${err.message}`);}
   finally{button.disabled=false;}
 }
@@ -2769,6 +2823,9 @@ async function addHoseAt(tool, lat, lng){
 }
 async function addHoseToTarget(tool){
   const v = live.vehicles.find(x=>x.id===tool.vehicleId);
+  if(tool.targetType==='vehicle'&&tool.targetId===tool.vehicleId){toast('水線終點不能是來源車輛');return;}
+  const duplicate=live.hoses.some(h=>h.vehicleId===tool.vehicleId&&h.targetType===tool.targetType&&h.targetId===tool.targetId);
+  if(duplicate&&!confirm('此起點與終點已有水線，確定新增另一條平行線？'))return;
   let target=null,targetName='';
   if(tool.targetType==='vehicle'){
     target=live.vehicles.find(x=>x.id===tool.targetId);
@@ -2781,7 +2838,7 @@ async function addHoseToTarget(tool){
     targetName=target?.name||tool.targetName||'火場建物';
   }
   if(!target){ toast('請先選擇水線目的地'); return; }
-  const hoseId=await addItem('hoses',{vehicleId:tool.vehicleId,vehicleName:vehicleDisplayName(v||tool),unit:v?.unit||tool.unit,owner:tool.owner||v?.unit||'',port:tool.port,task:tool.task,kind:tool.kind||'進攻水線',status:'使用中',targetType:tool.targetType,targetId:tool.targetId,targetName,from:v?[v.lat,v.lng]:null});
+  const hoseId=await addItem('hoses',{vehicleId:tool.vehicleId,vehicleName:vehicleDisplayName(v||tool),unit:v?.unit||tool.unit,owner:tool.owner||v?.unit||'',port:tool.port,task:tool.task,kind:tool.kind||'進攻水線',status:'規劃',targetType:tool.targetType,targetId:tool.targetId,targetName,from:v?[v.lat,v.lng]:null});
   pushMapUndo(`復原建立水線 ${vehicleDisplayName(v||tool)} ${tool.port||''}`,async()=>deleteMapRecordSilent('hoses',hoseId));
   await addLog('hose',`建立連結水線：${vehicleDisplayName(v||tool)} ${tool.port||''} → ${targetName}`);
   toast(`水線已連接至${targetName}`);
