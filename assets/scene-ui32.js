@@ -63,7 +63,7 @@ async function applyRoad32(){
 function installScene32(){
  deploymentSchematicHtml=deploymentSchematic32;renderMap=renderGoogle32;fitMapToIncident=mapFocus32;
  const base=renderOverviewContent;renderOverviewContent=function(){base();const host=$('overviewDeploymentSnapshot');if(host&&currentCase)host.innerHTML=deploymentSchematic32();bindScene32(host);renderDeployment32();};
- $('fitMapBtn').textContent='10m近距離';$('fitMapBtn').onclick=()=>{sceneView32.scale=8;sceneView32.fit=false;renderDeployment32();mapFocus32();};
- $('suggestRoad32').onclick=()=>suggestRoad32();$('drawRoad32').onclick=()=>beginRoad32();$('applyRoad32').onclick=()=>applyRoad32().catch(e=>roadMessage32(e.message));
- $('reverseRoad32').onclick=()=>{if(roadDraft32){roadDraft32.points.reverse();renderGoogle32();roadMessage32('已反轉，第一點為頭車；請確認後套用。');}};
+ if($('fitMapBtn')){$('fitMapBtn').textContent='10m近距離';$('fitMapBtn').onclick=()=>{sceneView32.scale=8;sceneView32.fit=false;renderDeployment32();mapFocus32();};}
+ if($('suggestRoad32'))$('suggestRoad32').onclick=()=>suggestRoad32();if($('drawRoad32'))$('drawRoad32').onclick=()=>beginRoad32();if($('applyRoad32'))$('applyRoad32').onclick=()=>applyRoad32().catch(e=>roadMessage32(e.message));
+ if($('reverseRoad32'))$('reverseRoad32').onclick=()=>{if(roadDraft32){roadDraft32.points.reverse();renderGoogle32();roadMessage32('已反轉，第一點為頭車；請確認後套用。');}};
 }
