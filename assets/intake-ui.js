@@ -1,6 +1,7 @@
 'use strict';
 let intake28=null,intakeBusy28=false,resourceReady28=new Set(),intakeRequest29=null;
 let aiPreference29='auto',aiFallback29=true;
+const intakeV34=typeof FCV34V3!=='undefined'?FCV34V3:{tasks:['待命','滅火攻擊','人命搜救','內攻','警戒','供水','排煙','救護','休息','RIT'],taskChoice(value=''){const text=String(value||'').trim(),tasks=this.tasks;return !text||tasks.includes(text)?{choice:text,other:''}:{choice:'其他',other:text};}};
 function intakeSnapshot28(){return Object.fromEntries(FCIntake.collections.map(c=>[c,JSON.parse(JSON.stringify(live[c]||[]))]));}
 function intakeRevision28(c=currentCase){return FCIntake.fingerprint({revision:c?.resourceRevision||0,box:c?.buildingBox||null});}
 function intakePosition28(face,index){const box=getBuildingBox(),n=FCIntake.faces.indexOf(face),w=box.widthM/2+15,h=box.heightM/2+15;const p=n===0?[index%4*8,-h]:n===1?[w,index%4*8]:n===2?[index%4*8,h]:n===3?[-w,index%4*8]:[w+25,25-index*7];return {...localPointToLatLng(box,...p),anchorBuilding:true,staged:n<0};}
@@ -58,6 +59,10 @@ function field29(i,key,label,type='text'){
  return `<label for="${escapeHtml(id)}">${label}<input id="${escapeHtml(id)}" data-field="${key}" value="${escapeHtml(String(v))}" ${type==='number'?'inputmode="text" placeholder="可填七、兩或 7；留空保留原數"':''} maxlength="${key==='text'?800:160}" /></label>`;
 }
 function select29(i,key,label,options){return `<label>${label}<select data-field="${key}">${options.map(([v,l])=>`<option value="${escapeHtml(v)}" ${String(i[key]||'')===v?'selected':''}>${escapeHtml(l)}</option>`).join('')}</select></label>`;}
+function taskEditor29(i){
+ const parsed=i.taskChoice==='其他'?{choice:'其他',other:i.task||''}:intakeV34.taskChoice(i.task),options=[['','未指定'],...intakeV34.tasks.map(x=>[x,x]),['其他','其他']];
+ return `<label>任務<select data-task-choice>${options.map(([v,l])=>`<option value="${escapeHtml(v)}" ${parsed.choice===v?'selected':''}>${escapeHtml(l)}</option>`).join('')}</select></label><label data-task-other ${parsed.choice==='其他'?'':'hidden'}>其他任務<input data-field="task" value="${escapeHtml(parsed.other)}" maxlength="80" placeholder="輸入特殊任務" /></label>`;
+}
 function rowPlan30(i){
  const s=intake28,rows=[{...i,selected:true,reviewed:true}],dependencies=[];
  if(i.kind==='hose')for(const name of [FCIntake29.tactics.vehicleName(i.unit,i.vehicle)||i.vehicle,i.target].filter(v=>v&&!FCIntake.faces.includes(v))){
@@ -93,7 +98,7 @@ function renderIntakePlan28(){
    const values=[['','未知'],...Array.from({length:16},(_,n)=>[String(n),String(n)])];
    if(i.number!==null&&i.number!==undefined&&Number(i.number)>15)values.push([String(i.number),`${i.number}（既有資料）`]);
    fields+=select29(i,'number','出勤總人數',values)+unitSelect(i.brigade);
-   fields+=`</div><div class="review-subhead-v2">面向及任務</div><div class="review-fields29">`+select29(i,'face','面向',faceOptions)+field29(i,'task','任務');
+   fields+=`</div><div class="review-subhead-v2">面向及任務</div><div class="review-fields29">`+select29(i,'face','面向',faceOptions)+taskEditor29(i);
    const groups=(s.base.crews||[]).filter(c=>c.unit===i.unit);
    if(groups.length>1)fields+=select29(i,'targetId','請選此次更新對象',[['','請選擇'],...groups.map(c=>[c.id,`${c.voiceGroup||c.leader||c.id.slice(-6)}｜${c.count}人｜${c.face||'待部署'}`])]);
   }
@@ -113,6 +118,7 @@ function renderIntakePlan28(){
   card.querySelector('[data-commit]').onclick=safeIntake28(()=>applyIntakeRow30(i.id));
   card.querySelector('[data-remove]').onclick=()=>{s.items=s.items.filter(x=>x!==i);renderIntakePlan28();};
   card.querySelectorAll('[data-field]').forEach(el=>{const fn=()=>{i[el.dataset.field]=el.value;i.reviewed=false;if(el.dataset.field==='number')i.allowUnknown=el.value==='';if(i.kind==='hose'&&el.dataset.field==='target')i.face=FCIntake.faces.includes(i.target)?i.target:'';if(['kind','brigade'].includes(el.dataset.field)){if(el.dataset.field==='brigade')i.unit='';renderIntakePlan28();}else updateIntakeSummary29();};el[el.tagName==='SELECT'?'onchange':'oninput']=fn;});
+  const taskChoice=card.querySelector('[data-task-choice]');if(taskChoice)taskChoice.onchange=()=>{i.taskChoice=taskChoice.value;i.task=taskChoice.value==='其他'?'':taskChoice.value;i.reviewed=false;const other=card.querySelector('[data-task-other]');if(other){other.hidden=taskChoice.value!=='其他';if(!other.hidden)other.querySelector('input')?.focus();}updateIntakeSummary29();};
   const unit=card.querySelector('[data-unit-select]');if(unit)unit.onchange=e=>{[i.brigade,i.unit]=e.target.value.split('|');i.targetId='';i.reviewed=false;renderIntakePlan28();};
  });
  updateIntakeSummary29();
