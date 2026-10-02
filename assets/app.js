@@ -732,7 +732,7 @@ async function saveProfile(e){
   // demo identity enter the app so the real SOP/deployment routes can be verified,
   // while keeping every Firebase-backed account on the normal approval path.
   const isIsolatedPreviewDemo = !firebaseEnabled
-    && isIsolatedPreviewHost(location.hostname)
+    && FCFieldEntry.isolatedPreviewHost(location.hostname)
     && fbUser.uid === 'demo-user';
   const isImmediatelyActive = isAdminEmail || isIsolatedPreviewDemo;
   profile = {
