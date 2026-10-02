@@ -84,34 +84,36 @@ function renderIntakePlan28(){
  $('intakeCorrections28').innerHTML=(s.corrections||[]).map(c=>`<span class="intake-correction">${escapeHtml(c.from)} → <b>${escapeHtml(c.to)}</b></span>`).join('');
  const roster=FCIntake.roster(UNIT_TREE),pending=s.items.filter(i=>!i.committed);
  $('intakeChanges28').innerHTML=pending.slice(0,3).map(i=>{
+  if(!i.brigade&&i.unit){const matches=roster.filter(r=>r.unit===i.unit);if(matches.length===1)i.brigade=matches[0].brigade;}
   const resource=['crew','vehicle','hose'].includes(i.kind),faceOptions=[['','保留現況／待部署'],...FCIntake.faces.map(x=>[x,x])];
+  const unitSelect=(brigade)=>`<label>分隊<select data-unit-select><option value="">請選擇分隊</option>${roster.filter(r=>r.brigade===brigade).map(r=>`<option value="${escapeHtml(r.brigade+'|'+r.unit)}" ${i.unit===r.unit&&i.brigade===r.brigade?'selected':''}>${escapeHtml(r.unit)}</option>`).join('')}</select></label>`;
   let fields=select29(i,'kind','資料類型',FCIntake29.kinds.map(k=>[k,FCIntake29.labels[k]]));
-  if(resource)fields+=`<label>分隊<select data-unit-select><option value="">請選擇分隊</option>${roster.map(r=>`<option value="${escapeHtml(r.brigade+'|'+r.unit)}" ${i.unit===r.unit&&(!i.brigade||i.brigade===r.brigade)?'selected':''}>${escapeHtml(r.unit+'｜'+r.brigade)}</option>`).join('')}</select></label>`;
+  if(resource)fields+=select29(i,'brigade','大隊',[['','請選擇大隊'],...Object.keys(UNIT_TREE).map(x=>[x,x])]);
   if(i.kind==='crew'){
-   fields+=field29(i,'number','本次人數','number')+select29(i,'face','部署面向',faceOptions);
+   const values=[['','未知'],...Array.from({length:16},(_,n)=>[String(n),String(n)])];
+   if(i.number!==null&&i.number!==undefined&&Number(i.number)>15)values.push([String(i.number),`${i.number}（既有資料）`]);
+   fields+=select29(i,'number','出勤總人數',values)+unitSelect(i.brigade);
+   fields+=`</div><div class="review-subhead-v2">面向及任務</div><div class="review-fields29">`+select29(i,'face','面向',faceOptions)+field29(i,'task','任務');
    const groups=(s.base.crews||[]).filter(c=>c.unit===i.unit);
    if(groups.length>1)fields+=select29(i,'targetId','請選此次更新對象',[['','請選擇'],...groups.map(c=>[c.id,`${c.voiceGroup||c.leader||c.id.slice(-6)}｜${c.count}人｜${c.face||'待部署'}`])]);
   }
-  if(i.kind==='vehicle')fields+=field29(i,'vehicle','車輛編號（如11、111；自動加分隊）')+select29(i,'face','部署面向',faceOptions);
+  if(i.kind==='vehicle')fields+=unitSelect(i.brigade)+field29(i,'vehicle','車輛編號（如11、111；自動加分隊）')+select29(i,'face','部署面向',faceOptions);
+  if(i.kind==='hose')fields+=unitSelect(i.brigade);
   if(i.kind==='hose')fields+=field29(i,'vehicle','來源車號（可留空）')+field29(i,'number','水線條數','number')+select29(i,'target','終點',[['','請選擇'],...FCIntake.faces.map(x=>[x,x]),...[...new Set([...(s.base.vehicles||[]).map(v=>v.name),...s.items.filter(x=>x.kind==='vehicle').map(x=>x.vehicle),i.target].filter(x=>x&&!FCIntake.faces.includes(x)))].map(x=>[x,x])]);
   if(i.kind==='support')fields+=field29(i,'task','支援類型')+field29(i,'number','需要幾台（未定可留空）','number');
   if(!resource)fields+=field29(i,'text','紀錄內容');
-  let extra=resource?field29(i,'task','任務／備註'):'';
-  if(['crew','hose'].includes(i.kind))extra+=select29(i,'quantityMode','本次變更',[['set','登錄／修正總數'],['add','增加'],['subtract','減少']]);
+  let extra=resource&&i.kind!=='crew'?field29(i,'task','任務／備註'):'';
   const plan=rowPlan30(i),errors=plan.issues;
-  return `<article class="review-card29 review-card30" data-item="${escapeHtml(i.id)}"><div class="review-top30"><span class="review-kind30">${escapeHtml(FCIntake29.labels[i.kind])}</span><span class="review-state30">${errors.length?'待補資料':i.uncertainty?'待核對':'待確認'}</span></div><p class="review-title30">${escapeHtml(shortItem30(i))}</p>${i.uncertainty?`<p class="review-notice30">${escapeHtml(i.uncertainty)}</p>`:''}<p class="review-preview29">${escapeHtml(plan.previews.find(p=>p.id===i.id)?.after||'')}</p>${plan.dependencies.length?`<p class="hint">同時登錄：${escapeHtml(plan.dependencies.map(v=>(v.vehicle||v.unit+'人員')+(v.face?'（'+v.face+'）':'')).join('、'))}</p>`:''}<div data-error role="status">${escapeHtml(errors.map(e=>e.message).join('；'))}</div><div class="review-actions30"><button type="button" class="btn primary" data-commit ${intakeBusy28?'disabled':''}>確認登錄</button><button type="button" class="btn ghost" data-edit-toggle aria-expanded="${!!i.editOpen}">修改</button><button type="button" class="btn ghost" data-defer>稍後</button></div><details class="review-editor30" ${i.editOpen?'open':''}><summary>修改資料</summary><div class="review-fields29">${fields}</div>${extra?`<details class="review-extra30"><summary>任務／其他修正</summary><div class="review-fields29">${extra}</div></details>`:''}<details class="review-evidence29"><summary>原始回報</summary><p>${escapeHtml(i.sourceEvidence||i.evidence||s.text||'手動新增')}</p></details><button type="button" class="btn ghost" data-remove>移除此項</button></details></article>`;
+  return `<article class="review-card29 review-card30 review-v2" data-item="${escapeHtml(i.id)}"><h4 class="review-title30">${escapeHtml(i.unit||FCIntake29.labels[i.kind]||'單位待確認')}</h4>${i.uncertainty?`<p class="review-notice30">${escapeHtml(i.uncertainty)}</p>`:''}${plan.dependencies.length?`<p class="hint">同時登錄：${escapeHtml(plan.dependencies.map(v=>v.vehicle||v.unit+'人員').join('、'))}</p>`:''}<div data-error role="status">${escapeHtml(errors.map(e=>e.message).join('；'))}</div><div class="review-fields29">${fields}</div>${extra?`<div class="review-fields29">${extra}</div>`:''}<details class="review-evidence29"><summary>原始回報</summary><p>${escapeHtml(i.sourceEvidence||i.evidence||s.text||'手動新增')}</p></details><div class="review-actions30"><button type="button" class="btn primary" data-commit ${intakeBusy28?'disabled':''}>確認登錄</button><button type="button" class="btn ghost" data-remove>移除此項</button></div></article>`;
  }).join('')||'<p class="intake-done30">本次資料已處理完畢。</p>';
  if(pending.length>3){$('intakeChanges28').innerHTML+=`<details class="review-queue30"><summary>其餘 ${pending.length-3} 項</summary>${pending.slice(3).map(i=>`<button type="button" class="btn ghost" data-prioritize="${escapeHtml(i.id)}">${escapeHtml(shortItem30(i))}</button>`).join('')}</details>`;
  $('intakeChanges28').querySelectorAll('[data-prioritize]').forEach(b=>b.onclick=()=>{const row=s.items.find(x=>x.id===b.dataset.prioritize);s.items=[row,...s.items.filter(x=>x!==row)];renderIntakePlan28();});}
  $('intakeChanges28').querySelectorAll('[data-item]').forEach(card=>{
-  const i=s.items.find(x=>x.id===card.dataset.item),editor=card.querySelector('.review-editor30');
+  const i=s.items.find(x=>x.id===card.dataset.item);
   card.querySelector('[data-commit]').onclick=safeIntake28(()=>applyIntakeRow30(i.id));
-  card.querySelector('[data-edit-toggle]').onclick=()=>{editor.open=!editor.open;i.editOpen=editor.open;card.querySelector('[data-edit-toggle]').setAttribute('aria-expanded',String(editor.open));};
-  card.querySelector('[data-defer]').onclick=()=>{s.items=s.items.filter(x=>x!==i).concat(i);i.deferred=true;renderIntakePlan28();$('intakeMessage28').textContent='已移到待處理項目末端。其他項目可繼續確認。';};
   card.querySelector('[data-remove]').onclick=()=>{s.items=s.items.filter(x=>x!==i);renderIntakePlan28();};
-  if(editor)editor.ontoggle=()=>{i.editOpen=editor.open;};
-  card.querySelectorAll('[data-field]').forEach(el=>{const fn=()=>{i[el.dataset.field]=el.value;i.reviewed=false;if(i.kind==='hose'&&el.dataset.field==='target')i.face=FCIntake.faces.includes(i.target)?i.target:'';if(el.dataset.field==='kind')renderIntakePlan28();else updateIntakeSummary29();};el[el.tagName==='SELECT'?'onchange':'oninput']=fn;});
-  const unit=card.querySelector('[data-unit-select]');if(unit)unit.onchange=e=>{[i.brigade,i.unit]=e.target.value.split('|');i.targetId='';i.reviewed=false;i.editOpen=true;renderIntakePlan28();};
+  card.querySelectorAll('[data-field]').forEach(el=>{const fn=()=>{i[el.dataset.field]=el.value;i.reviewed=false;if(el.dataset.field==='number')i.allowUnknown=el.value==='';if(i.kind==='hose'&&el.dataset.field==='target')i.face=FCIntake.faces.includes(i.target)?i.target:'';if(['kind','brigade'].includes(el.dataset.field)){if(el.dataset.field==='brigade')i.unit='';renderIntakePlan28();}else updateIntakeSummary29();};el[el.tagName==='SELECT'?'onchange':'oninput']=fn;});
+  const unit=card.querySelector('[data-unit-select]');if(unit)unit.onchange=e=>{[i.brigade,i.unit]=e.target.value.split('|');i.targetId='';i.reviewed=false;renderIntakePlan28();};
  });
  updateIntakeSummary29();
 }
@@ -124,8 +126,6 @@ function updateIntakeSummary29(){
   const i=pending.find(x=>x.id===card.dataset.item);if(!i)return;const row=rowPlan30(i);
   card.querySelector('[data-error]').textContent=row.issues.map(x=>x.message).join('；');
   card.querySelector('.review-title30').textContent=shortItem30(i);
-  card.querySelector('.review-preview29').textContent=row.previews.find(x=>x.id===i.id)?.after||'';
-  card.querySelector('.review-state30').textContent=row.issues.length?'待補資料':i.uncertainty?'待核對':'待確認';
   // Remain tappable: a missing field opens its own editor, never disables other rows.
   card.querySelector('[data-commit]').disabled=intakeBusy28||!!intakeRequest29;
  });
