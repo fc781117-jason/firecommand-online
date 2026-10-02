@@ -160,7 +160,7 @@ async function applyIntakeRow30(id){
   throw e;
  }finally{intakeBusy28=false;setIntakeDisabled29(false);if(intake28===s)renderIntakePlan28();}
 }
-function addIntakeRow29(){const s=ensureIntake29();s.text=$('intakeText28').value;if(intakeBusy28||intakeRequest29)return;if(!s.base)captureBase29(s);const kind=$('intakeAddKind29').value;s.items.push(FCIntake29.item(kind,{id:uid('row'),text:kind==='note'?$('intakeText28').value.trim():'',evidence:'手動新增',editOpen:true}));renderIntakePlan28();}
+function addIntakeRow29(){const s=ensureIntake29();s.text=$('intakeText28').value;if(intakeBusy28||intakeRequest29)return;if(!s.base)captureBase29(s);const kind=$('intakeAddKind29').value;s.items.push(FCIntake29.item(kind,{id:uid('row'),text:kind==='note'?$('intakeText28').value.trim():'',evidence:'手動新增',editOpen:true,allowUnknown:kind==='crew'}));renderIntakePlan28();}
 function safeIntake28(fn){return async(...args)=>{try{return await fn(...args);}catch(err){$('intakeMessage28').textContent=err.message||'尚未儲存，請重試';toast(err.message||'尚未儲存',5000);}};}
 function stampWrites28(writes,commandId){const now=Date.now();return writes.map(w=>({...w,after:w.after?{...w.after,...(w.coll==='crews'&&w.after.status==='作業中'&&w.before?.status!=='作業中'?{startAt:now,dispatchCount:(w.before?.dispatchCount||0)+1}:{}),createdAt:w.before?.createdAt||now,updatedAt:now,lastIntakeId:commandId}:null}));}
 function withoutId28(x){const {id,...data}=x;return data;}

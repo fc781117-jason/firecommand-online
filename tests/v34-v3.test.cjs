@@ -6,6 +6,7 @@ const Scene=require('../assets/scene32');
 
 const html=fs.readFileSync(require.resolve('../index.html'),'utf8');
 const app=fs.readFileSync(require.resolve('../assets/app.js'),'utf8');
+const intakeUi=fs.readFileSync(require.resolve('../assets/intake-ui.js'),'utf8');
 const css=fs.readFileSync(require.resolve('../assets/v34-v3.css'),'utf8');
 
 test('V3 任務使用既有選單，其他任務才切自由輸入',()=>{
@@ -79,4 +80,8 @@ test('V3 Preview 示範帳號只在隔離且無 Firebase 時略過人工審核',
   assert.match(app,/FCFieldEntry\.isolatedPreviewHost\(location\.hostname\)/);
   assert.match(app,/fbUser\.uid === 'demo-user'/);
   assert.match(app,/status: isImmediatelyActive \? 'active' : 'pending'/);
+});
+
+test('V3 SOP 手動新增人員預設允許未知人數直接登錄',()=>{
+  assert.match(intakeUi,/allowUnknown:kind==='crew'/);
 });
