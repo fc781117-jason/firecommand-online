@@ -728,6 +728,13 @@ async function logout(){
 async function saveProfile(e){
   e.preventDefault();
   const isAdminEmail = isSuperAdminEmail(fbUser.email);
+  // Isolated Preview hosts intentionally run without Firebase. Let the local-only
+  // demo identity enter the app so the real SOP/deployment routes can be verified,
+  // while keeping every Firebase-backed account on the normal approval path.
+  const isIsolatedPreviewDemo = !firebaseEnabled
+    && isIsolatedPreviewHost(location.hostname)
+    && fbUser.uid === 'demo-user';
+  const isImmediatelyActive = isAdminEmail || isIsolatedPreviewDemo;
   profile = {
     id: fbUser.uid,
     email: fbUser.email || '',
@@ -738,9 +745,9 @@ async function saveProfile(e){
     unit: $('profileUnit').value,
     title: $('profileTitle').value,
     role: isAdminEmail ? 'admin' : $('profileRole').value,
-    status: isAdminEmail ? 'active' : 'pending',
-    approvedBy: isAdminEmail ? SUPER_ADMIN_EMAIL : '',
-    approvedAt: isAdminEmail ? Date.now() : null,
+    status: isImmediatelyActive ? 'active' : 'pending',
+    approvedBy: isAdminEmail ? SUPER_ADMIN_EMAIL : (isIsolatedPreviewDemo ? 'preview-isolated-demo' : ''),
+    approvedAt: isImmediatelyActive ? Date.now() : null,
     isSuperAdmin: isAdminEmail,
     updatedAt: Date.now(),
     createdAt: profile?.createdAt || Date.now()
