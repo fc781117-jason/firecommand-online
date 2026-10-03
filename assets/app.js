@@ -226,6 +226,9 @@ let selectedMapResource = null;
 let tacticalVehicleSelectionV3 = '';
 let tacticalHoseSelectionV3 = '';
 let tacticalSceneV3 = null;
+let tacticalObjectSelectionV31 = null;
+let tacticalPointerV31 = null;
+let tacticalSuppressClickUntilV31 = 0;
 let pendingDeploymentVehicles = [];
 let mapUndoStack = [];
 let derivedSummaryTimer = null;
@@ -411,7 +414,7 @@ function bindEvents(){
   document.querySelectorAll('.support-grid input').forEach(ch => ch.addEventListener('change', () => { updateSupportStatus(); fieldEntryStatus('supportSaveStatus','尚未儲存'); }));
   $('fitMapBtn')?.addEventListener('click', fitMapToIncident);
   $('mapUndoBtn')?.addEventListener('click', undoLastMapAction);
-  $('cancelHoseSelection')?.addEventListener('click',()=>{pendingTool=null;selectedMapResource=null;tacticalVehicleSelectionV3='';tacticalHoseSelectionV3='';setDeploymentMode('select');renderTacticalCanvasV3();toast('已取消選取');});
+  $('cancelHoseSelection')?.addEventListener('click',()=>{pendingTool=null;selectedMapResource=null;clearTacticalSelectionV31();tacticalHoseSelectionV3='';setDeploymentMode('select');renderTacticalCanvasV3();toast('已取消選取');});
   $('mapBuildingUnlockBtn')?.addEventListener('click', () => setBuildingBoxLock(false));
   $('mapBuildingLockBtn')?.addEventListener('click', () => setBuildingBoxLock(true));
   $('deploymentVehicleCode')?.addEventListener('change', syncDeploymentVehicleManualField);
@@ -1491,7 +1494,7 @@ function chooseLocationCandidate(candidates,address){
 
 function backHome(){
   clearIntake28();resourceReady28.clear();
-  cleanupSubscriptions(); stopPracticeTicker(); document.body.classList.remove('in-training'); currentCaseId=null; currentCase=null; pendingDeploymentVehicles=[]; tacticalVehicleSelectionV3=''; tacticalHoseSelectionV3=''; tacticalSceneV3=null; mapUndoStack=[]; updateMapUndoButton();
+  cleanupSubscriptions(); stopPracticeTicker(); document.body.classList.remove('in-training'); currentCaseId=null; currentCase=null; pendingDeploymentVehicles=[]; tacticalVehicleSelectionV3=''; tacticalHoseSelectionV3=''; tacticalObjectSelectionV31=null; tacticalSceneV3=null; mapUndoStack=[]; updateMapUndoButton();
   $('detailPage').hidden=true; $('homePage').hidden=false;
   subscribeCases();
 }
@@ -1500,7 +1503,7 @@ function openCase(id){
   deploymentDraft27=null;selectedSds27=null;if($('deploymentDraftPreview'))$('deploymentDraftPreview').hidden=true;
   if($('practiceResponseText'))$('practiceResponseText').value='';
   document.querySelectorAll('#sdsKnowledgePanel input,#sdsKnowledgePanel textarea').forEach(el=>{if(el.type==='checkbox')el.checked=false;else el.value='';});
-  cleanupSubscriptions(); stopPracticeTicker(); currentCaseId = id; pendingDeploymentVehicles=[]; tacticalVehicleSelectionV3=''; tacticalHoseSelectionV3=''; tacticalSceneV3=null; mapUndoStack=[]; updateMapUndoButton(); renderPendingDeploymentVehicles();
+  cleanupSubscriptions(); stopPracticeTicker(); currentCaseId = id; pendingDeploymentVehicles=[]; tacticalVehicleSelectionV3=''; tacticalHoseSelectionV3=''; tacticalObjectSelectionV31=null; tacticalSceneV3=null; mapUndoStack=[]; updateMapUndoButton(); renderPendingDeploymentVehicles();
   live={vehicles:[],crews:[],hoses:[],hazards:[],sitreps:[],logs:[],players:[],simulationEvents:[],practiceResponses:[],practiceMessages:[],hazardReferences:[],intakeEvents:[]};
   $('homePage').hidden=true; $('detailPage').hidden=false;
   switchCasePage('caseInfo', false);
@@ -1666,7 +1669,7 @@ function buildExecutiveSummaryText(c=currentCase){
   const situation=[];
   if(c.fireStatus && !/未知|未明|尚未確認/.test(c.fireStatus)) situation.push(c.fireStatus.replace(/[。；]+$/,''));
   if(c.trapped==='無') situation.push('目前確認無人受困');
-  else if(c.trapped==='有') situation.push(`目前確認有${Number(c.trappedCount)||0}人受困`);
+  else if(c.trapped==='有') situation.push(Number(c.trappedCount)>0?`目前確認有${Number(c.trappedCount)}人受困`:'目前確認有人受困，人數待確認');
   if(c.hazardState==='none') situation.push('已確認無危險物品');
   else if(c.hazardState==='has' && c.hazardItems) situation.push(`現場危險物品為${c.hazardItems}`);
   if(situation.length) sentences.push(`${situation.join('；')}。`);
@@ -1703,6 +1706,29 @@ function renderOverviewContent(){
     const html=floorPlanSchematicHtml();
     building.innerHTML=html||'<div class="overview-empty">尚未建立建物內部作戰圖；請至「部署」開啟建物作戰圖繪製。</div>';
   }
+  renderOverviewSituationV31();
+}
+function buildingResidentEntriesV31(){return (currentCase?.buildingOps?.floorActions||[]).flatMap(entry=>(entry.residents||[]).map(row=>({floor:Number(entry.floor),floorAction:entry.action||'未標示',...row})));}
+function confirmedPatientEntriesV31(){return (live.sitreps||[]).map(row=>row.patient).filter(Boolean);}
+function hasBuildingOperationalDataV31(){const ops=currentCase?.buildingOps||{};return (ops.floorActions||[]).some(entry=>(entry.action&&entry.action!=='未標示')||(entry.residents||[]).length)||(ops.planMarkers||[]).length>0;}
+function overviewSituationLinesV31(){
+  const lines=[],residents=buildingResidentEntriesV31(),patients=confirmedPatientEntriesV31();
+  if(currentCase?.trapped==='有')lines.push(Number(currentCase.trappedCount)>0?`已確認受困 ${Number(currentCase.trappedCount)} 人。`:'已確認有人受困，人數待確認。');
+  else if(currentCase?.trapped==='無')lines.push('目前確認無人受困。');
+  const evacuated=residents.filter(row=>row.status==='已疏散'),rescued=residents.filter(row=>row.status==='已救出'),hospitalized=[...residents.filter(row=>row.status==='送醫'),...patients.filter(row=>/送醫/.test(row.status||''))],fatal=[...residents.filter(row=>row.status==='死亡'),...patients.filter(row=>/死亡/.test(row.status||''))];
+  const completeResidents=residents.reduce((sum,row)=>sum+(window.FCV34V3?.residentTotal(row.maleCount,row.femaleCount)??0),0),pending=residents.filter(row=>window.FCV34V3?.residentTotal(row.maleCount,row.femaleCount)===null).length;
+  if(evacuated.length)lines.push(`已確認 ${evacuated.length} 戶完成疏散。`);
+  if(rescued.length)lines.push(`已確認救出 ${rescued.length} 戶住戶紀錄。`);
+  if(hospitalized.length)lines.push(`已登錄送醫 ${hospitalized.length} 筆。`);
+  if(fatal.length)lines.push(`已登錄死亡 ${fatal.length} 筆。`);
+  if(residents.length){const countText=pending?(completeResidents>0?`完整人數資料 ${completeResidents} 人，另有 ${pending} 戶人數待確認`:`${pending} 戶人數待確認`):`完整人數資料 ${completeResidents} 人`;lines.push(`建物住戶已記錄 ${residents.length} 戶；${countText}。`);}
+  for(const entry of currentCase?.buildingOps?.floorActions||[]){const rows=entry.residents||[];if(!rows.length)continue;const summary=window.FCV34V3?.floorResidentSummary(rows),known=summary.confirmedMinimum>0?`，已確認至少 ${summary.confirmedMinimum} 人`:'';lines.push(`${floorLabel(entry.floor)}已記錄 ${summary.households} 戶${summary.pending?`${known}，${summary.pending} 戶人數待確認`:`，完整人數資料 ${summary.knownTotal} 人`}。`);}
+  return lines;
+}
+function renderOverviewSituationV31(){
+  const card=$('overviewSituationCardV31'),slot=$('overviewSituationSummaryV31'),buildingCard=$('overviewBuildingCardV31');if(!card||!slot)return;
+  const lines=overviewSituationLinesV31();card.hidden=!lines.length;slot.innerHTML=lines.length?`<ul>${lines.map(line=>`<li>${escapeHtml(line)}</li>`).join('')}</ul>`:'';
+  if(buildingCard)buildingCard.hidden=!hasBuildingOperationalDataV31();
 }
 function scheduleDerivedSummaryPersist(){
   if(currentCase?.mode==='practice'&&myTrainingRole()==='觀察員')return;
@@ -1725,7 +1751,7 @@ function renderSummaryCards(){
   const c=currentCase; const wrap=$('summaryCards'); if(!wrap)return;
   wrap.innerHTML = `
     <button type="button" class="mini-card summary-link-card" data-summary-page="arrivalSection" data-summary-stage="建"><div class="metric">${c.floors||'?'}</div><div class="metric-label">建物樓層</div><div class="subline">起火：${escapeHtml(floorText(c.fireFloor))}｜點選查看</div></button>
-    <button type="button" class="mini-card summary-link-card" data-summary-page="arrivalSection" data-summary-stage="人"><div class="metric">${c.trapped==='有'?'有':c.trapped==='無'?'無':'?'}</div><div class="metric-label">受困狀況</div><div class="subline">${c.trapped==='有'?`${c.trappedCount||0} 人`:c.trapped==='無'?'確認無人受困':'尚未確認'}｜點選查看</div></button>
+    <button type="button" class="mini-card summary-link-card" data-summary-page="arrivalSection" data-summary-stage="人"><div class="metric">${c.trapped==='有'?'有':c.trapped==='無'?'無':'?'}</div><div class="metric-label">受困狀況</div><div class="subline">${c.trapped==='有'?(Number(c.trappedCount)>0?`${Number(c.trappedCount)} 人`:'人數待確認'):c.trapped==='無'?'確認無人受困':'尚未確認'}｜點選查看</div></button>
     <button type="button" class="mini-card summary-link-card" data-summary-page="dashboardSection"><div class="metric">${live.vehicles.length}</div><div class="metric-label">車輛</div><div class="subline">部署與任務細節</div></button>
     <button type="button" class="mini-card summary-link-card" data-summary-page="dashboardSection"><div class="metric">${FCFieldEntry.summary(live.crews).known}${FCFieldEntry.summary(live.crews).pending?'+?':''}</div><div class="metric-label">已確認人數小計</div><div class="subline">${FCFieldEntry.summary(live.crews).pending} 筆待補｜點選查看</div></button>
     <button type="button" class="mini-card summary-link-card" data-summary-page="tacticalMapSection"><div class="metric">${live.hoses.length}</div><div class="metric-label">水線</div><div class="subline">連接與部署細節</div></button>
@@ -1767,20 +1793,29 @@ function renderDeploymentPalette(){
   }));
 }
 function tacticalStatusV3(message){const el=$('tacticalCanvasStatusV3');if(el)el.textContent=message;}
+function tacticalCollectionItemV31(coll,id){return (live[coll]||[]).find(item=>item.id===id)||null;}
+function tacticalSceneNodeV31(coll,id){return tacticalSceneV3?.allNodes?.find(node=>node.coll===coll&&node.id===id)||null;}
+function tacticalObjectLabelV31(coll,id){const node=tacticalSceneNodeV31(coll,id),item=tacticalCollectionItemV31(coll,id);return node?.label||item?.name||item?.unit||item?.type||'戰術物件';}
+function tacticalEndpointV31(coll,id){const item=tacticalCollectionItemV31(coll,id);if(!item||!['vehicles','crews'].includes(coll))return null;if(coll==='vehicles'&&item.canHose===false)return null;return {coll,id,item,type:coll==='vehicles'?'vehicle':'crew',name:tacticalObjectLabelV31(coll,id)};}
+function clearTacticalSelectionV31(){tacticalObjectSelectionV31=null;tacticalVehicleSelectionV3='';}
+function selectTacticalObjectV31(coll,id){tacticalObjectSelectionV31={coll,id};tacticalVehicleSelectionV3=coll==='vehicles'?id:'';}
+function openTacticalObjectV31(coll,id){if(coll==='vehicles')editVehicle(id);else if(coll==='crews')editCrew(id);else if(coll==='hazards')editHazard(id);else {const node=tacticalSceneNodeV31(coll,id);if(node)openActionSheet(node.label,`<p>${escapeHtml(node.detail||'依已確認資料顯示')}</p>`);}}
 function renderTacticalCanvasV3(){
   const canvas=$('tacticalCanvasV3');if(!canvas||!currentCase||!window.FCScene32)return;
-  tacticalSceneV3=FCScene32.build(currentCase,{vehicles:live.vehicles,crews:live.crews,hoses:live.hoses,hazards:live.hazards,sitreps:live.sitreps});
+  tacticalSceneV3=FCScene32.build(currentCase,{vehicles:live.vehicles,crews:live.crews,hoses:live.hoses,hazards:live.hazards,sitreps:live.sitreps},{all:true});
   canvas.innerHTML=FCScene32.svg(tacticalSceneV3);
-  if(tacticalVehicleSelectionV3&&!live.vehicles.some(v=>v.id===tacticalVehicleSelectionV3))tacticalVehicleSelectionV3='';
+  if(tacticalObjectSelectionV31&&!tacticalSceneV31HasObject(tacticalObjectSelectionV31))clearTacticalSelectionV31();
   if(tacticalHoseSelectionV3&&!live.hoses.some(h=>h.id===tacticalHoseSelectionV3))tacticalHoseSelectionV3='';
-  canvas.querySelector(`[data-fc32-coll="vehicles"][data-fc32-id="${CSS.escape(tacticalVehicleSelectionV3)}"]`)?.classList.add('tactical-selected-v3');
+  if(tacticalObjectSelectionV31)canvas.querySelector(`[data-fc32-coll="${CSS.escape(tacticalObjectSelectionV31.coll)}"][data-fc32-id="${CSS.escape(tacticalObjectSelectionV31.id)}"]`)?.classList.add('tactical-selected-v3');
   canvas.querySelector(`[data-fc32-coll="hoses"][data-fc32-id="${CSS.escape(tacticalHoseSelectionV3)}"]`)?.classList.add('tactical-selected-v3');
   if(pendingTool?.type==='hazard')tacticalStatusV3(`圖示放置模式｜請在畫布點選「${pendingTool.hazardType}」位置`);
-  else if(tacticalVehicleSelectionV3){const v=live.vehicles.find(x=>x.id===tacticalVehicleSelectionV3);tacticalStatusV3(`已選取 ${vehicleDisplayName(v||{})}｜點另一台車建立水線；再點本車開啟詳細操作`);}
+  else if(tacticalObjectSelectionV31){const s=tacticalObjectSelectionV31,label=tacticalObjectLabelV31(s.coll,s.id),endpoint=tacticalEndpointV31(s.coll,s.id);tacticalStatusV3(endpoint?`已選取 ${label}｜點另一台車或人員建立水線；再點本物件開啟詳細操作`:`已選取 ${label}｜再點本物件開啟詳細操作`);}
   else if(tacticalHoseSelectionV3)tacticalStatusV3('已選取水線｜可移除連線，完成後可短時間復原');
-  else tacticalStatusV3('查看模式｜點第一台車選取；再點第二台車建立水線');
+  else tacticalStatusV3('查看模式｜單點選取；再點同一物件開啟設定；長按可拖動');
   canvas.onclick=handleTacticalCanvasClickV3;
+  bindTacticalPointerV31(canvas);
 }
+function tacticalSceneV31HasObject(selection){return !!tacticalSceneV3?.allNodes?.some(node=>node.coll===selection.coll&&node.id===selection.id);}
 function tacticalPointV3(event){
   const svg=$('tacticalCanvasV3')?.querySelector('svg'),scene=tacticalSceneV3;if(!svg||!scene)return null;
   const rect=svg.getBoundingClientRect();if(!rect.width||!rect.height)return null;
@@ -1788,35 +1823,79 @@ function tacticalPointV3(event){
   return FCScene32.ll(scene.box,{x:scene.bounds.minX+vx/scene.scale,y:scene.bounds.maxY-vy/scene.scale});
 }
 async function handleTacticalCanvasClickV3(event){
+  if(Date.now()<tacticalSuppressClickUntilV31)return;
   const target=event.target.closest('[data-fc32-coll]');
   if(target){
     const coll=target.dataset.fc32Coll,id=target.dataset.fc32Id;
-    if(coll==='vehicles'){
-      const vehicle=live.vehicles.find(v=>v.id===id);if(!vehicle)return;
-      tacticalHoseSelectionV3='';
-      if(!tacticalVehicleSelectionV3){tacticalVehicleSelectionV3=id;renderTacticalCanvasV3();return;}
-      if(tacticalVehicleSelectionV3===id){tacticalVehicleSelectionV3='';renderTacticalCanvasV3();editVehicle(id);return;}
-      const source=live.vehicles.find(v=>v.id===tacticalVehicleSelectionV3);tacticalVehicleSelectionV3='';
-      if(!source?.canHose){renderTacticalCanvasV3();toast(`${vehicleDisplayName(source||{})} 的車種不可作為水線起點`);return;}
-      const tool={type:'hoseConnect',vehicleId:source.id,vehicleName:source.name,unit:source.unit,owner:source.unit||profile?.unit||'',port:firstAvailableHosePort(source.id),task:'水線作業',kind:'供水線',targetType:'vehicle',targetId:vehicle.id};
-      await addHoseToTarget(tool);renderTacticalCanvasV3();return;
-    }
-    tacticalVehicleSelectionV3='';
-    if(coll==='hoses'){tacticalHoseSelectionV3=id;renderTacticalCanvasV3();openTacticalHoseSheetV3(id);return;}
-    if(coll==='crews'){renderTacticalCanvasV3();editCrew(id);return;}
-    if(coll==='hazards'){renderTacticalCanvasV3();editHazard(id);return;}
-    renderTacticalCanvasV3();return;
+    if(coll==='hoses'){clearTacticalSelectionV31();tacticalHoseSelectionV3=id;renderTacticalCanvasV3();openTacticalHoseSheetV3(id);return;}
+    tacticalHoseSelectionV3='';
+    const previous=tacticalObjectSelectionV31;
+    if(!previous){selectTacticalObjectV31(coll,id);renderTacticalCanvasV3();return;}
+    if(previous.coll===coll&&previous.id===id){clearTacticalSelectionV31();renderTacticalCanvasV3();openTacticalObjectV31(coll,id);return;}
+    const source=tacticalEndpointV31(previous.coll,previous.id),destination=tacticalEndpointV31(coll,id);
+    if(source&&destination){clearTacticalSelectionV31();await addTacticalHoseV31(source,destination);renderTacticalCanvasV3();return;}
+    if(source||destination)toast('此圖示無法連接水線',2600);
+    selectTacticalObjectV31(coll,id);renderTacticalCanvasV3();return;
   }
   if(pendingTool?.type==='hazard'){
     const tool={...pendingTool},ll=tacticalPointV3(event);pendingTool=null;
     if(ll){await addHazardAt(tool.hazardType,ll.lat,ll.lng);$('tacticalIconPaletteV3')&&($('tacticalIconPaletteV3').open=false);renderTacticalCanvasV3();}
     return;
   }
-  tacticalVehicleSelectionV3='';tacticalHoseSelectionV3='';renderTacticalCanvasV3();
+  clearTacticalSelectionV31();tacticalHoseSelectionV3='';renderTacticalCanvasV3();
 }
+async function addTacticalHoseV31(source,destination){
+  if(source.coll===destination.coll&&source.id===destination.id){toast('水線起點與終點不能相同');return;}
+  const duplicate=live.hoses.some(h=>(h.sourceId||h.vehicleId)===source.id&&h.targetId===destination.id);
+  if(duplicate){toast('此起點與終點已有水線；如需平行雙線請使用水線詳細工具');return;}
+  const port=source.type==='vehicle'?firstAvailableHosePort(source.id):'攻擊線';
+  const record={sourceType:source.type,sourceId:source.id,sourceName:source.name,vehicleId:source.type==='vehicle'?source.id:'',vehicleName:source.type==='vehicle'?source.name:'',unit:source.item.unit||'',owner:source.item.unit||profile?.unit||'',port,task:'水線作業',kind:destination.type==='vehicle'?'供水線':'進攻水線',status:'規劃',targetType:destination.type,targetId:destination.id,targetName:destination.name,from:Number.isFinite(source.item.lat)&&Number.isFinite(source.item.lng)?[source.item.lat,source.item.lng]:null};
+  const hoseId=await addItem('hoses',record);pushMapUndo(`復原建立水線 ${source.name} → ${destination.name}`,async()=>deleteMapRecordSilent('hoses',hoseId));await addLog('hose',`建立連結水線：${source.name} → ${destination.name}`);toast(`已建立 ${source.name} → ${destination.name} 水線`);
+}
+
+function bindTacticalPointerV31(canvas){
+  const svg=canvas.querySelector('svg');if(!svg)return;
+  svg.querySelectorAll('[data-fc32-coll]').forEach(node=>{
+    const coll=node.dataset.fc32Coll,id=node.dataset.fc32Id;if(!['vehicles','crews','hazards','zones'].includes(coll))return;
+    node.addEventListener('pointerdown',event=>beginTacticalPointerV31(event,node,canvas,svg,coll,id));
+  });
+}
+function beginTacticalPointerV31(event,node,canvas,svg,coll,id){
+  if(!event.isPrimary||event.button>0)return;
+  cancelTacticalPointerV31();
+  const point={x:event.clientX,y:event.clientY},state={pointerId:event.pointerId,node,canvas,svg,coll,id,start:point,last:point,active:false,timer:null};
+  state.timer=setTimeout(()=>{if(tacticalPointerV31!==state)return;state.active=true;selectTacticalObjectV31(coll,id);node.classList.add('tactical-dragging-v31','tactical-selected-v3');canvas.classList.add('tactical-drag-active-v31');node.setPointerCapture?.(state.pointerId);tacticalStatusV3(`正在移動 ${tacticalObjectLabelV31(coll,id)}｜放開後儲存位置`);},360);
+  tacticalPointerV31=state;
+  const move=e=>moveTacticalPointerV31(e,state),up=e=>finishTacticalPointerV31(e,state),cancel=()=>cancelTacticalPointerV31(state);
+  state.listeners={move,up,cancel};node.addEventListener('pointermove',move);node.addEventListener('pointerup',up,{once:true});node.addEventListener('pointercancel',cancel,{once:true});
+}
+function moveTacticalPointerV31(event,state){
+  if(tacticalPointerV31!==state||event.pointerId!==state.pointerId)return;state.last={x:event.clientX,y:event.clientY};const dx=state.last.x-state.start.x,dy=state.last.y-state.start.y;
+  if(!state.active){if(Math.hypot(dx,dy)>10)cancelTacticalPointerV31(state);return;}
+  event.preventDefault();event.stopPropagation();state.node.style.transform=`translate(${dx}px,${dy}px)`;
+}
+async function finishTacticalPointerV31(event,state){
+  if(tacticalPointerV31!==state)return;clearTimeout(state.timer);detachTacticalPointerV31(state);
+  if(!state.active){tacticalPointerV31=null;return;}
+  event.preventDefault();event.stopPropagation();const dx=event.clientX-state.start.x,dy=event.clientY-state.start.y,scene=tacticalSceneV3,source=scene?.allNodes?.find(n=>n.coll===state.coll&&n.id===state.id),rect=state.svg.getBoundingClientRect();
+  state.node.style.transform='';state.node.classList.remove('tactical-dragging-v31');state.canvas.classList.remove('tactical-drag-active-v31');tacticalPointerV31=null;tacticalSuppressClickUntilV31=Date.now()+500;
+  if(!source||!rect.width)return renderTacticalCanvasV3();
+  const factor=scene.W/rect.width,pos=FCScene32.ll(scene.box,{x:source.x+dx*factor/scene.scale,y:source.y-dy*factor/scene.scale});
+  try{await updateTacticalPositionV31(state.coll,state.id,{...pos,positionManual:true,staged:false},`移動${tacticalObjectLabelV31(state.coll,state.id)}`);toast('位置已同步儲存');}catch(error){toast(`位置儲存失敗：${error.message}`,4600);}finally{renderTacticalCanvasV3();}
+}
+async function updateTacticalPositionV31(coll,id,patch,label){
+  if(coll==='zones'){
+    const node=tacticalSceneNodeV31(coll,id);if(!node)return;const hazardId=await addItem('hazards',{type:node.label||'戰術圖示',lat:patch.lat,lng:patch.lng,positionManual:true,sourceZoneId:id});pushMapUndo(`復原${label}`,()=>deleteMapRecordSilent('hazards',hazardId));return;
+  }
+  const item=tacticalCollectionItemV31(coll,id);if(!item)return;const finalPatch={...patch};
+  if(['vehicles','crews'].includes(coll)&&Number.isFinite(finalPatch.lat)&&Number.isFinite(finalPatch.lng))finalPatch.face=mapFace30(finalPatch.lat,finalPatch.lng);
+  const before={};Object.keys(finalPatch).forEach(key=>before[key]=item[key]);await updateItem(coll,id,finalPatch);pushMapUndo(`復原${label}`,()=>updateItem(coll,id,before));
+}
+function detachTacticalPointerV31(state){if(!state?.listeners)return;state.node.removeEventListener('pointermove',state.listeners.move);state.node.removeEventListener('pointerup',state.listeners.up);state.node.removeEventListener('pointercancel',state.listeners.cancel);}
+function cancelTacticalPointerV31(state=tacticalPointerV31){if(!state)return;clearTimeout(state.timer);detachTacticalPointerV31(state);state.node.style.transform='';state.node.classList.remove('tactical-dragging-v31');state.canvas.classList.remove('tactical-drag-active-v31');if(tacticalPointerV31===state)tacticalPointerV31=null;}
 function openTacticalHoseSheetV3(id){
   const hose=live.hoses.find(h=>h.id===id);if(!hose)return;
-  const target=escapeHtml(hose.targetName||'終點待確認'),source=escapeHtml(hose.vehicleName||hose.unit||'來源車輛');
+  const target=escapeHtml(hose.targetName||'終點待確認'),source=escapeHtml(hose.sourceName||hose.vehicleName||hose.unit||'水線起點');
   openActionSheet('水線操作',`<div class="readonly-card"><b>${source} → ${target}</b><br>${escapeHtml(hose.kind||'水線')}｜${escapeHtml(hose.port||'')}</div><div class="button-row"><button id="removeTacticalHoseV3" class="btn danger" type="button">移除水線</button><button id="cancelTacticalHoseV3" class="btn ghost" type="button">取消</button></div>`);
   $('cancelTacticalHoseV3').onclick=()=>{tacticalHoseSelectionV3='';closeActionSheet();renderTacticalCanvasV3();};
   $('removeTacticalHoseV3').onclick=async()=>{closeActionSheet();await deleteHose(id);tacticalHoseSelectionV3='';renderTacticalCanvasV3();};
@@ -2918,7 +2997,7 @@ async function addHoseToTarget(tool){
   await addLog('hose',`建立連結水線：${vehicleDisplayName(v||tool)} ${tool.port||''} → ${targetName}`);
   toast(`水線已連接至${targetName}`);
 }
-function startHazardTool(type){ pendingTool = { type:'hazard', hazardType:type }; tacticalVehicleSelectionV3='';tacticalHoseSelectionV3='';renderTacticalCanvasV3();toast(`請在戰術畫布點選「${type}」位置`); }
+function startHazardTool(type){ pendingTool = { type:'hazard', hazardType:type }; clearTacticalSelectionV31();tacticalHoseSelectionV3='';renderTacticalCanvasV3();toast(`請在戰術畫布點選「${type}」位置`); }
 async function addHazardAt(type, lat, lng){ const id=await addItem('hazards', { type, lat, lng }); pushMapUndo(`復原新增標示 ${type}`,async()=>deleteMapRecordSilent('hazards',id)); await addLog('hazard', `新增標示：${type}`); toast(`${type} 已標示`); }
 function vehicleType(name){
   const n=(String(name).match(/\d/)||['1'])[0];
@@ -4173,8 +4252,9 @@ function renderBuildingOps(){
   }
   $('verticalSection').innerHTML = levels.map(f => {
     const a = ops.floorActions?.find(x=>Number(x.floor)===f) || {floor:f, action:'未標示', note:''};
-    const residents=Array.isArray(a.residents)?a.residents:[],summary=window.FCV34V3?.floorResidentSummary(residents)||{households:residents.length,knownTotal:0,pending:0};
-    const residentSection=(a.action==='疏散離開'||residents.length)?`<div class="floor-residents-v3"><div class="floor-resident-summary-v3"><span>住戶｜已記錄 ${summary.households} 戶｜已確認 ${summary.knownTotal} 人${summary.pending?`｜${summary.pending} 戶人數未完整`:''}</span><button type="button" class="btn small primary" data-add-resident="${f}">＋新增住戶</button></div>${residents.map(r=>residentCardHtmlV3(f,r)).join('')||'<div class="hint">尚未新增本樓住戶紀錄</div>'}</div>`:'';
+    const residents=Array.isArray(a.residents)?a.residents:[],summary=window.FCV34V3?.floorResidentSummary(residents)||{households:residents.length,knownTotal:0,confirmedMinimum:0,pending:0};
+    const populationText=summary.pending?`已確認至少 ${summary.confirmedMinimum} 人｜${summary.pending} 戶人數未完整`:`已確認 ${summary.knownTotal} 人`;
+    const residentSection=`<div class="floor-residents-v3"><div class="floor-resident-summary-v3"><span>住戶｜已記錄 ${summary.households} 戶｜${populationText}</span><button type="button" class="btn small primary" data-add-resident="${f}">＋新增住戶</button></div>${residents.map(r=>residentCardHtmlV3(f,r)).join('')||'<div class="hint">尚未新增本樓住戶紀錄</div>'}</div>`;
     return `<div class="floor-row ${f===fireFloorNum?'fire-floor':''}" data-floor="${f}">
       <div class="floor-label">${floorLabel(f)}</div>
       <select class="floor-action" data-floor-action="${f}"><option ${a.action==='滅火攻擊'?'selected':''}>滅火攻擊</option><option ${a.action==='阻隔延燒'?'selected':''}>阻隔延燒</option><option ${a.action==='就地避難'?'selected':''}>就地避難</option><option ${a.action==='疏散離開'?'selected':''}>疏散離開</option><option ${a.action==='搜索救援'?'selected':''}>搜索救援</option><option ${a.action==='未標示'?'selected':''}>未標示</option></select>
@@ -4188,6 +4268,7 @@ function renderBuildingOps(){
   document.querySelectorAll('[data-edit-resident]').forEach(btn=>btn.onclick=()=>openResidentEditorV3(Number(btn.dataset.residentFloor),btn.dataset.editResident));
   document.querySelectorAll('[data-delete-resident]').forEach(btn=>btn.onclick=()=>deleteResidentV3(Number(btn.dataset.residentFloor),btn.dataset.deleteResident));
   loadPrivatePhotos($('verticalSection'));
+  renderBuildingResidentDetailsV31();
   renderFloorPlan();
   setBuildingOpsView(activeBuildingView || (isWideBuildingViewport()?'split':'vertical'));
   selectFloorTool(selectedFloorTool || '起火點', false);
@@ -4203,12 +4284,11 @@ function collectBuildingOpsFromUI(){
   currentCase.buildingOps = ops;
 }
 function residentTotalLabelV3(row={}){
-  const total=window.FCV34V3?.residentTotal(row.maleCount,row.femaleCount);
-  return total===null?'總人數未完整':`共 ${total} 人`;
+  return window.FCV34V3?.residentPopulationLabel(row.maleCount,row.femaleCount)||'人數未完整';
 }
 function residentCardHtmlV3(floor,row={}){
   const id=escapeHtml(row.id||''),counts=`男 ${row.maleCount==null?'未知':row.maleCount}｜女 ${row.femaleCount==null?'未知':row.femaleCount}｜${residentTotalLabelV3(row)}`;
-  return `<article class="resident-card-v3"><div><strong>${escapeHtml(row.unitNo||'門牌／戶號待補')}</strong><p>${escapeHtml(row.contact||'聯絡人待補')}</p><p>${escapeHtml(counts)}</p>${row.note?`<p>${escapeHtml(row.note)}</p>`:''}${row.photoStatus==='pending'?'<p class="photo-pending">照片待重新上傳</p>':''}<div class="resident-actions-v3"><button type="button" class="btn small ghost" data-edit-resident="${id}" data-resident-floor="${floor}">修改</button><button type="button" class="btn small danger" data-delete-resident="${id}" data-resident-floor="${floor}">刪除</button></div></div><div class="private-photo" data-photo-path="${escapeHtml(row.photoPath||'')}">${row.photoStatus==='pending'&&!row.photoPath?'照片待補':''}</div></article>`;
+  return `<article class="resident-card-v3"><div><strong>${escapeHtml(row.unitNo||'門牌／戶號待補')}</strong>${row.address?`<p>${escapeHtml(row.address)}</p>`:''}<p>${escapeHtml(row.contact||'聯絡人待補')}</p>${row.phone?`<p>${escapeHtml(row.phone)}</p>`:''}<p>${escapeHtml(counts)}</p>${row.status?`<p>狀態：${escapeHtml(row.status)}</p>`:''}${row.note?`<p>${escapeHtml(row.note)}</p>`:''}${row.photoStatus==='pending'?'<p class="photo-pending">照片待重新上傳</p>':''}<div class="resident-actions-v3"><button type="button" class="btn small ghost" data-edit-resident="${id}" data-resident-floor="${floor}">修改</button><button type="button" class="btn small danger" data-delete-resident="${id}" data-resident-floor="${floor}">刪除</button></div></div><div class="private-photo" data-photo-path="${escapeHtml(row.photoPath||'')}">${row.photoStatus==='pending'&&!row.photoPath?'照片待補':''}</div></article>`;
 }
 function residentCountOptionsV3(value){
   const current=value==null?'':String(value),values=['',...Array.from({length:16},(_,i)=>String(i))];if(current&&!values.includes(current))values.push(current);
@@ -4216,13 +4296,14 @@ function residentCountOptionsV3(value){
 }
 function residentDraftFromSheetV3(existing={}){
   const male=$('residentMaleV3').value===''?null:Number($('residentMaleV3').value),female=$('residentFemaleV3').value===''?null:Number($('residentFemaleV3').value);
-  return {...existing,unitNo:$('residentUnitNoV3').value.trim(),contact:$('residentContactV3').value.trim(),maleCount:male,femaleCount:female,totalCount:window.FCV34V3?.residentTotal(male,female)??null,note:$('residentNoteV3').value.trim(),updatedAt:Date.now()};
+  return {...existing,address:$('residentAddressV31').value.trim(),unitNo:$('residentUnitNoV3').value.trim(),contact:$('residentContactV3').value.trim(),phone:$('residentPhoneV31').value.trim(),maleCount:male,femaleCount:female,totalCount:window.FCV34V3?.residentTotal(male,female)??null,status:$('residentStatusV31').value,note:$('residentNoteV3').value.trim(),updatedAt:Date.now()};
 }
-function updateResidentTotalV3(){const slot=$('residentTotalV3');if(!slot)return;const male=$('residentMaleV3').value===''?null:Number($('residentMaleV3').value),female=$('residentFemaleV3').value===''?null:Number($('residentFemaleV3').value),total=window.FCV34V3?.residentTotal(male,female);slot.textContent=total===null?'總人數：未完整':`總人數：${total}`;}
+function updateResidentTotalV3(){const slot=$('residentTotalV3');if(!slot)return;const male=$('residentMaleV3').value===''?null:Number($('residentMaleV3').value),female=$('residentFemaleV3').value===''?null:Number($('residentFemaleV3').value);slot.textContent=`總人數：${window.FCV34V3?.residentPopulationLabel(male,female)||'未完整'}`;}
 function openResidentEditorV3(floor,id=''){
   collectBuildingOpsFromUI();const action=getBuildingOps().floorActions.find(x=>Number(x.floor)===Number(floor))||{residents:[]},existing=(action.residents||[]).find(r=>r.id===id)||{};
-  const address=String(currentCase.confirmedAddress||currentCase.correctedAddress||currentCase.address||'').trim();
-  openActionSheet(`${floorLabel(floor)}｜${id?'修改住戶':'新增住戶'}`,`<div class="resident-editor-grid-v3"><div class="field"><label>門牌／戶號<input id="residentUnitNoV3" value="${escapeHtml(existing.unitNo||'')}" placeholder="${escapeHtml(address?address+'（補 2號／A戶）':'例：2號／A戶')}" /></label></div><div class="field"><label>聯絡人<input id="residentContactV3" value="${escapeHtml(existing.contact||'')}" /></label></div></div><div class="resident-population-v3"><label>男性人數<select id="residentMaleV3">${residentCountOptionsV3(existing.maleCount)}</select></label><label>女性人數<select id="residentFemaleV3">${residentCountOptionsV3(existing.femaleCount)}</select></label><div id="residentTotalV3" class="resident-total-v3"></div></div><div class="field"><label>補充<textarea id="residentNoteV3" rows="3">${escapeHtml(existing.note||'')}</textarea></label></div><label class="photo-input">照片（選填）<input id="residentPhotoV3" type="file" accept="image/*" capture="environment" /></label><div id="residentPhotoPreviewV3" class="local-photo-preview"></div><div id="residentSaveStatusV3" class="hint" role="status">尚未儲存</div><div class="button-row"><button id="saveResidentV3" class="btn primary" type="button">確認儲存</button><button id="cancelResidentV3" class="btn ghost" type="button">取消</button></div>`);
+  const address=String(currentCase.confirmedAddress||currentCase.correctedAddress||currentCase.reportedAddress||currentCase.address||'').trim();
+  const statusOptions=['','已確認在場','已疏散','已救出','送醫','死亡'].map(value=>`<option value="${value}" ${existing.status===value?'selected':''}>${value||'尚未確認'}</option>`).join('');
+  openActionSheet(`${floorLabel(floor)}｜${id?'修改住戶':'新增住戶'}`,`<div class="field"><label>地址（已帶入案件地址，可修改）<input id="residentAddressV31" value="${escapeHtml(existing.address||address)}" /></label></div><div class="resident-editor-grid-v3"><div class="field"><label>門牌／戶號<input id="residentUnitNoV3" value="${escapeHtml(existing.unitNo||'')}" placeholder="例：2號／A戶／1號之2" /></label></div><div class="field"><label>聯絡人姓名<input id="residentContactV3" value="${escapeHtml(existing.contact||'')}" /></label></div><div class="field"><label>電話<input id="residentPhoneV31" inputmode="tel" value="${escapeHtml(existing.phone||'')}" /></label></div><div class="field"><label>人員狀態<select id="residentStatusV31">${statusOptions}</select></label></div></div><div class="resident-population-v3"><label>男性人數<select id="residentMaleV3">${residentCountOptionsV3(existing.maleCount)}</select></label><label>女性人數<select id="residentFemaleV3">${residentCountOptionsV3(existing.femaleCount)}</select></label><div id="residentTotalV3" class="resident-total-v3"></div></div><div class="field"><label>穿著／特徵／補充<textarea id="residentNoteV3" rows="3">${escapeHtml(existing.note||'')}</textarea></label></div><label class="photo-input">照片（選填）<input id="residentPhotoV3" type="file" accept="image/*" capture="environment" /></label><div id="residentPhotoPreviewV3" class="local-photo-preview"></div><div id="residentSaveStatusV3" class="hint" role="status">尚未儲存</div><div class="button-row"><button id="saveResidentV3" class="btn primary" type="button">確認儲存</button><button id="cancelResidentV3" class="btn ghost" type="button">取消</button></div>`);
   $('residentMaleV3').onchange=updateResidentTotalV3;$('residentFemaleV3').onchange=updateResidentTotalV3;updateResidentTotalV3();
   $('residentPhotoV3').onchange=e=>showLocalPhotoPreview(e.target.files[0],$('residentPhotoPreviewV3'));
   $('cancelResidentV3').onclick=closeActionSheet;
@@ -4230,12 +4311,17 @@ function openResidentEditorV3(floor,id=''){
 }
 async function saveResidentV3(floor,id,existing={}){
   const button=$('saveResidentV3'),file=$('residentPhotoV3')?.files[0],key=id||uid('resident');button.disabled=true;fieldEntryStatus('residentSaveStatusV3','儲存中');
-  try{assertCaseEditor();const draft=residentDraftFromSheetV3(existing);if(!draft.unitNo&&!draft.contact&&draft.maleCount===null&&draft.femaleCount===null&&!draft.note)throw Error('請至少填寫一項住戶資料');
-    await updateCaseSection('buildingOpsRevision',c=>{const ops=cloneBuildingOps(c.buildingOps),actions=Array.isArray(ops.floorActions)?ops.floorActions:[],index=actions.findIndex(x=>Number(x.floor)===Number(floor)),entry=index>=0?{...actions[index]}:{floor:Number(floor),action:'疏散離開',note:'',residents:[]},rows=Array.isArray(entry.residents)?[...entry.residents]:[],ri=rows.findIndex(r=>r.id===key);const row={...(ri>=0?rows[ri]:{}),...draft,id:key};if(ri>=0)rows[ri]=row;else rows.push(row);entry.residents=rows;if(index>=0)actions[index]=entry;else actions.push(entry);ops.floorActions=actions;return {buildingOps:ops};});
+  try{assertCaseEditor();const draft=residentDraftFromSheetV3(existing);if(!draft.unitNo&&!draft.contact&&!draft.phone&&draft.maleCount===null&&draft.femaleCount===null&&!draft.note)throw Error('請至少填寫一項住戶資料');
+    await updateCaseSection('buildingOpsRevision',c=>{const ops=cloneBuildingOps(c.buildingOps),actions=Array.isArray(ops.floorActions)?ops.floorActions:[],index=actions.findIndex(x=>Number(x.floor)===Number(floor)),entry=index>=0?{...actions[index]}:{floor:Number(floor),action:'未標示',note:'',residents:[]},rows=Array.isArray(entry.residents)?[...entry.residents]:[],ri=rows.findIndex(r=>r.id===key);const row={...(ri>=0?rows[ri]:{}),...draft,id:key};if(ri>=0)rows[ri]=row;else rows.push(row);entry.residents=rows;if(index>=0)actions[index]=entry;else actions.push(entry);ops.floorActions=actions;return {buildingOps:ops};});
     closeActionSheet();renderBuildingOps();
     if(file){try{const path=await uploadCasePhoto(`residents/${floor}`,key,file);await updateCaseSection('buildingOpsRevision',c=>{const ops=cloneBuildingOps(c.buildingOps);for(const entry of ops.floorActions||[])if(Number(entry.floor)===Number(floor))entry.residents=(entry.residents||[]).map(r=>r.id===key?{...r,photoPath:path,photoStatus:'ready'}:r);return {buildingOps:ops};});toast('住戶與照片已同步儲存');}catch(error){await updateCaseSection('buildingOpsRevision',c=>{const ops=cloneBuildingOps(c.buildingOps);for(const entry of ops.floorActions||[])if(Number(entry.floor)===Number(floor))entry.residents=(entry.residents||[]).map(r=>r.id===key?{...r,photoStatus:'pending'}:r);return {buildingOps:ops};});toast(`住戶文字已儲存；照片待重新上傳：${error.message}`,6500);}}
     else toast('住戶已同步儲存');renderBuildingOps();
   }catch(error){fieldEntryStatus('residentSaveStatusV3',`儲存失敗：${error.message}`);button.disabled=false;}
+}
+function renderBuildingResidentDetailsV31(){
+  const slot=$('buildingResidentDetailsV31');if(!slot)return;const entries=currentCase?.buildingOps?.floorActions||[],withRows=entries.filter(entry=>(entry.residents||[]).length);
+  slot.hidden=!withRows.length;if(!withRows.length){slot.innerHTML='';return;}
+  slot.innerHTML=`<div class="panel-title">樓層詳細資料</div>${withRows.map(entry=>{const rows=entry.residents||[],summary=window.FCV34V3?.floorResidentSummary(rows),details=rows.map(row=>{const pop=window.FCV34V3?.residentPopulationLabel(row.maleCount,row.femaleCount)||'人數未完整';return `${row.unitNo||'戶號待補'}${row.contact?row.contact:''}，${pop}${row.status?`，${row.status}`:''}`;}).join('；');return `<p><strong>${floorLabel(entry.floor)}：</strong>共記錄 ${summary.households} 戶。${escapeHtml(details)}。</p>`;}).join('')}`;
 }
 async function deleteResidentV3(floor,id){
   const entry=getBuildingOps().floorActions.find(x=>Number(x.floor)===Number(floor)),row=(entry?.residents||[]).find(r=>r.id===id);if(!row||!confirm(`確認刪除 ${floorLabel(floor)}「${row.unitNo||'未命名住戶'}」？`))return;
@@ -4497,7 +4583,7 @@ function deploymentMapSummary(){
     lines.push(...live.vehicles.map(x=>`${vehicleDisplayName(x)}${x.face?'於'+x.face:''}${x.task?`執行${x.task}`:x.status?`為${x.status}`:''}`));
   }
   if(live.hoses.length){
-    lines.push(...live.hoses.map((x,i)=>`${x.vehicleName||x.label||x.owner||`第${i+1}線`}${x.targetName?(x.task==='車輛串接（流向未指定）'?`與${x.targetName}串接（流向未指定）`:`接至${x.targetName}`):''}${(x.mission||x.task)&&x.task!=='車輛串接（流向未指定）'?`執行${x.mission||x.task}`:''}${x.supplyUnconfirmed?'（供水起點待確認）':''}`));
+    lines.push(...live.hoses.map((x,i)=>`${x.sourceName||x.vehicleName||x.label||x.owner||`第${i+1}線`}${x.targetName?(x.task==='車輛串接（流向未指定）'?`與${x.targetName}串接（流向未指定）`:`接至${x.targetName}`):''}${(x.mission||x.task)&&x.task!=='車輛串接（流向未指定）'?`執行${x.mission||x.task}`:''}${x.supplyUnconfirmed?'（供水起點待確認）':''}`));
   }
   if(live.hazards.length){
     const names=[...new Set(live.hazards.map(x=>x.type||x.name||x.label).filter(Boolean))];
@@ -4518,7 +4604,7 @@ function deploymentMapSignature(){
   const raw=JSON.stringify({
     vehicles:keep(live.vehicles,['name','unit','task','status','lat','lng']),
     crews:keep(live.crews,['unit','leader','face','task','status','count','lat','lng']),
-    hoses:keep(live.hoses,['id','vehicleId','vehicleName','targetType','targetId','label','owner','targetName','mission','type']),
+    hoses:keep(live.hoses,['id','sourceType','sourceId','sourceName','vehicleId','vehicleName','targetType','targetId','label','owner','targetName','mission','type']),
     hazards:keep(live.hazards,['type','name','label','lat','lng']),
     floorActions:keep(ops.floorActions||[],['floor','action','note']),
     planMarkers:keep(ops.planMarkers||[],['floor','type','label','note','x','y','x2','y2'])
@@ -4570,7 +4656,7 @@ function renderDeploymentTextReference(dirty=false){
     status.className=`tag ${conflict?'red':manual?'amber':mapText?'green':'amber'}`;
   }
   const html=text?`<b>${manual?'現場文字紀錄':'圖面整理摘要'}</b><p>${escapeHtml(text)}</p>${conflict?'<div class="deployment-conflict-hint">圖面新增或調整後與文字關鍵資料不同，儲存時會要求確認。</div>':''}`:'';
-  ['deploymentTextReference','deploymentDrawingReference'].forEach(id=>{const el=$(id);if(!el)return;el.hidden=!text;el.innerHTML=html;});
+  ['deploymentTextReference'].forEach(id=>{const el=$(id);if(!el)return;el.hidden=!text;el.innerHTML=html;});
   renderDeploymentSopSummary();
 }
 function openDeploymentConflictSheet(onConfirm){

@@ -311,13 +311,18 @@
               <div class="overview-brief-head"><div><div class="eyebrow">長官快速掌握</div><h3>即時案件概要</h3></div><span id="overviewUpdatedMeta" class="overview-updated-meta">自動更新</span></div>
               <p id="overviewExecutiveText" class="overview-executive-text">案件資料彙整中。</p>
             </section>
+            <section id="overviewSituationCardV31" class="overview-brief-card" hidden>
+              <div class="overview-brief-head"><div><div class="eyebrow">已確認情報</div><h3>目前戰情</h3></div></div>
+              <div id="overviewSituationSummaryV31" class="overview-situation-summary-v31"></div>
+            </section>
             <div class="overview-visual-grid">
               <section class="overview-visual-card">
-                <div class="overview-visual-head"><div><div class="eyebrow">外部部署</div><h4>戰術部署快照</h4></div><button type="button" class="btn small ghost" data-case-page-jump="tacticalMapSection">前往部署修改</button></div>
+                <div class="overview-visual-head"><div><div class="eyebrow">外部部署</div><h4>戰術部署快照</h4></div></div>
                 <div id="overviewDeploymentSnapshot" class="overview-schematic-host"></div>
+                <p class="overview-edit-hint">如需調整人員、車輛、水線或戰術圖示，請至「部署」功能進行修改。</p>
               </section>
-              <section class="overview-visual-card">
-                <div class="overview-visual-head"><div><div class="eyebrow">建物內部</div><h4>作戰圖快照</h4></div><button type="button" class="btn small ghost" data-case-page-jump="tacticalMapSection">前往建物圖修改</button></div>
+              <section id="overviewBuildingCardV31" class="overview-visual-card" hidden>
+                <div class="overview-visual-head"><div><div class="eyebrow">建物內部</div><h4>作戰／人員摘要</h4></div></div>
                 <div id="overviewBuildingSnapshot" class="overview-schematic-host"></div>
               </section>
             </div>
@@ -675,7 +680,6 @@
                 <details id="buildingOpsDetails" class="accordion">
                   <summary><span>建物內部作戰圖｜縱向剖面 / 水平俯視</span><span class="chevron">›</span></summary>
                   <div class="accordion-body">
-                    <div id="deploymentDrawingReference" class="deployment-drawing-reference" hidden></div>
                     <div class="notice">點選「同步樓層」後，左側會依建物樓層產生縱向剖面圖；右側可切換火災樓層並標示起火點、受困者、死亡者、入口、隔間與水線。此資料會併入報告與操作紀錄。</div>
                     <div id="orientationHint" class="orientation-hint" hidden>
                       <b>建議將手機轉為橫向</b><span>橫向可取得較大的繪圖區；直向仍可完整操作。</span>
@@ -694,6 +698,7 @@
                           <button id="addBasementFloorBtn" class="btn small ghost" type="button">＋地下室</button>
                         </div>
                         <div id="verticalSection" class="vertical-section"></div>
+                        <section id="buildingResidentDetailsV31" class="building-resident-details-v31" hidden></section>
                       </div>
                       <div class="building-panel plan-panel" id="planBuildingPanel">
                         <div class="building-panel-head"><div><div class="panel-title">水平俯視作戰圖</div><div class="hint">直式、橫式、平板與電腦皆可使用；寬螢幕會自動放大繪圖區。</div></div><div class="button-row compact-actions"><button id="toggleBuildingFullscreenBtn" class="btn small ghost" type="button">全幅繪圖</button><button id="saveBuildingOpsBtn" class="btn small primary" type="button">儲存作戰圖</button></div></div>

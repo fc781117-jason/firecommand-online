@@ -62,12 +62,12 @@ function build(c,state,options={}){
  if(standby){const at=standbyPoint(0);at.y+=7;make('zones',{id:'standby32'},at,'待命區',{type:'zone',zoneType:'rehab'});}
  const corners=[[-b.widthM/2,-b.heightM/2],[b.widthM/2,-b.heightM/2],[b.widthM/2,b.heightM/2],[-b.widthM/2,b.heightM/2]].map(p=>local(...p));
  const entrances=[local(0,-b.heightM/2),local(b.widthM/2,0),local(0,b.heightM/2),local(-b.widthM/2,0)];
- const hoses=(s.hoses||[]).map(h=>{let source=map.get(h.vehicleId);if(!source&&h.vehicleName)source=nodes.find(v=>v.coll==='vehicles'&&v.label===h.vehicleName);
+ const hoses=(s.hoses||[]).map(h=>{let source=map.get(h.sourceId||h.vehicleId);if(!source&&(h.sourceName||h.vehicleName))source=nodes.find(v=>v.label===(h.sourceName||h.vehicleName));
   if(!source&&h.targetType==='buildingFace'){const hs=heads[h.targetName]||[];if(hs.length===1)source=map.get(hs[0].id);}
   if(!source){notes.push((h.port||'水線')+'供水來源待確認');return {...h,missing:true};}return {...h,source};});
  const paths=[];
  for(const h of hoses){if(h.missing)continue;const a=h.source,peers=hoses.filter(x=>!x.missing&&x.source.id===a.id).sort((x,y)=>String(x.id).localeCompare(String(y.id))),rank=peers.indexOf(h),spread=(rank-(peers.length-1)/2)*1.8;
-  const direction=rotate({x:0,y:1},-a.heading),normal={x:-direction.y,y:direction.x};
+  const direction=rotate({x:0,y:1},-(Number(a.heading)||0)),normal={x:-direction.y,y:direction.x};
   const start={x:a.x+direction.x*2.8+normal.x*spread,y:a.y+direction.y*2.8+normal.y*spread};
   let end=map.get(h.targetId),path;
   if(h.targetType==='buildingFace'){
