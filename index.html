@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="./assets/account-admin.css?v=33" />
   <link rel="stylesheet" href="./assets/field-entry.css?v=34.2" />
   <link rel="stylesheet" href="./assets/v31.css?v=32" /><link rel="stylesheet" href="./assets/v30.css?v=32" />
+  <link rel="stylesheet" href="./assets/v34-v3.css?v=34.3" />
 </head>
 <body>
   <div id="toast" class="toast" hidden></div>
@@ -322,6 +323,20 @@
             </div>
           </div>
         </details>
+        <details id="incidentLocationDetails" class="accordion">
+          <summary><span>案件定位／導航</span><span class="chevron">›</span></summary>
+          <div class="accordion-body">
+            <div class="notice compact">這裡保留真實地址、GPS 與導航定位；戰術部署圖另用消防示意畫布，兩者不強迫疊合。</div>
+            <div id="googlePlacesSearchHost" class="google-places-host" aria-label="Google 地址自動完成"></div>
+            <div class="field"><label>地址搜尋</label><input id="locationAddressInput" placeholder="例：新北市淡水區中正東路一段125號" /></div>
+            <div class="button-row compact-actions"><button id="googleAddressSearchBtn" type="button" class="btn small primary">Google 地址搜尋</button><button id="useCurrentGpsBtn" type="button" class="btn small ghost">使用目前 GPS</button><button id="setIncidentCenterBtn" type="button" class="btn small ghost">點地圖設定中心</button></div>
+            <div id="locationCandidateList" class="location-candidate-list"></div><div id="locationStatusPanel" class="location-status-panel"></div>
+            <div class="button-row compact-actions"><button id="confirmIncidentLocationBtn" type="button" class="btn small danger">確認並鎖定案件中心</button><button id="unlockIncidentLocationBtn" type="button" class="btn small ghost">解除案件中心鎖定</button></div>
+            <div id="map" class="map google-map" aria-label="案件定位 Google 地圖"></div>
+            <div id="mapLocationWarning" class="map-location-warning" hidden>目前僅有行政區備援中心，並非精準火場位置。請使用 Google 地址候選、現場 GPS 或手動點選後鎖定案件中心。</div>
+            <div id="mapUnavailablePanel" class="map-unavailable-panel" hidden><b>Google 地圖目前無法載入</b><span id="mapUnavailableMessage">請確認 Google Maps 設定與目前網域授權。</span></div>
+          </div>
+        </details>
       </section>
 
       <section id="arrivalSection" class="stack case-page-panel" data-case-page-panel="arrivalSection" hidden>
@@ -476,13 +491,18 @@
                   <label class="choice-chip"><input id="hazardStateHas" class="arrival-detail-input" type="radio" name="hazardState" value="has" /> 有危險物品</label>
                 </div>
                 <div id="hazardDetailFields" hidden>
-                  <div class="field"><label>危險物 / 危害資訊</label><textarea id="hazardItems" class="arrival-detail-input" rows="2" placeholder="例：桶裝瓦斯、化學品、氧氣鋼瓶、太陽能板、高壓電"></textarea></div>
-                  <div class="two-col compact-form">
-                    <div class="field"><label>關係人姓名</label><input id="hazardContact" class="arrival-detail-input" placeholder="例：屋主王先生" /></div>
-                    <div class="field"><label>電話</label><input id="hazardPhone" class="arrival-detail-input" inputmode="tel" placeholder="例：09xx-xxx-xxx" /></div>
+                  <div id="hazardSavedCard"></div>
+                  <div id="hazardEditFields">
+                    <div class="field"><label>危險物 / 危害資訊</label><textarea id="hazardItems" class="arrival-detail-input" rows="2" placeholder="例：桶裝瓦斯、化學品、氧氣鋼瓶、太陽能板、高壓電"></textarea></div>
+                    <div class="two-col compact-form">
+                      <div class="field"><label>關係人姓名</label><input id="hazardContact" class="arrival-detail-input" placeholder="例：屋主王先生" /></div>
+                      <div class="field"><label>電話</label><input id="hazardPhone" class="arrival-detail-input" inputmode="tel" placeholder="例：09xx-xxx-xxx" /></div>
+                    </div>
+                    <div class="field"><label>穿著／特徵／補充</label><textarea id="hazardAppearance" class="arrival-detail-input" rows="2" placeholder="例：紅色上衣、黑褲，位於第一面封鎖線外"></textarea></div>
+                    <label class="photo-input">拍照／更換照片<input id="hazardPhoto" type="file" accept="image/*" capture="environment" /></label>
+                    <div id="hazardPhotoPreview" class="local-photo-preview"></div>
+                    <div id="hazardSaveStatus" class="hint" role="status">尚未儲存</div><button id="hazardSaveBtn" type="button" class="btn primary full">確認儲存危險物品</button>
                   </div>
-                  <div class="field"><label>關係人穿著 / 特徵</label><input id="hazardAppearance" class="arrival-detail-input" placeholder="例：紅色上衣、黑褲，位於第一面封鎖線外" /></div>
-                  <div id="hazardSavedCard"></div><div id="hazardEditFields"><label class="photo-input">拍照／更換照片<input id="hazardPhoto" type="file" accept="image/*" capture="environment" /></label><div id="hazardSaveStatus" class="hint" role="status">尚未儲存</div><button id="hazardSaveBtn" type="button" class="btn primary full">確認儲存危險物品</button></div>
                 </div>
               </div>
               <div class="arrival-detail-panel" data-arrival-panel="firstSide" hidden>
@@ -598,13 +618,12 @@
 
       <section id="tacticalMapSection" class="map-section case-page-panel" data-case-page-panel="tacticalMapSection" hidden>
         <div class="section-head compact">
-          <div><div class="eyebrow">戰術地圖標示</div><h3>車輛 / 人員 / 危害標示 / 水線部署圖</h3></div>
-          <button id="fitMapBtn" class="btn small ghost">回到200m</button>
+          <div><div class="eyebrow">部署</div><h3>人員、車輛與戰術部署圖</h3></div>
         </div>
 
         <div class="field-entry-bars" aria-label="現場資源快速登錄">
           <details id="fieldCrewDetails" class="field-entry-bar"><summary><span>人員登錄／確認</span><small id="fieldCrewSummary">可先登錄單位，人數待補</small></summary><div class="field-entry-body">
-            <div class="field-entry-grid crew-grid-v2"><label>資料類型<select id="fieldCrewKind"><option value="crew">人員／單位</option></select></label><label>大隊<select id="fieldCrewBrigade"></select></label><label>出勤總人數<select id="fieldCrewCount"></select></label><label>分隊<select id="fieldCrewUnit"></select></label></div><div class="field-entry-grid crew-grid-v2"><label>面向<select id="fieldCrewFace"><option value="">未指定</option><option>第一面</option><option>第二面</option><option>第三面</option><option>第四面</option></select></label><label>任務<select id="fieldCrewTask"><option value="">未指定</option><option>待命</option><option>攻擊</option><option>搜索</option><option>休息</option><option>RIT</option></select></label></div>
+            <div class="field-entry-grid crew-grid-v2"><label>資料類型<select id="fieldCrewKind"><option value="crew">人員／單位</option></select></label><label>大隊<select id="fieldCrewBrigade"></select></label><label>出勤總人數<select id="fieldCrewCount"></select></label><label>分隊<select id="fieldCrewUnit"></select></label></div><div class="field-entry-grid crew-grid-v2"><label>面向<select id="fieldCrewFace"><option value="">未指定</option><option>第一面</option><option>第二面</option><option>第三面</option><option>第四面</option></select></label><label>任務<select id="fieldCrewTask"><option value="">未指定</option><option>待命</option><option>滅火攻擊</option><option>人命搜救</option><option>內攻</option><option>警戒</option><option>供水</option><option>排煙</option><option>救護</option><option>休息</option><option>RIT</option><option value="其他">其他</option></select></label></div><label id="fieldCrewTaskOtherWrap" hidden>其他任務<input id="fieldCrewTaskOther" maxlength="80" placeholder="輸入特殊任務" /></label>
             <div id="fieldCrewSaveStatus" class="hint" role="status">尚未儲存</div><button id="fieldCrewSaveBtn" type="button" class="btn primary full">確認儲存人員／單位</button><div id="fieldCrewList" class="field-entry-list"></div>
           </div></details>
           <details id="fieldVehicleDetails" class="field-entry-bar"><summary><span>車輛登錄／確認</span><small id="fieldVehicleSummary">只需大隊、單位、車號</small></summary><div class="field-entry-body">
@@ -614,9 +633,7 @@
           <details id="fieldMapDetails" class="field-entry-bar"><summary><span>圖面</span><small>戰術部署／建物繪圖</small></summary><div class="field-entry-body"><button type="button" class="field-entry-link" data-field-map-tool="select">戰術部署圖 <span>查看與編輯</span></button><button type="button" class="field-entry-link" id="openBuildingDrawing">建物繪圖 <span>進入同一案件的建物圖</span></button></div></details>
         </div>
 
-        <div id="deploymentScene32"></div>
-        <details class="road-tools32"><summary>道路對齊與底圖定位</summary><p>選擇部署面向，預覽道路後再套用。手動點選時，先點頭車、再點後方。</p><select id="roadFace32"><option>第一面</option><option>第二面</option><option>第三面</option><option>第四面</option></select><div class="button-row"><button id="suggestRoad32" type="button" class="btn small">辨識鄰近道路</button><button id="drawRoad32" type="button" class="btn small">在底圖點兩點</button><button id="reverseRoad32" type="button" class="btn small">反轉車流</button><button id="applyRoad32" type="button" class="btn small primary" disabled>套用道路排列</button></div><p id="roadMessage32" role="status"></p></details>
-        <details class="deployment-text-capture"><summary>部署文字紀錄與圖文核對</summary>
+        <details class="deployment-text-capture" hidden><summary>部署文字紀錄與圖文核對</summary>
           <div class="deployment-text-head"><div><div class="eyebrow">第一時間快速紀錄</div><h4>部署文字紀錄</h4></div><span id="deploymentTextStatus" class="tag amber">尚未紀錄</span></div>
           <div class="notice compact">還來不及畫圖時，可先用文字記下各面、人車、水線與任務；內容會同步到 SOP 確認資料，並固定顯示於繪圖區供邊看邊畫。</div>
           <div class="field"><textarea id="deploymentTextRecord" rows="4" placeholder="例：淡水11第一面佈一線內攻；竹圍11第二面防護；淡水61佔據消防栓供水。"></textarea><div class="button-row"><button id="parseDeploymentBtn" type="button" class="btn small primary">文字轉部署草圖</button><button id="rotateDeploymentBtn" type="button" class="btn small ghost">旋轉建物 90°</button></div><div id="deploymentDraftPreview" hidden></div></div>
@@ -628,85 +645,31 @@
           <div id="deploymentTextReference" class="deployment-text-reference" hidden></div>
         </details>
 
-        <details id="deploymentMapDetails" class="accordion tool-accordion">
-          <summary><span>戰術部署圖｜平時檢視，展開編輯</span><span class="chevron">›</span></summary>
-          <div class="accordion-body">
-            <details id="incidentLocationDetails" class="sub-accordion location-control">
-              <summary>案件中心精準定位｜Google 地址 / 現場 GPS / 手動校正</summary>
-              <div class="location-control-body">
-                <div class="notice compact">建議先用 Google 地址搜尋取得候選位置，再以現場 GPS 與入口位置確認；案件中心確認後可鎖定，避免後續部署基準誤移。</div>
-                <details id="mapDiagnosticsDetails" class="sub-accordion map-diagnostics">
-                  <summary>定位診斷｜Google API、GPS 與網域限制</summary>
-                  <div id="mapDiagnosticsPanel" class="map-diagnostics-panel">尚未執行診斷。</div>
-                  <div class="button-row compact-actions">
-                    <button id="runMapDiagnosticsBtn" type="button" class="btn small primary">執行定位診斷</button>
-                    <button id="copyMapDiagnosticsBtn" type="button" class="btn small ghost">複製診斷結果</button>
-                  </div>
-                </details>
-                <div id="googlePlacesSearchHost" class="google-places-host" aria-label="Google 地址自動完成"></div>
-                <div class="field"><label>地址搜尋</label><input id="locationAddressInput" placeholder="例：新北市淡水區中正東路一段125號" /></div>
-                <div class="button-row compact-actions">
-                  <button id="googleAddressSearchBtn" type="button" class="btn small primary">Google 地址搜尋</button>
-                  <button id="useCurrentGpsBtn" type="button" class="btn small ghost">使用目前 GPS</button>
-                  <button id="setIncidentCenterBtn" type="button" class="btn small ghost">點地圖設定中心</button>
-                </div>
-                <div id="locationCandidateList" class="location-candidate-list"></div>
-                <div id="locationStatusPanel" class="location-status-panel"></div>
-                <div class="button-row compact-actions">
-                  <button id="confirmIncidentLocationBtn" type="button" class="btn small danger">確認並鎖定案件中心</button>
-                  <button id="unlockIncidentLocationBtn" type="button" class="btn small ghost">解除案件中心鎖定</button>
-                </div>
-              </div>
-            </details>
-            <div class="deployment-quick-panel">
-              <div class="panel-title">快速部署｜點選資源後再點地圖；支援平板拖放</div>
-              <div id="deploymentModeBar" class="deployment-mode-bar">
-                <button type="button" class="btn small primary" data-deploy-mode="select">選取 / 移動</button>
-                <button type="button" class="btn small ghost" data-deploy-mode="hose">水線連接</button>
-                <button type="button" class="btn small ghost" data-deploy-mode="hazard">危害標示</button>
-                <button id="cancelHoseSelection" type="button" class="btn small ghost">取消選取</button>
-                <button id="mapUndoBtn" type="button" class="btn small ghost" disabled>↶ 回復上一步</button>
-                <button id="mapBuildingUnlockBtn" type="button" class="btn small ghost">調整建物框</button>
-                <button id="mapBuildingLockBtn" type="button" class="btn small ghost">鎖定建物框</button>
-              </div>
-              <div id="mapResourcePalette" class="map-resource-palette"></div>
-              <div id="deploymentActionHint" class="deployment-hose-instruction">水線建立：先點選可供水車輛的「拉水線」，再點另一台車、人員編組，或直接點建物第一、二、三、四面完成連接。</div>
-            </div>
-            <div class="tool-cards deployment-form-cards">
-              <div class="tool-card deployment-group-card" hidden>
-                <h4>新增分隊 / 人員 / 車輛</h4>
-                <div class="notice compact">先選擇大隊與單位，再登錄帶隊官、人數、狀態與任務；車輛會沿用同一單位，不需重複填寫。新增後，車輛預設單列排列；待命人員置於指揮站附近，可直接拖曳調整。</div>
-                <div class="two-col compact-grid"><div class="field"><label>大隊</label><select id="deploymentBrigade"></select></div><div class="field"><label>單位</label><select id="deploymentUnit"></select></div></div>
-                <div class="three-col compact-grid"><div class="field"><label>帶隊官號</label><select id="deploymentLeader"><option>6</option><option>7</option><option>8</option><option>9</option></select></div><div class="field"><label>人數</label><select id="deploymentCrewCount" aria-label="編組人數"></select></div><div class="field"><label>狀態</label><select id="deploymentStatus"><option>作業中</option><option>待命</option><option>休息</option><option>RIT</option><option>撤出</option></select></div></div>
-                <div class="field"><label>任務</label><input id="deploymentTask" placeholder="例：第一面人命搜救 / RIT 待命 / 佔據水源" /></div>
-                <div class="deployment-vehicle-builder">
-                  <div class="two-col compact-grid"><div class="field"><label>車輛代號</label><select id="deploymentVehicleCode"><option value="manual" selected>＋新增車號／借用車輛</option><option value="11">11｜水車</option><option value="12">12｜水車</option><option value="16">16｜水車</option><option value="17">17｜水車</option><option value="21">21｜直線雲梯車</option><option value="31">31｜曲折雲梯車</option><option value="41">41｜指揮／後勤車</option><option value="51">51｜化學車</option><option value="61">61｜水庫車</option><option value="71">71｜救助車</option><option value="81">81｜照明／排煙車</option><option value="91">91｜救護車</option></select></div><div class="field" id="deploymentVehicleManualField" hidden><label>手動車號</label><input id="deploymentVehicleManual" placeholder="例：借用12／淡水備用車" /></div></div>
-                  <button id="addPendingVehicleBtn" type="button" class="btn small ghost full">＋ 加入此分隊車輛</button>
-                  <div id="pendingDeploymentVehicles" class="pending-vehicle-list"><div class="empty">尚未加入車輛；可只登錄人員編組。</div></div>
-                </div>
-                <button id="addDeploymentGroupBtn" type="button" class="btn primary full">新增分隊 / 人員 / 車輛</button>
-              </div>
-            </div>
-          </div>
-          <div id="mapShell" class="map-shell">
-            <details id="hazardPaletteV2" class="hazard-palette-v2"><summary>⚠ 危害圖示</summary><div class="hazard-grid">
-                  <button class="btn small ghost hazard-btn" data-hazard="起火點">🔥 起火點</button>
-                  <button class="btn small ghost hazard-btn" data-hazard="瓦斯">🔥 瓦斯</button>
-                  <button class="btn small ghost hazard-btn" data-hazard="高壓電">⚡ 高壓電</button>
-                  <button class="btn small ghost hazard-btn" data-hazard="危險物">☣️ 危險物</button>
-                  <button class="btn small ghost hazard-btn" data-hazard="指揮站">🎙️ 指揮站</button>
-                  <button class="btn small ghost hazard-btn" data-hazard="前進指揮所">🚩 前進指揮所</button>
-                  <button class="btn small ghost hazard-btn" data-hazard="休息區">🟢 休息區</button>
-                </div></details>
-            <div id="map" class="map google-map" aria-label="Google 戰術地圖"></div>
-            <div id="mapLocationWarning" class="map-location-warning" hidden>目前僅有行政區備援中心，並非精準火場位置。請使用 Google 地址候選、現場 GPS 或手動點選後鎖定案件中心。</div>
-            <div id="mapUnavailablePanel" class="map-unavailable-panel" hidden>
-              <b>Google 地圖目前無法載入</b>
-              <span id="mapUnavailableMessage">請執行定位診斷，確認 API Key、Billing、網域限制與 Maps JavaScript API。</span>
-              <button id="retryGoogleMapBtn" type="button" class="btn small primary">重新載入 Google 地圖</button>
-            </div>
-          </div>
-        </details>
+        <section id="deploymentMapDetails" class="tactical-workspace-v3" aria-label="戰術部署圖">
+          <div class="tactical-head-v3"><div><div class="eyebrow">消防戰術示意</div><h4>戰術部署圖</h4><p id="deploymentActionHint">點第一台車選取；再點第二台車建立水線。再次點同一台車開啟詳細操作。</p></div><div class="tactical-head-actions"><button id="cancelHoseSelection" type="button" class="btn small ghost">取消選取</button><button id="mapUndoBtn" type="button" class="btn small ghost" disabled>↶ 復原</button></div></div>
+          <details id="tacticalIconPaletteV3" class="tactical-icon-palette-v3"><summary>戰術圖示</summary><div id="hazardPaletteV2" class="hazard-grid">
+            <button class="btn small ghost hazard-btn" data-hazard="起火點"><svg aria-hidden="true"><use href="#fc-icon-fire"></use></svg>起火點</button>
+            <button class="btn small ghost hazard-btn" data-hazard="瓦斯"><svg aria-hidden="true"><use href="#fc-icon-gas"></use></svg>瓦斯</button>
+            <button class="btn small ghost hazard-btn" data-hazard="高壓電"><svg aria-hidden="true"><use href="#fc-icon-electric"></use></svg>高壓電</button>
+            <button class="btn small ghost hazard-btn" data-hazard="危險物"><svg aria-hidden="true"><use href="#fc-icon-hazard"></use></svg>危險物</button>
+            <button class="btn small ghost hazard-btn" data-hazard="前進指揮所"><svg aria-hidden="true"><use href="#fc-icon-command"></use></svg>前進指揮所</button>
+            <button class="btn small ghost hazard-btn" data-hazard="休息區"><svg aria-hidden="true"><use href="#fc-icon-rehab"></use></svg>休息區</button>
+            <button class="btn small ghost hazard-btn" data-hazard="救護區"><svg aria-hidden="true"><use href="#fc-icon-ems"></use></svg>救護區</button>
+          </div></details>
+          <svg class="fc-icon-sprite" aria-hidden="true" focusable="false">
+            <defs>
+              <symbol id="fc-icon-fire" viewBox="0 0 24 24"><path d="M13 2c1 4-2 5-2 8 0 1 1 2 2 2 2 0 3-2 3-4 3 3 4 6 2 10-1 3-4 4-7 4-5 0-8-3-8-7 0-4 3-7 6-10 0 3 1 5 3 6-1-4 1-6 1-9Z"/></symbol>
+              <symbol id="fc-icon-gas" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="15" rx="2"/><path d="M9 6V3h6v3M9 11h6M12 11v5"/></symbol>
+              <symbol id="fc-icon-electric" viewBox="0 0 24 24"><path d="M13 2 5 14h6l-1 8 9-13h-6V2Z"/></symbol>
+              <symbol id="fc-icon-hazard" viewBox="0 0 24 24"><path d="M12 3 2 21h20L12 3Z"/><path d="M12 9v5m0 3v1"/></symbol>
+              <symbol id="fc-icon-command" viewBox="0 0 24 24"><path d="M5 22V3m1 1h12l-3 4 3 4H6"/></symbol>
+              <symbol id="fc-icon-rehab" viewBox="0 0 24 24"><path d="M4 20h16M7 20v-6h10v6M8 10a4 4 0 1 1 8 0"/></symbol>
+              <symbol id="fc-icon-ems" viewBox="0 0 24 24"><path d="M10 3h4v6h6v4h-6v8h-4v-8H4V9h6V3Z"/></symbol>
+            </defs>
+          </svg>
+          <div id="tacticalCanvasV3" class="tactical-canvas-v3" tabindex="0" aria-label="非導航底圖的消防戰術部署畫布"></div>
+          <div id="tacticalCanvasStatusV3" class="hint" role="status">查看模式｜尚未選取資源</div>
+        </section>
 
         <div id="buildingSection" class="stack">
                 <details id="buildingOpsDetails" class="accordion">
@@ -844,12 +807,13 @@
   <script src="./assets/intake-core.js?v=32"></script>
   <script src="./assets/tactics31.js?v=32"></script>
   <script src="./assets/intake-semantic.js?v=32"></script>
-  <script src="./assets/intake-ui.js?v=34.2"></script>
+  <script src="./assets/v34-v3.js?v=34.3"></script>
+  <script src="./assets/intake-ui.js?v=34.3"></script>
   <script src="./assets/auth28.js?v=32"></script>
-  <script src="./assets/scene32.js?v=32"></script>
-  <script src="./assets/scene-ui32.js?v=32"></script>
+  <script src="./assets/scene32.js?v=34.3"></script>
+  <script src="./assets/scene-ui32.js?v=34.3"></script>
   <script src="./assets/account-admin-core.js?v=33"></script>
-  <script src="./assets/field-entry-core.js?v=34"></script>
-  <script src="./assets/app.js?v=34.2"></script>
+  <script src="./assets/field-entry-core.js?v=34.3"></script>
+  <script src="./assets/app.js?v=34.3"></script>
 </body>
 </html>

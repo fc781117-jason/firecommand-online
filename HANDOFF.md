@@ -1,8 +1,9 @@
-# FireCommand VNext｜續作指南
+# FireCommand v34.2 V3｜續作交接
 
-1. 從分支 `feature/vnext-field-feedback` 最新 HEAD 接續，先看 `CURRENT_STATUS.md`、`TEST_RESULTS.md`，不要從遠端舊版 `main` 重做，也不要將 v33 的局部帳號管理更新包當成完整 VNext。
-2. 本批關鍵檔案：`index.html`、`assets/app.js`、`assets/field-entry-core.js`、`assets/field-entry.css`、`assets/intake-core.js`、`assets/intake-semantic.js`、`firebase/firestore.rules` 與相關測試。
-3. 安全邊界：`*.vercel.app` 非正式網域預設停用 Firebase，使用本機示範資料；目前無隔離 Preview Firebase，切勿以正式案件作測試。自訂 Preview 網域未涵蓋；新 Rules 尚未部署，勿稱已驗證。
-4. 下一步先解照片規則與測試環境的授權選擇，再逐筆關係人與支援；待 UI／資料儲存跨模組回歸後做戰術圖。
-5. Production 不合併、不部署、不改資料，待使用者確認隔離 Preview 與驗收結果。
-6. 本輪 `git push` 因缺少 GitHub 寫入身分失敗。最新成果保存在本機功能分支，不能聲稱遠端已有這些 commit。取得正常授權後先查遠端是否已有同名分支及新 HEAD，再安全推送；勿 force push。
+1. 從 `feature/v34-2-tactical-simplification-v3` 最新 HEAD 接續；功能完成點為 `e2a1cd7a96bb7fc47c91827bacd00b1460b699ea`。
+2. Draft PR：<https://github.com/fc781117-jason/firecommand-online/pull/5>；不要合併。
+3. 穩定 Preview：<https://firecommand-online-git-feature-v-207742-fc781117-4321s-projects.vercel.app/>。
+4. 先讀 `V34_UI_V3_STATUS.md`、`TEST_RESULTS.md`、`V34_UI_V3_UPDATE_GUIDE_ZH_EN.md`。
+5. Preview 為隔離本機示範資料；不可用它宣稱照片、Firebase 或多裝置已驗收。
+6. 下一步使用隔離 Firebase／Storage 與核准測試帳號完成照片持久化、權限、iPhone 與同步測試。
+7. Production 保持 HOLD；只有使用者明確確認 Preview 後，才另行安排 merge／正式部署。

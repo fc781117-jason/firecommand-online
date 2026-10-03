@@ -1,4 +1,6 @@
 {
+  "buildCommand": "node scripts/verify.cjs",
+  "outputDirectory": ".",
   "rewrites": [
     {
       "source": "/",
