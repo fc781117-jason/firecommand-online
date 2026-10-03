@@ -33,7 +33,8 @@ test('V3 人口未知與零不同，男女皆已知才計算總數',()=>{
   assert.equal(V3.residentTotal(null,3),null);
   assert.equal(V3.residentTotal(0,0),0);
   assert.equal(V3.residentTotal(2,3),5);
-  assert.deepEqual(V3.floorResidentSummary([{maleCount:2,femaleCount:1},{maleCount:null,femaleCount:2},{maleCount:0,femaleCount:0}]),{households:3,knownTotal:3,pending:1});
+  assert.deepEqual(V3.floorResidentSummary([{maleCount:2,femaleCount:1},{maleCount:null,femaleCount:2},{maleCount:0,femaleCount:0}]),{households:3,knownTotal:3,confirmedMinimum:5,pending:1});
+  assert.equal(V3.residentPopulationLabel(null,2),'至少 2 人／人數未完整');
 });
 
 test('V3 部署首頁只有人員、車輛、圖面三個逐層入口，戰術畫布不是 Google Map',()=>{
@@ -43,10 +44,10 @@ test('V3 部署首頁只有人員、車輛、圖面三個逐層入口，戰術�
   assert.match(html,/class="deployment-text-capture" hidden/);
 });
 
-test('V3 車輛 Selected State + Same Target Tap 與 A 到 B 建線均在正式畫布',()=>{
-  assert.match(app,/if\(!tacticalVehicleSelectionV3\)\{tacticalVehicleSelectionV3=id/);
-  assert.match(app,/if\(tacticalVehicleSelectionV3===id\)[^]*?editVehicle\(id\)/);
-  assert.match(app,/targetType:'vehicle',targetId:vehicle\.id/);
+test('V3.1 物件 Selected State + Same Target Tap 與 A 到 B 建線均在正式畫布',()=>{
+  assert.match(app,/tacticalObjectSelectionV31=\{coll,id\}/);
+  assert.match(app,/previous\.coll===coll&&previous\.id===id[^]*?openTacticalObjectV31/);
+  assert.match(app,/source&&destination[^]*?addTacticalHoseV31/);
   assert.match(css,/\.tactical-selected-v3 circle/);
 });
 
@@ -76,7 +77,7 @@ test('V3 疏散樓層可新增多戶，住戶有男女、總數、照片與修�
 });
 
 test('V3 Preview 示範帳號只在隔離且無 Firebase 時略過人工審核',()=>{
-  assert.match(app,/const isIsolatedPreviewDemo = !firebaseEnabled/);
+  assert.match(app,/const isIsolatedPreviewDemo = previewTargetVerifiedV31 && !firebaseEnabled/);
   assert.match(app,/FCFieldEntry\.isolatedPreviewHost\(location\.hostname\)/);
   assert.match(app,/fbUser\.uid === 'demo-user'/);
   assert.match(app,/status: isImmediatelyActive \? 'active' : 'pending'/);
