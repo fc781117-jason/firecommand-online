@@ -89,3 +89,26 @@ test('patient form keeps identity on updates and rapid repeat submit creates one
  run(c,`$('patientRecordV31').value=window.FCOperationalV31.getLatestPatients(live.sitreps)[0].key;$('patientStatus').value='已救出';`);
  await c.addPatientSitrep();assert.equal(submitted.length,2);assert.equal(submitted[1].patient.id,identity);assert.equal(run(c,'window.FCOperationalV31.getLatestPatients(live.sitreps).length'),1);
 });
+test('first derived-zone edit/move/delete Undo restores SOP label and provenance with no empty override',async()=>{
+ for(const mode of ['live','practice'])for(const patch of [{label:'QA 指揮所',note:'合成測試'},{lat:25.0002,lng:121.0001,positionManual:true},{hidden:true}]){
+  const c=setup();run(c,`currentCase={id:'room',mode:'${mode}',hostUid:'owner',lat:25,lng:121,firstSideNote:'第一面已設立指揮站',tacticalZones:{}};localState.cases=[currentCase];tacticalSceneV3=FCScene32.build(currentCase,live,{all:true});globalThis.undos=[];pushMapUndo=(label,fn)=>undos.push(fn);`);
+  const original=clone(run(c,"tacticalSceneV3.allNodes.find(n=>n.id==='zone32_command')"));
+  assert.equal(original.label,'前進指揮所');assert.equal(original.detail,'第一面｜SOP');
+  await c.patchTacticalZoneV31('zone32_command',patch,'修改標示');
+  await c.undos.at(-1)();
+  assert.equal(run(c,"Object.hasOwn(currentCase.tacticalZones,'command')"),false);
+  const scene=Scene.build(clone(run(c,'currentCase')),clone(run(c,'live')),{all:true});
+  const restored=scene.allNodes.find(n=>n.id==='zone32_command');
+  assert.equal(restored.label,original.label);assert.equal(restored.detail,original.detail);
+  assert.equal(restored.x,original.x);assert.equal(restored.y,original.y);
+  assert.equal(scene.allNodes.filter(n=>n.id==='zone32_command').length,1);
+ }
+});
+test('zone Undo keeps unrelated overrides and restores an existing manual override exactly',async()=>{
+ const c=setup();run(c,`currentCase={id:'room',mode:'live',lat:25,lng:121,firstSideNote:'第一面設立指揮站',tacticalZones:{command:{label:'既有指揮所',face:'第二面',note:'既有補述',lat:25.0001,lng:121.0001}}};localState.cases=[currentCase];tacticalSceneV3=FCScene32.build(currentCase,live,{all:true});globalThis.undos=[];pushMapUndo=(label,fn)=>undos.push(fn);`);
+ const before=clone(run(c,'currentCase.tacticalZones.command'));
+ await c.patchTacticalZoneV31('zone32_command',{label:'新名稱'},'修改標示');
+ run(c,"currentCase.tacticalZones.rehab={label:'休息區',face:'第三面'};");await c.undos.at(-1)();
+ assert.deepEqual(clone(run(c,'currentCase.tacticalZones.command')),before);
+ assert.equal(run(c,'currentCase.tacticalZones.rehab.label'),'休息區');
+});

@@ -1845,7 +1845,7 @@ function selectTacticalObjectV31(coll,id){tacticalObjectSelectionV31={coll,id};t
 function openTacticalObjectV31(coll,id){if(coll==='vehicles')editVehicle(id);else if(coll==='crews')editCrew(id);else if(coll==='hazards')editHazard(id);else if(coll==='zones')editTacticalZoneV31(id);}
 function tacticalZoneKeyV31(id){return id==='standby32'?'standby':String(id).replace(/^zone32_/, '');}
 async function patchTacticalZoneV31(id,patch,label){
-  assertCaseEditor();const key=tacticalZoneKeyV31(id),node=tacticalSceneNodeV31('zones',id),before=clonePlain(currentCase.tacticalZones?.[key]??null);
+  assertCaseEditor();const key=tacticalZoneKeyV31(id),node=tacticalSceneNodeV31('zones',id),before=currentCase.tacticalZones?.[key]==null?null:clonePlain(currentCase.tacticalZones[key]);
   await updateCaseSection('tacticalZonesRevision',c=>({tacticalZones:{...(c.tacticalZones||{}),[key]:{...(node?.item||{}),...(c.tacticalZones?.[key]||{}),...patch}}}));
   pushMapUndo(`復原${label}`,async()=>{assertCaseEditor();await updateCaseSection('tacticalZonesRevision',c=>{const zones={...(c.tacticalZones||{})};if(before===null)delete zones[key];else zones[key]=before;return {tacticalZones:zones};});renderTacticalCanvasV3();});
   renderTacticalCanvasV3();
