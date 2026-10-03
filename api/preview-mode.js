@@ -8,6 +8,6 @@ export default function handler(req,res){
   const value=process.env.VERCEL_ENV;
   const target=['preview','production','development'].includes(value)?value:'unavailable';
   // This review fixture belongs only to the authorized revision branch.
-  const demoEnabled=target==='preview'&&process.env.VERCEL_GIT_COMMIT_REF==='feature/v34-2-field-revision-v3-1';
+  const demoEnabled=target==='preview'&&['feature/v34-2-field-revision-v3-1','feature/v34-2-field-revision-v3-2'].includes(process.env.VERCEL_GIT_COMMIT_REF);
   return res.status(200).json({demoEnabled,target});
 }

@@ -1705,6 +1705,7 @@ function latestOperationalTimestamp(){
   return valid.length?Math.max(...valid):Date.now();
 }
 function buildExecutiveSummaryText(c=currentCase){
+  if(window.FCOperationalV32)return window.FCOperationalV32.summaryText(buildOperationalSummary(c));
   if(!c) return '尚無案件資料。';
   const first=[];
   if(c.address) first.push(`本案位於${c.address}`);
@@ -1758,6 +1759,17 @@ function renderOverviewContent(){
     building.innerHTML=html||overviewBuildingOperationalSummaryHtmlV31()||'<div class="overview-empty">尚未建立建物內部作戰圖；請至「部署」開啟建物作戰圖繪製。</div>';
   }
   renderOverviewSituationV31();
+  renderOperationalSummaryV32();
+}
+function buildOperationalSummary(c=currentCase){return window.FCOperationalV32.buildOperationalSummary(c||{},live);}
+function renderOperationalSummaryV32(){
+  if(!window.FCOperationalV32||!currentCase)return;
+  const summary=buildOperationalSummary(),slot=$('overviewExecutiveText');if(!slot)return;
+  const bullets=lines=>`<ul>${lines.map(line=>`<li>${escapeHtml(line)}</li>`).join('')}</ul>`;
+  const section=(title,lines)=>lines.length?`<section class="operational-section-v32"><h4>${title}</h4>${bullets(lines)}</section>`:'';
+  slot.innerHTML=`<section class="operational-section-v32"><h4>案件資訊</h4><dl>${summary.incident.map(([k,v])=>`<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join('')}</dl></section>`+section('人命／疏散',summary.lifeSafety)+section('目前戰情',summary.situation)+section('目前部署',summary.deployment)+(summary.floors.length?`<section class="operational-section-v32"><h4>建物／樓層狀況</h4>${summary.floors.map(f=>`<div class="operational-floor-v32"><strong>${floorLabel(f.floor)}</strong>${bullets(f.lines)}</div>`).join('')}</section>`:'')+section('危害與支援',[...summary.hazards,...summary.support])+section('時間關鍵資訊',summary.timestamps.map(([k,v])=>`${k}：${fmtTime(timestampMs(v))}`));
+  if($('overviewSituationCardV31'))$('overviewSituationCardV31').hidden=true;
+  if($('summaryCards'))$('summaryCards').hidden=true;
 }
 function buildingResidentEntriesV31(){return (currentCase?.buildingOps?.floorActions||[]).flatMap(entry=>(entry.residents||[]).map(row=>({floor:Number(entry.floor),floorAction:entry.action||'未標示',...row})));}
 function confirmedPatientEntriesV31(){return window.FCOperationalV31.getLatestPatients(live.sitreps||[]).map(row=>row.patient);}
@@ -1780,7 +1792,7 @@ function scheduleDerivedSummaryPersist(){
   derivedSummaryTimer=setTimeout(persistDerivedSummary,650);
 }
 async function persistDerivedSummary(){
-  if(!currentCase) return;
+  if(!currentCase||currentCase.status==='closed') return;
   const summary=buildExecutiveSummaryText(currentCase);
   if(!summary || summary===currentCase.summary) return;
   currentCase.summary=summary;
@@ -1866,6 +1878,7 @@ function renderTacticalCanvasV3(){
   const canvas=$('tacticalCanvasV3');if(!canvas||!currentCase||!window.FCScene32)return;
   tacticalSceneV3=FCScene32.build(currentCase,{vehicles:live.vehicles,crews:live.crews,hoses:live.hoses,hazards:live.hazards,sitreps:live.sitreps},{all:true});
   canvas.innerHTML=FCScene32.svg(tacticalSceneV3);
+  applyTacticalViewportV32();
   if(tacticalObjectSelectionV31&&!tacticalSceneV31HasObject(tacticalObjectSelectionV31))clearTacticalSelectionV31();
   if(tacticalHoseSelectionV3&&!live.hoses.some(h=>h.id===tacticalHoseSelectionV3))tacticalHoseSelectionV3='';
   if(tacticalObjectSelectionV31)canvas.querySelector(`[data-fc32-coll="${CSS.escape(tacticalObjectSelectionV31.coll)}"][data-fc32-id="${CSS.escape(tacticalObjectSelectionV31.id)}"]`)?.classList.add('tactical-selected-v3');
@@ -1876,12 +1889,36 @@ function renderTacticalCanvasV3(){
   else tacticalStatusV3('查看模式｜單點選取；再點同一物件開啟設定；長按可拖動');
   canvas.onclick=handleTacticalCanvasClickV3;
   bindTacticalPointerV31(canvas);
+  bindTacticalViewportV32(canvas);
 }
 function tacticalSceneV31HasObject(selection){return !!tacticalSceneV3?.allNodes?.some(node=>node.coll===selection.coll&&node.id===selection.id);}
+let tacticalViewportV32=null;
+function tacticalSvgPointV32(event,svg){const matrix=svg.getScreenCTM?.();if(!matrix)return null;const p=svg.createSVGPoint();p.x=event.clientX;p.y=event.clientY;return p.matrixTransform(matrix.inverse());}
+function applyTacticalViewportV32(reset=false){
+  const svg=$('tacticalCanvasV3')?.querySelector('svg'),s=tacticalSceneV3;if(!svg||!s)return;
+  if(reset||!tacticalViewportV32||tacticalViewportV32.caseId!==currentCaseId)tacticalViewportV32={caseId:currentCaseId,x:0,y:0,w:s.W,h:s.H,zoom:1};
+  const v=tacticalViewportV32;svg.setAttribute('viewBox',`${v.x} ${v.y} ${v.w} ${v.h}`);
+  // Transparent targets grow in SVG units when zoomed out; symbols remain at scene scale.
+  const scale=svg.getScreenCTM?.()?.a||1;svg.querySelectorAll('[data-fc32-coll]:not([data-fc32-coll="hoses"])').forEach(g=>{g.querySelector('[data-hit-v32]')?.remove();const box=g.getBBox(),w=Math.max(box.width,44/scale),h=Math.max(box.height,44/scale),rect=document.createElementNS('http://www.w3.org/2000/svg','rect');rect.setAttribute('data-hit-v32','');rect.setAttribute('x',box.x+(box.width-w)/2);rect.setAttribute('y',box.y+(box.height-h)/2);rect.setAttribute('width',w);rect.setAttribute('height',h);rect.setAttribute('fill','transparent');rect.style.pointerEvents='all';g.prepend(rect);});
+}
+function zoomTacticalV32(multiplier,point){const s=tacticalSceneV3,v=tacticalViewportV32;if(!s||!v)return;const p=point||{x:v.x+v.w/2,y:v.y+v.h/2};tacticalViewportV32={...v,...window.FCOperationalV32.viewportPoint(v,p,{w:s.W,h:s.H},v.zoom*multiplier)};applyTacticalViewportV32();}
+function bindTacticalViewportV32(canvas){
+  $('tacticalZoomInV32').onclick=()=>zoomTacticalV32(1.25);$('tacticalZoomOutV32').onclick=()=>zoomTacticalV32(.8);$('tacticalFitV32').onclick=()=>applyTacticalViewportV32(true);
+  const svg=canvas.querySelector('svg'),pointers=new Map();let previous=null,moved=false;
+  const geometry=()=>{const p=[...pointers.values()];return p.length>=2?{x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2,d:Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)}:{...p[0],d:0};};
+  svg.addEventListener('pointerdown',e=>{pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.size>1){cancelTacticalPointerV31();moved=true;tacticalSuppressClickUntilV31=Date.now()+600;svg.setPointerCapture(e.pointerId);}else if(!e.target.closest('[data-fc32-coll]'))svg.setPointerCapture(e.pointerId);previous=geometry();});
+  svg.addEventListener('pointermove',e=>{
+    if(!pointers.has(e.pointerId))return;pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});const next=geometry();
+    if(tacticalPointerV31?.active||pointers.size===1&&e.target.closest('[data-fc32-coll]')&&!moved){previous=next;return;}
+    if(!previous)return;const a=tacticalSvgPointV32({clientX:previous.x,clientY:previous.y},svg),b=tacticalSvgPointV32({clientX:next.x,clientY:next.y},svg);if(!a||!b)return;
+    if(Math.hypot(next.x-previous.x,next.y-previous.y)>1||pointers.size>1){moved=true;cancelTacticalPointerV31();e.preventDefault();tacticalSuppressClickUntilV31=Date.now()+600;tacticalViewportV32.x-=b.x-a.x;tacticalViewportV32.y-=b.y-a.y;if(next.d&&previous.d)zoomTacticalV32(next.d/previous.d,a);else applyTacticalViewportV32();}previous=next;
+  });
+  const release=e=>{pointers.delete(e.pointerId);if(moved)tacticalSuppressClickUntilV31=Date.now()+600;previous=pointers.size?geometry():null;if(!pointers.size)moved=false;};svg.addEventListener('pointerup',release);svg.addEventListener('pointercancel',release);
+}
 function tacticalPointV3(event){
   const svg=$('tacticalCanvasV3')?.querySelector('svg'),scene=tacticalSceneV3;if(!svg||!scene)return null;
-  const rect=svg.getBoundingClientRect();if(!rect.width||!rect.height)return null;
-  const vx=(event.clientX-rect.left)/rect.width*scene.W,vy=(event.clientY-rect.top)/rect.height*scene.H;
+  const point=tacticalSvgPointV32(event,svg);if(!point)return null;
+  const vx=point.x,vy=point.y;
   return FCScene32.ll(scene.box,{x:scene.bounds.minX+vx/scene.scale,y:scene.bounds.maxY-vy/scene.scale});
 }
 async function handleTacticalCanvasClickV3(event){
@@ -1924,7 +1961,7 @@ function bindTacticalPointerV31(canvas){
   });
 }
 function beginTacticalPointerV31(event,node,canvas,svg,coll,id){
-  if(!event.isPrimary||event.button>0)return;
+  if(!event.isPrimary||event.button>0||currentCase?.status==='closed')return;
   cancelTacticalPointerV31();
   const point={x:event.clientX,y:event.clientY},state={pointerId:event.pointerId,node,canvas,svg,coll,id,start:point,last:point,active:false,timer:null};
   state.timer=setTimeout(()=>{if(tacticalPointerV31!==state)return;state.active=true;selectTacticalObjectV31(coll,id);node.classList.add('tactical-dragging-v31','tactical-selected-v3');canvas.classList.add('tactical-drag-active-v31');node.setPointerCapture?.(state.pointerId);tacticalStatusV3(`正在移動 ${tacticalObjectLabelV31(coll,id)}｜放開後儲存位置`);},360);
@@ -1935,7 +1972,7 @@ function beginTacticalPointerV31(event,node,canvas,svg,coll,id){
 function moveTacticalPointerV31(event,state){
   if(tacticalPointerV31!==state||event.pointerId!==state.pointerId)return;state.last={x:event.clientX,y:event.clientY};const dx=state.last.x-state.start.x,dy=state.last.y-state.start.y;
   if(!state.active){if(Math.hypot(dx,dy)>10)cancelTacticalPointerV31(state);return;}
-  event.preventDefault();event.stopPropagation();state.node.style.transform=`translate(${dx}px,${dy}px)`;
+  event.preventDefault();event.stopPropagation();const a=tacticalSvgPointV32({clientX:state.start.x,clientY:state.start.y},state.svg),b=tacticalSvgPointV32(event,state.svg);if(a&&b)state.node.style.transform=`translate(${b.x-a.x}px,${b.y-a.y}px)`;
 }
 async function finishTacticalPointerV31(event,state){
   if(tacticalPointerV31!==state)return;clearTimeout(state.timer);detachTacticalPointerV31(state);
@@ -1943,7 +1980,8 @@ async function finishTacticalPointerV31(event,state){
   event.preventDefault();event.stopPropagation();const dx=event.clientX-state.start.x,dy=event.clientY-state.start.y,scene=tacticalSceneV3,source=scene?.allNodes?.find(n=>n.coll===state.coll&&n.id===state.id),rect=state.svg.getBoundingClientRect();
   state.node.style.transform='';state.node.classList.remove('tactical-dragging-v31');state.canvas.classList.remove('tactical-drag-active-v31');tacticalPointerV31=null;tacticalSuppressClickUntilV31=Date.now()+500;
   if(!source||!rect.width)return renderTacticalCanvasV3();
-  const factor=scene.W/rect.width,pos=FCScene32.ll(scene.box,{x:source.x+dx*factor/scene.scale,y:source.y-dy*factor/scene.scale});
+  const a=tacticalSvgPointV32({clientX:state.start.x,clientY:state.start.y},state.svg),b=tacticalSvgPointV32(event,state.svg);if(!a||!b)return renderTacticalCanvasV3();
+  const pos=FCScene32.ll(scene.box,{x:source.x+(b.x-a.x)/scene.scale,y:source.y-(b.y-a.y)/scene.scale});
   try{await updateTacticalPositionV31(state.coll,state.id,{...pos,positionManual:true,staged:false},`移動${tacticalObjectLabelV31(state.coll,state.id)}`);toast('位置已同步儲存');}catch(error){toast(`位置儲存失敗：${error.message}`,4600);}finally{renderTacticalCanvasV3();}
 }
 async function updateTacticalPositionV31(coll,id,patch,label){
@@ -4347,7 +4385,7 @@ function renderBuildingOps(){
     const a = ops.floorActions?.find(x=>Number(x.floor)===f) || {floor:f, action:'未標示', note:''};
     const residents=Array.isArray(a.residents)?a.residents:[],summary=window.FCV34V3?.floorResidentSummary(residents)||{households:residents.length,knownTotal:0,confirmedMinimum:0,pending:0};
     const populationText=summary.pending?`${summary.confirmedMinimum>0?`已確認至少 ${summary.confirmedMinimum} 人｜`:''}${summary.pending} 戶人數未完整`:`已確認 ${summary.knownTotal} 人`;
-    const residentSection=`<div class="floor-residents-v3"><div class="floor-resident-summary-v3"><span>住戶｜已記錄 ${summary.households} 戶｜${populationText}</span><button type="button" class="btn small primary" data-add-resident="${f}">＋新增住戶</button></div>${residents.map(r=>residentCardHtmlV3(f,r)).join('')||'<div class="hint">尚未新增本樓住戶紀錄</div>'}</div>`;
+    const residentSection=`<div class="floor-residents-v3"><div class="floor-resident-summary-v3"><span>住戶｜已記錄 ${summary.households} 戶｜${populationText}</span><button type="button" class="btn small primary" data-add-resident="${f}">＋新增住戶</button></div><div class="resident-carousel-v32" aria-label="住戶，左右滑動查看更多">${residents.map(r=>residentCardHtmlV3(f,r)).join('')||'<div class="hint">尚未新增本樓住戶紀錄</div>'}</div></div>`;
     return `<div class="floor-row ${f===fireFloorNum?'fire-floor':''}" data-floor="${f}">
       <div class="floor-label">${floorLabel(f)}</div>
       <select class="floor-action" data-floor-action="${f}"><option ${a.action==='滅火攻擊'?'selected':''}>滅火攻擊</option><option ${a.action==='阻隔延燒'?'selected':''}>阻隔延燒</option><option ${a.action==='就地避難'?'selected':''}>就地避難</option><option ${a.action==='疏散離開'?'selected':''}>疏散離開</option><option ${a.action==='搜索救援'?'selected':''}>搜索救援</option><option ${a.action==='未標示'?'selected':''}>未標示</option></select>
@@ -4360,6 +4398,7 @@ function renderBuildingOps(){
   document.querySelectorAll('[data-add-resident]').forEach(btn=>btn.onclick=()=>openResidentEditorV3(Number(btn.dataset.addResident)));
   document.querySelectorAll('[data-edit-resident]').forEach(btn=>btn.onclick=()=>openResidentEditorV3(Number(btn.dataset.residentFloor),btn.dataset.editResident));
   document.querySelectorAll('[data-delete-resident]').forEach(btn=>btn.onclick=()=>deleteResidentV3(Number(btn.dataset.residentFloor),btn.dataset.deleteResident));
+  document.querySelectorAll('[data-view-resident]').forEach(card=>{const open=event=>{if(event.target.closest('button'))return;openResidentDetailV32(Number(card.dataset.residentFloor),card.dataset.viewResident);};card.onclick=open;card.onkeydown=e=>{if(e.target===card&&(e.key==='Enter'||e.key===' ')){e.preventDefault();open(e);}};});
   loadPrivatePhotos($('verticalSection'));
   renderBuildingResidentDetailsV31();
   renderFloorPlan();
@@ -4380,8 +4419,13 @@ function residentTotalLabelV3(row={}){
   return window.FCV34V3?.residentPopulationLabel(row.maleCount,row.femaleCount)||'人數未完整';
 }
 function residentCardHtmlV3(floor,row={}){
-  const id=escapeHtml(row.id||''),counts=`男 ${row.maleCount==null?'未知':row.maleCount}｜女 ${row.femaleCount==null?'未知':row.femaleCount}｜${residentTotalLabelV3(row)}`;
-  return `<article class="resident-card-v3"><div><strong>${escapeHtml(row.unitNo||'門牌／戶號待補')}</strong>${row.address?`<p>${escapeHtml(row.address)}</p>`:''}<p>${escapeHtml(row.contact||'聯絡人待補')}</p>${row.phone?`<p>${escapeHtml(row.phone)}</p>`:''}<p>${escapeHtml(counts)}</p>${row.status?`<p>狀態：${escapeHtml(row.status)}</p>`:''}${row.note?`<p>${escapeHtml(row.note)}</p>`:''}${row.photoStatus==='pending'?'<p class="photo-pending">照片待重新上傳</p>':row.photoStatus==='local-demo'?'<p>合成照片｜本機示範，非雲端上傳</p>':''}<div class="resident-actions-v3"><button type="button" class="btn small ghost" data-edit-resident="${id}" data-resident-floor="${floor}">修改</button><button type="button" class="btn small danger" data-delete-resident="${id}" data-resident-floor="${floor}">刪除</button></div></div><div class="private-photo" data-photo-path="${escapeHtml(row.photoPath||'')}">${row.photoStatus==='pending'&&!row.photoPath?'照片待補':''}</div></article>`;
+  const id=escapeHtml(row.id||''),counts=`男 ${row.maleCount??'未知'}｜女 ${row.femaleCount??'未知'}｜${residentTotalLabelV3(row)}`;
+  return `<article class="resident-card-v3" tabindex="0" role="group" aria-label="查看住戶完整資料" data-view-resident="${id}" data-resident-floor="${floor}"><div><strong>${escapeHtml(window.FCOperationalV32.shortUnit(row))}</strong><p>${escapeHtml(counts)}</p><p>${escapeHtml(row.status||'待確認')}</p>${row.photoStatus==='pending'?'<p class="photo-pending">照片待重新上傳</p>':row.photoStatus==='local-demo'?'<p>合成照片｜本機示範</p>':''}<div class="resident-actions-v3"><button type="button" class="btn small ghost" data-edit-resident="${id}" data-resident-floor="${floor}">修改</button><button type="button" class="btn small danger" data-delete-resident="${id}" data-resident-floor="${floor}">刪除</button></div></div><div class="private-photo" data-photo-path="${escapeHtml(row.photoPath||'')}"></div></article>`;
+}
+function openResidentDetailV32(floor,id){
+  const row=(getBuildingOps().floorActions.find(x=>Number(x.floor)===floor)?.residents||[]).find(r=>r.id===id);if(!row)return;
+  const fields=[['完整地址',row.address],['樓層',floorLabel(floor)],['戶號',row.unitNo],['男性',row.maleCount??'未知'],['女性',row.femaleCount??'未知'],['人口',residentTotalLabelV3(row)],['狀態',row.status||'待確認'],['最後更新',row.updatedAt?fmtTime(row.updatedAt):'未記錄']];
+  openActionSheet('住戶詳細資料',`<div class="resident-detail-v32"><dl>${fields.map(([k,v])=>`<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v??'未填')}</dd>`).join('')}</dl>${contactCardHtml({name:row.contact,phone:row.phone,detail:row.note,photoPath:row.photoPath,photoStatus:row.photoStatus})}</div><button id="residentDetailCloseV32" class="btn ghost">關閉</button>`);$('residentDetailCloseV32').onclick=closeActionSheet;loadPrivatePhotos($('appActionBody'));
 }
 function residentCountOptionsV3(value){
   const current=value==null?'':String(value),values=['',...Array.from({length:16},(_,i)=>String(i))];if(current&&!values.includes(current))values.push(current);
