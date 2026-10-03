@@ -144,6 +144,15 @@ function householdStatusLine(label,entries){
 function floorKey(value){const n=Number(value);return value!==null&&value!==undefined&&text(value)!==''&&Number.isInteger(n)&&n!==0?String(n):'';}
 function floorLabel(value){const key=floorKey(value);return key?(Number(key)>0?`${key}F`:`B${Math.abs(Number(key))}`):'樓層待確認';}
 const floorActions=new Set(['滅火','滅火攻擊','阻隔延燒','就地避難','疏散離開','搜索救援','搜索中','搜索完成','已完成搜索','搜索未完成']);
+function getLatestFloorActions(caseRecord={}){
+  const floors=new Map();
+  list(caseRecord?.buildingOps?.floorActions).forEach((entry,index)=>{
+    if(!record(entry))return;
+    const key=floorKey(entry.floor)||'unknown',candidate={entry,eventAt:timestamp(entry.updatedAt??entry.createdAt),submittedAt:null,index};
+    if(isLater(candidate,floors.get(key)))floors.set(key,candidate);
+  });
+  return [...floors.values()].map(({entry})=>entry);
+}
 function buildSituationLines(caseRecord={},live={}){
   const lines=[],residents=getLatestResidents(caseRecord),patients=getPatientSummaries(live?.sitreps);
   if(caseRecord?.trapped==='有'){
@@ -157,13 +166,8 @@ function buildSituationLines(caseRecord={},live={}){
   }
   lines.push(...patients.lines);
   if(residents.length){const summary=summarizeResidents(residents);lines.push(`建物住戶已記錄 ${summary.households} 戶；${populationText(summary)}。`);}
-  const floors=new Map();
-  list(caseRecord?.buildingOps?.floorActions).forEach((entry,index)=>{
-    if(!record(entry))return;
-    const key=floorKey(entry.floor)||'unknown',candidate={entry,eventAt:timestamp(entry.updatedAt??entry.createdAt),submittedAt:null,index};
-    if(isLater(candidate,floors.get(key)))floors.set(key,candidate);
-  });
-  for(const [key,{entry}] of floors){
+  for(const entry of getLatestFloorActions(caseRecord)){
+    const key=floorKey(entry.floor)||'unknown';
     const rows=residents.filter(row=>(floorKey(row.floor)||'unknown')===key),action=floorActions.has(text(entry.action))?text(entry.action):'';
     if(!rows.length&&!action)continue;
     const label=floorLabel(entry.floor);
@@ -172,6 +176,6 @@ function buildSituationLines(caseRecord={},live={}){
   }
   return lines;
 }
-root.FCOperationalV31={buildSituationLines,getLatestPatients,getPatientSummaries,getLatestResidents,legacyTransportConfirmed,isTransported};
+root.FCOperationalV31={buildSituationLines,getLatestPatients,getPatientSummaries,getLatestResidents,getLatestFloorActions,population,householdStatusLine,legacyTransportConfirmed,isTransported};
 if(typeof module!=='undefined')module.exports=root.FCOperationalV31;
 })(typeof window==='undefined'?globalThis:window);

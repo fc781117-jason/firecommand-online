@@ -880,7 +880,7 @@ function renderCases(){
         <span class="tag blue">${escapeHtml(c.type||'火警')}</span>
         <span class="tag">${escapeHtml(c.floors||'?')}樓建築</span>
         <span class="tag">起火：${escapeHtml(floorText(c.fireFloor))}</span>
-        <span class="tag ${c.trapped==='有'?'red':c.trapped==='無'?'green':'amber'}">受困：${escapeHtml(c.trapped==='有'?`有 ${c.trappedCount||0}人`:c.trapped==='無'?'無':'尚未確認')}</span>
+        <span class="tag ${c.trapped==='有'?'red':c.trapped==='無'?'green':'amber'}">${escapeHtml(window.FCOperationalV32.trappedSummary(c).line)}</span>
       </div>
     </article>`).join('');
   wrap.querySelectorAll('.case-card').forEach(card => { card.style.cursor='pointer'; card.addEventListener('click', ev => { if(ev.target.closest('button')) return; openCase(card.querySelector('[data-open-case]')?.dataset.openCase); }); });
@@ -2821,7 +2821,8 @@ async function deleteVehicle(id){
 }
 async function editCrew(id){
   const p=live.crews.find(x=>x.id===id); if(!p) return;
-  const statuses=['作業中','待命','休息','RIT','撤出'].map(x=>`<option ${p.status===x?'selected':''}>${x}</option>`).join('');
+  const currentStatus=p.status||'';
+  const statuses=[...new Set([currentStatus,'未指定','作業中','待命','休息','RIT','撤出'])].map(x=>`<option value="${escapeHtml(x)}" ${currentStatus===x?'selected':''}>${escapeHtml(x||'未指定')}</option>`).join('');
   openActionSheet(`人員｜${p.unit}${p.leader}`,`<div class="field"><label>任務</label><input id="sheetCrewTask" value="${escapeHtml(p.task||'')}" /></div><div class="choice-row"><button class="action-option" data-fill-target="sheetCrewTask" data-fill-value="第一面內攻">第一面內攻</button><button class="action-option" data-fill-target="sheetCrewTask" data-fill-value="人命搜救">人命搜救</button><button class="action-option" data-fill-target="sheetCrewTask" data-fill-value="RIT待命">RIT待命</button><button class="action-option" data-fill-target="sheetCrewTask" data-fill-value="佔據水源">佔據水源</button></div><div class="field"><label>樓層／位置</label><input id="sheetCrewFloor31" value="${escapeHtml(p.floor||'')}" placeholder="例如3樓；俯視圖位置不變" /></div><div class="two-col"><div class="field"><label>狀態</label><select id="sheetCrewStatus">${statuses}</select></div><div class="field"><label>人數</label><input id="sheetCrewCount" type="number" min="0" step="1" placeholder="人數待補" value="${FCFieldEntry.unknown(p)?'':escapeHtml(p.count)}" /></div></div><div class="button-row"><button id="saveCrewSheetBtn" class="btn primary">儲存</button><button id="deleteCrewSheetBtn" class="btn ghost">刪除編組</button></div>`);
   bindQuickFillButtons($('appActionBody'));
   $('saveCrewSheetBtn').onclick=async()=>{const parsed=FCFieldEntry.parseCount($('sheetCrewCount').value);if(!parsed.valid){toast('人數只接受空白或 0–99 整數');return;}const patch={floor:$('sheetCrewFloor31').value.trim(),task:$('sheetCrewTask').value.trim()||p.task,status:$('sheetCrewStatus').value,count:parsed.count,countUnknown:parsed.count===null};await updateItem('crews',id,patch);await addLog('crew',`修改人員：${p.unit}${p.leader}｜${patch.status}｜${patch.task}`);closeActionSheet();};
@@ -2988,7 +2989,8 @@ async function saveFieldCrew(){
   if((existing&&expected?.id!==existing.id)||(!existing&&expected&&expected.id!==id)){fieldEntryStatus('fieldCrewSaveStatus','版本衝突待處理：單位資料已更新，請重新選擇');return;}
   const now=Date.now(),task=$('fieldCrewTask')?.value==='其他'?$('fieldCrewTaskOther')?.value.trim()||'':$('fieldCrewTask')?.value||'',face=$('fieldCrewFace')?.value||'',count=parsed.count;
   if($('fieldCrewTask')?.value==='其他'&&!task){fieldEntryStatus('fieldCrewSaveStatus','儲存失敗：請輸入其他任務');return;}
-  const patch=assignmentTransitionV32(existing||{unit,brigade},{count,countUnknown:count===null,task,face,status:existing&&task===existing.task?(existing.status||'未指定'):task==='休息'?'休息':task==='待命'?'待命':'未指定',updatedAt:now},uid('task'),'personnel-form',id);
+  const status=existing&&task===existing.task?existing.status||'未指定':window.FCAssignmentV32.statusForTask(task)||existing?.status||'未指定';
+  const patch=assignmentTransitionV32(existing||{unit,brigade},{count,countUnknown:count===null,task,face,status,updatedAt:now},uid('task'),'personnel-form',id);
   button.disabled=true;fieldEntryStatus('fieldCrewSaveStatus','儲存中');
   try{
     if(firebaseEnabled){
@@ -3246,23 +3248,57 @@ function distanceMeters(a,b){
   const x=Math.sin(dp/2)**2 + Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
   return 2*R*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
 }
+// A rotation and its undo are new, atomic assignment transitions. Only the
+// affected fields are restored; elapsed segments and unrelated edits survive.
+async function commitCrewRotationV32(records,caseId=currentCaseId,source='rotation'){
+  assertCaseEditor();
+  if(caseId!==currentCaseId)throw Error('案件已切換，無法復原輪替');
+  const at=Date.now(),eventId=uid('rotation');
+  const derive=(record,stored)=>{
+    if(!stored)throw Error('輪替資料已移除');
+    const keys=[...new Set([...Object.keys(record.patch),...(record.coll==='crews'?['taskSegments','assignmentRevision']:[])])];
+    if(keys.some(key=>JSON.stringify(stored[key]??null)!==JSON.stringify(record.before[key]??null)))throw Error('輪替資料已更新，請重新核對');
+    const patch={...(record.coll==='crews'?window.FCAssignmentV32.transition(stored,record.patch,{id:eventId+'-'+record.id,crewId:record.id,at,source,operator:profile.id}):record.patch),updatedAt:at};
+    return {coll:record.coll,id:record.id,patch,undo:{coll:record.coll,id:record.id,before:{...stored,...patch},patch:Object.fromEntries(Object.keys(record.patch).map(key=>[key,stored[key]??null]))}};
+  };
+  let changes;
+  if(firebaseEnabled){
+    const parent=db.collection('cases').doc(caseId);
+    changes=await db.runTransaction(async tx=>{
+      const cs=await tx.get(parent);
+      if(!cs.exists||cs.data().status==='closed')throw Error('案件已結案');
+      const refs=records.map(r=>parent.collection(r.coll).doc(r.id));
+      const docs=await Promise.all(refs.map(ref=>tx.get(ref)));
+      const prepared=records.map((r,i)=>derive(r,docs[i].exists?docs[i].data():null));
+      prepared.forEach((r,i)=>tx.update(refs[i],r.patch));
+      tx.update(parent,{resourceRevision:(cs.data().resourceRevision||0)+1,updatedAt:at});
+      return prepared;
+    });
+  }else{
+    changes=records.map(r=>derive(r,(live[r.coll]||[]).find(x=>x.id===r.id)));
+    const next={};
+    for(const coll of ['crews','hoses'])next[coll]=live[coll].map(row=>{const change=changes.find(r=>r.coll===coll&&r.id===row.id);return change?{...row,...change.patch}:row;});
+    const candidate={...currentCase,...next,resourceRevision:(currentCase.resourceRevision||0)+1,updatedAt:at};
+    const cases=localState.cases.map(c=>c.id===caseId?candidate:c);
+    localStorage.setItem(LOCAL_KEY,JSON.stringify({...localState,cases}));
+    Object.assign(live,next);Object.assign(currentCase,candidate);localState.cases=cases;renderLiveParts();
+  }
+  return changes.map(r=>r.undo);
+}
 async function handleCrewDragEnd(p, ll){
   const nearest = live.crews.filter(x=>x.id!==p.id && x.status==='作業中').map(x=>({item:x, d:distanceMeters({lat:ll.lat,lng:ll.lng},{lat:Number(x.lat),lng:Number(x.lng)})})).sort((a,b)=>a.d-b.d)[0];
   if(nearest && nearest.d < 18){
     const target = nearest.item;
     if(confirm(`是否由 ${p.unit}${p.leader} 接替 ${target.unit}${target.leader} 執行「${target.task||'作業任務'}」？`)){
       const oldTask = target.task || '作業任務';
-      const records=[
-        {coll:'crews',id:p.id,data:clonePlain(p)},
-        {coll:'crews',id:target.id,data:clonePlain(target)},
-        ...live.hoses.filter(h=>h.targetType==='crew' && h.targetId===target.id).map(h=>({coll:'hoses',id:h.id,data:clonePlain(h)}))
+      const caseId=currentCaseId,records=[
+        {coll:'crews',id:p.id,before:clonePlain(p),patch:{lat:target.lat,lng:target.lng,face:target.face||'',floor:target.floor||'',status:'作業中',task:oldTask,staged:false,anchorBuilding:false}},
+        {coll:'crews',id:target.id,before:clonePlain(target),patch:{lat:ll.lat,lng:ll.lng,status:'休息',task:'輪替休息',staged:false,anchorBuilding:false}},
+        ...live.hoses.filter(h=>h.targetType==='crew'&&h.targetId===target.id).map(h=>({coll:'hoses',id:h.id,before:clonePlain(h),patch:{targetId:p.id,targetName:`${p.unit}${p.leader||''}｜${crewCount31(p)}`,owner:h.owner||`${p.unit}${p.leader||''}`}}))
       ];
-      for(const h of live.hoses.filter(h=>h.targetType==='crew' && h.targetId===target.id)){
-        await updateItem('hoses', h.id, {targetId:p.id, targetName:`${p.unit}${p.leader||''}｜${p.count||0}人`, owner:h.owner || `${p.unit}${p.leader||''}`});
-      }
-      await updateItem('crews', p.id, {lat:target.lat,lng:target.lng,status:'作業中',task:oldTask,startAt:Date.now(),dispatchCount:(p.dispatchCount||0)+1,staged:false});
-      await updateItem('crews', target.id, {lat:ll.lat,lng:ll.lng,status:'休息',task:'輪替休息',endAt:Date.now(),staged:false});
-      pushMapUndo(`復原 ${p.unit}${p.leader} 接替任務`,async()=>restoreMapRecords(records));
+      const undo=await commitCrewRotationV32(records,caseId);
+      if(currentCaseId!==caseId)return;
+      pushMapUndo(`復原 ${p.unit}${p.leader} 接替任務`,()=>commitCrewRotationV32(undo,caseId,'rotation-undo'));
       await addLog('crew', `${p.unit}${p.leader} 接替 ${target.unit}${target.leader} 執行「${oldTask}」，相關水線改由接替單位承接，${target.unit}${target.leader} 改為休息`);
       toast('已完成任務輪替');
       return;
@@ -3562,8 +3598,7 @@ function keyOperationalSummaryLines(){
   lines.push(`本案地址為${c.address||'未登錄'}${buildingParts.length?`，${buildingParts.join('，')}`:''}。`);
   const situation=[];
   if(c.fireStatus) situation.push(`目前火煙狀況為${c.fireStatus.replace(/[。；]+$/,'')}`);
-  if(c.trapped==='無') situation.push('已確認無人受困');
-  else if(c.trapped==='有') situation.push(`已確認有${Number(c.trappedCount)||0}人受困`);
+  const trapped=window.FCOperationalV32.trappedSummary(c);if(trapped.state!=='unknown')situation.push(trapped.line);
   if(situation.length) lines.push(`${situation.join('；')}。`);
   const arrival=[];
   if(c.arrived) arrival.push('已到達現場');
@@ -3707,7 +3742,7 @@ function buildFullSpeech(){
   if(c.fireStatus) lines.push(`三、火：目前${c.fireStatus.replace(/[。；]+$/,'')}。`);
   const people=[];
   if(c.contactState==='found') people.push((c.contacts||[]).length?'已找到關係人':'已找到關係人');
-  if(c.trapped==='無') people.push('確認無人受困'); else if(c.trapped==='有') people.push(`確認有${Number(c.trappedCount)||0}人受困`);
+  const trapped=window.FCOperationalV32.trappedSummary(c);if(trapped.state!=='unknown')people.push(trapped.line);
   if(c.hazardState==='none') people.push('建物內無危險物品'); else if(c.hazardState==='has') people.push(`現場有危險物品${c.hazardItems?`：${c.hazardItems}`:''}`);
   if(people.length) lines.push(`四、人：目前${people.join('，')}。`);
   if(c.supportState==='needed'){
@@ -3773,7 +3808,7 @@ function buildReportSummaryTable(){
   return `<table class="report-plain-table"><tbody>
     <tr><th>案件類型</th><td>${escapeHtml(c.type||'未登錄')}</td><th>建物用途</th><td>${escapeHtml(c.purpose||'未登錄')}</td></tr>
     <tr><th>建物樓層</th><td>${escapeHtml(String(c.floors||'未登錄'))}</td><th>起火樓層</th><td>${escapeHtml(floorText(c.fireFloor))}</td></tr>
-    <tr><th>受困狀況</th><td>${escapeHtml(c.trapped==='有'?`有 / ${c.trappedCount||0}人`:c.trapped==='無'?'確認無人受困':'尚未確認')}</td><th>火煙狀況</th><td>${escapeHtml(c.fireStatus||'尚未確認')}</td></tr>
+    <tr><th>受困狀況</th><td>${escapeHtml(window.FCOperationalV32.trappedSummary(c).line)}</td><th>火煙狀況</th><td>${escapeHtml(c.fireStatus||'尚未確認')}</td></tr>
     <tr><th>到場回報</th><td>${escapeHtml(c.arrived?'已到達':'未確認')}</td><th>指揮權</th><td>${escapeHtml(c.commandTransfer?'已轉移':'未確認')}</td></tr>
     <tr><th>案件中心定位</th><td>${escapeHtml(locationSourceLabel(meta.source||'legacy'))}｜${escapeHtml(locationQualityLabel(meta))}</td><th>案件中心座標</th><td>${Number(c.lat||0).toFixed(6)}, ${Number(c.lng||0).toFixed(6)}</td></tr>
   </tbody></table>`;
@@ -4090,7 +4125,7 @@ function renderArrivalStatusCards(){
     arrived: [$('arrivedCheck'), $('addressConfirmCheck')?.checked ? '地址已確認' : '待確認地址'],
     building: [null, buildingDone ? `${$('detailPurpose').value}${$('buildingStructure')?.value?`／${$('buildingStructure').value}`:''}｜${$('detailFloors').value}樓｜${floorText($('detailFireFloor').value)}` : '尚缺必要資料'],
     fire: [null, fireDone ? buildFireStatusFromSop() : '尚缺火煙資料'],
-    trapped: [null, trappedState==='none'?'確認無人受困':trappedState==='has'?`受困 ${Number($('trappedCountArrival')?.value)||0} 人`:'尚未確認'],
+    trapped: [null, window.FCOperationalV32.trappedSummary({trapped:trappedState==='none'?'無':trappedState==='has'?'有':'',trappedCount:$('trappedCountArrival')?.value}).line],
     deployment: [null, deploymentDone?(live.crews.length||live.vehicles.length||live.hoses.length?`${live.vehicles.length}車｜${crewSummaryText()}｜${live.hoses.length}線`:'已有文字部署紀錄'):'尚未部署'],
     command: [$('commandCheck'), commandState==='transferred' ? '已完成轉移' : (commandState==='pending' ? '尚未完成' : '未確認')],
     contact: [$('contactCheck'), contactState==='found' ? (contacts.length ? `已找到 ${contacts.length} 位` : '已找到，待補資料') : (contactState==='notfound' ? '尚未找到' : '未確認')],
@@ -4168,7 +4203,7 @@ function commandBlocks(stage,c){
     '人': {
       confirm:['是否有人受困、受困人數與位置','搜救小組是否已派遣','RIT 與 PAR 是否已落實'],
       action:['優先人命搜救並以水線掩護','更新傷患者狀況回報','持續追蹤搜救進度與救護交接'],
-      speech:`目前人員受困狀況為${c.trapped||'未知'}，受困人數${c.trappedCount||0}人，${c.ritSet?'已律定RIT':'尚未律定RIT，請儘速指派'}。`
+      speech:`${window.FCOperationalV32.trappedSummary(c).line}，${c.ritSet?'已律定RIT':'尚未律定RIT，請儘速指派'}。`
     },
     '支': {
       confirm:['現有人車水線是否足夠','是否需要台電、瓦斯、警察、台水、毒災等外單位','是否需要雲梯、水庫、排煙、照明或大隊支援'],
@@ -4976,8 +5011,7 @@ function localTacticalAdviceText(){
   if(building) situation.push(`現場為${building}建物。`);
   if(c.fireFloor) situation.push(`起火樓層為${floorText(c.fireFloor)}。`);
   if(c.fireStatus && !/未知|未明/.test(c.fireStatus)) situation.push(`目前火煙狀況：${c.fireStatus.replace(/[。；]+$/,'')}。`);
-  if(c.trapped==='有') situation.push(`已確認有${Number(c.trappedCount)||0}人受困。`);
-  else if(c.trapped==='無') situation.push('已確認無人受困。');
+  const trapped=window.FCOperationalV32.trappedSummary(c);if(trapped.state!=='unknown')situation.push(`${trapped.line}。`);
   sections.push(`【態勢摘要】${situation.join('')||'現場資料持續確認中。'}`);
   const immediate=[];
   if(!c.hazardChecked) immediate.push('儘速由關係人或場所管理人確認瓦斯、化學品、電力、太陽能板及其他危害。');

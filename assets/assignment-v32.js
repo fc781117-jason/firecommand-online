@@ -5,7 +5,20 @@ const own=(v,k)=>Object.prototype.hasOwnProperty.call(v,k);
 const signature=v=>keys.map(k=>String(v?.[k]??'')).join('\u001f');
 const validTime=v=>Number.isFinite(v)&&v>0;
 function category(s){return /^(休息|REHAB)$/i.test(s.status||'')?'rehab':/^(作業中|OPERATING)$/i.test(s.status||'')?'work':'other';}
+// Task-only entry points share the same explicit task vocabulary. An unfamiliar
+// task does not prove deployment or reset an already confirmed status.
+function statusForTask(task){
+  const value=String(task||'').trim();
+  if(/^(?:休息|REHAB|輪替休息|原地休息|移至休息區|休息區休息)$/i.test(value))return '休息';
+  if(/^(?:待命|撤離|撤出)$/.test(value))return value==='待命'?'待命':'撤出';
+  if(/^RIT(?:待命)?$/i.test(value))return 'RIT';
+  if(/^(?:第[一二三四]面)?(?:滅火攻擊|人命搜救|內攻|搜救|搜索|搜索救援|救護|警戒|供水|滅火|排煙|人命救助|防護|佔據水源)$/.test(value))return '作業中';
+  return undefined;
+}
 function transition(before={},patch={},meta={}){
+  if(own(patch,'task')&&!own(patch,'status')&&patch.task!==before.task){
+    const status=statusForTask(patch.task);if(status)patch={...patch,status};
+  }
   const next={...before,...patch};
   if(!keys.some(k=>own(patch,k))||signature(before)===signature(next)){
     const safe={...patch};for(const k of ['taskSegments','assignmentRevision']){if(own(before,k))safe[k]=before[k];else delete safe[k];}return safe;
@@ -25,6 +38,6 @@ function totals(crew,now,closedAt){
   const stop=validTime(closedAt)?closedAt:now,segments=(crew.taskSegments||[]).map(s=>({...s,durationMs:Math.max(0,(s.endedAt??stop)-s.startedAt)}));
   return {segments,workMs:segments.filter(s=>category(s)==='work').reduce((n,s)=>n+s.durationMs,0),rehabMs:segments.filter(s=>category(s)==='rehab').reduce((n,s)=>n+s.durationMs,0),dispatchCount:crew.dispatchCount||0};
 }
-root.FCAssignmentV32={transition,closeSegments,totals,signature};
+root.FCAssignmentV32={transition,closeSegments,totals,signature,statusForTask};
 if(typeof module!=='undefined')module.exports=root.FCAssignmentV32;
 })(typeof window==='undefined'?globalThis:window);

@@ -113,7 +113,9 @@ function apply(items,before,state,c,options){
   if(i.kind==='crew'){
    const targets=state.crews.filter(x=>x.unit===i.unit&&(!i.targetId||x.id===i.targetId)&&(!i.group||(x.voiceGroup||x.leader)===i.group));
    if(targets.length!==1)continue;const p=targets[0];
-   if(i.interior){p.interior=true;p.layout31=true;p.positionManual=false;p.task=i.task||'內攻';p.status='作業中';p.staged=false;}
+   // A retained parser location hint cannot override an explicitly reviewed
+   // non-working task (rest, standby, withdrawal or RIT).
+   if(i.interior&&(!i.task||p.status==='作業中')){p.interior=true;p.layout31=true;p.positionManual=false;p.task=i.task||'內攻';p.status='作業中';p.staged=false;}
    if(i.floor)p.floor=i.floor;
    if(i.task==='待命'){p.interior=false;p.status='待命';p.task='待命';p.layout31=true;p.positionManual=false;}
    if(!before.crews.some(x=>x.id===p.id))p.layout31=true;
