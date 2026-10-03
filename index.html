@@ -97,6 +97,9 @@
       <button id="adminManageBtn" class="btn small ghost" type="button" hidden>帳號管理 <span id="adminManageBadge" class="account-pending-badge" hidden></span></button><button id="logoutBtn" class="btn small ghost">登出</button>
     </header>
 
+    <section id="previewDemoControlsV31" class="page" hidden aria-label="合成示範控制">
+      <div class="notice compact"><b>Preview 合成示範｜僅本機資料</b><p>已預填本輪測試資料。案件與練習共用功能；照片縮圖是合成素材，真實相機／Storage／跨裝置同步仍須另外驗收。</p><div class="button-row"><button id="previewDemoLiveV31" class="btn small primary" type="button">示範案件</button><button id="previewDemoPracticeV31" class="btn small ghost" type="button">示範練習</button><button id="previewDemoResetV31" class="btn small ghost" type="button">重設示範資料</button></div></div>
+    </section>
     <section class="page top-help-wrap" aria-label="常見故障排除">
       <details id="troubleshootingDetails" class="accordion troubleshooting-accordion">
         <summary><span>常見故障排除｜定位、PDF、登入</span><span class="chevron">›</span></summary>
@@ -608,9 +611,11 @@
                 <summary><span><b>戰情回報｜傷患者</b><small>尋獲、救出、救護處置與送醫</small></span><span class="chevron">›</span></summary>
                 <div class="sitrep-entry-body">
                 <div class="two-col compact-grid"><div class="field"><label>大隊</label><select id="patientBrigade"></select></div><div class="field"><label>單位</label><select id="patientUnit"></select></div></div>
+                <div class="field"><label>患者紀錄<select id="patientRecordV31"><option value="">新增患者（同一患者請選既有紀錄）</option></select></label></div>
                 <div class="field"><label>事件時間</label><input id="patientEventAt" type="datetime-local" /></div>
                 <div class="two-col compact-grid"><div class="field"><label>姓名</label><input id="patientName" placeholder="未知可空白" /></div><div class="field"><label>性別</label><select id="patientGender"><option>未知</option><option>男</option><option>女</option></select></div></div>
                 <div class="two-col compact-grid"><div class="field"><label>尋獲地點</label><input id="patientFoundAt" placeholder="例：3樓後側房間 / 陽台" /></div><div class="field"><label>狀況</label><select id="patientStatus"><option>待救援</option><option>已救出</option><option>輕傷</option><option>重傷</option><option>OHCA</option><option>死亡</option><option>其他</option></select></div></div>
+                <div class="field"><label>送醫狀態<select id="patientTransportV31"><option value="unknown">尚未確認</option><option value="not-transported">尚未送醫</option><option value="planned">預計送醫</option><option value="transported">已確認送醫</option></select></label></div>
                 <div class="field"><label>處置 / 送醫 / 補充</label><textarea id="patientNote" rows="4" placeholder="例：由○○分隊救出，交由救護站評估，送○○醫院"></textarea></div>
                 <div class="button-row"><button id="patientNowBtn" class="btn small ghost" type="button">事件時間設為現在</button><button id="addPatientSitrepBtn" class="btn small danger" type="button">送出傷 / 患者回報</button></div>
                 </div>
@@ -813,6 +818,8 @@
   <script src="./assets/tactics31.js?v=32"></script>
   <script src="./assets/intake-semantic.js?v=32"></script>
   <script src="./assets/v34-v3.js?v=34.3"></script>
+  <script src="./assets/operational-v31.js?v=34.3"></script>
+  <script src="./assets/preview-demo-v31.js?v=34.3"></script>
   <script src="./assets/intake-ui.js?v=34.3"></script>
   <script src="./assets/auth28.js?v=32"></script>
   <script src="./assets/scene32.js?v=34.3"></script>

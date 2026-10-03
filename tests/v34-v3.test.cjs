@@ -77,7 +77,7 @@ test('V3 疏散樓層可新增多戶，住戶有男女、總數、照片與修�
 });
 
 test('V3 Preview 示範帳號只在隔離且無 Firebase 時略過人工審核',()=>{
-  assert.match(app,/const isIsolatedPreviewDemo = !firebaseEnabled/);
+  assert.match(app,/const isIsolatedPreviewDemo = previewTargetVerifiedV31 && !firebaseEnabled/);
   assert.match(app,/FCFieldEntry\.isolatedPreviewHost\(location\.hostname\)/);
   assert.match(app,/fbUser\.uid === 'demo-user'/);
   assert.match(app,/status: isImmediatelyActive \? 'active' : 'pending'/);

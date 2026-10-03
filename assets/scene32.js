@@ -52,14 +52,14 @@ function build(c,state,options={}){
   make('crews',p,at,crewName(p),{type:'crew',inside,detail:[p.countUnknown?'人數待補':p.count+'人',p.status,p.floor,p.task,c.ritSet&&c.ritUnit===p.unit?'RIT':''].filter(Boolean).join('｜')});
  }
  if(c.ritSet&&c.ritUnit&&!nodes.some(n=>n.coll==='crews'&&n.item.unit===c.ritUnit))notes.push(c.ritUnit+'已指定RIT，人員位置待登錄');
- const existingTypes=new Set((s.hazards||[]).map(h=>zoneLabel(h.type)));
- for(const [key,z]of Object.entries(zoneMap))if(!existingTypes.has(zoneLabel(z.label))){
+ const existingTypes=new Set((s.hazards||[]).map(h=>zoneLabel(h.type))),sourceZoneIds=new Set((s.hazards||[]).map(h=>h.sourceZoneId).filter(Boolean));
+ for(const [key,z]of Object.entries(zoneMap))if(key!=='standby'&&!z.hidden&&!sourceZoneIds.has('zone32_'+key)&&!existingTypes.has(zoneLabel(z.label))){
   const point=Number.isFinite(z.lat)&&Number.isFinite(z.lng)?xy(b,z):pos(z.face,key==='ambulance'?'ambulanceZone':key==='forward'?'command':'command',0);
   if(key==='forward'&&!Number.isFinite(z.lat)){point.x+=12;point.y+=12;}
-  make('zones',{id:'zone32_'+key,...z},point,zoneLabel(z.label||key),{type:'zone',zoneType:zoneIcon(z.label||key),detail:z.face+'｜'+(z.derived||'已登錄')});
+  make('zones',{id:'zone32_'+key,...z},point,zoneLabel(z.label||key),{type:'zone',zoneType:zoneIcon(z.label||key),detail:[z.face,z.derived||'已登錄',z.note].filter(Boolean).join('｜')});
  }
  for(const h of s.hazards||[])make('hazards',h,xy(b,h),zoneLabel(h.type),{type:'zone',zoneType:zoneIcon(h.type),detail:'手動標示'});
- if(standby){const at=standbyPoint(0);at.y+=7;make('zones',{id:'standby32'},at,'待命區',{type:'zone',zoneType:'rehab'});}
+ if(standby&&!zoneMap.standby?.hidden&&!sourceZoneIds.has('standby32')){const z=zoneMap.standby||{},at=Number.isFinite(z.lat)&&Number.isFinite(z.lng)?xy(b,z):standbyPoint(0);if(!Number.isFinite(z.lat))at.y+=7;make('zones',{...z,id:'standby32'},at,z.label||'待命區',{type:'zone',zoneType:'rehab',detail:z.note||''});}
  const corners=[[-b.widthM/2,-b.heightM/2],[b.widthM/2,-b.heightM/2],[b.widthM/2,b.heightM/2],[-b.widthM/2,b.heightM/2]].map(p=>local(...p));
  const entrances=[local(0,-b.heightM/2),local(b.widthM/2,0),local(0,b.heightM/2),local(-b.widthM/2,0)];
  const hoses=(s.hoses||[]).map(h=>{let source=map.get(h.sourceId||h.vehicleId);if(!source&&(h.sourceName||h.vehicleName))source=nodes.find(v=>v.label===(h.sourceName||h.vehicleName));

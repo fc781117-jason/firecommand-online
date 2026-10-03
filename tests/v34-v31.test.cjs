@@ -27,7 +27,7 @@ test('V3.1 長按拖動只在放開時提交單一物件最終座標',()=>{
   const moveBody=app.slice(app.indexOf('function moveTacticalPointerV31'),app.indexOf('async function finishTacticalPointerV31'));
   assert.doesNotMatch(moveBody,/updateItem\(|updateTacticalPositionV31\(/);
   assert.match(app,/\['vehicles','crews','hazards','zones'\]\.includes\(coll\)/);
-  assert.match(app,/coll==='zones'[^]*?addItem\('hazards'/);
+  assert.match(app,/coll==='zones'[^]*?patchTacticalZoneV31\(/);
 });
 
 test('V3.1 建物內部移除錯置圖面摘要，概要沒有部署修改按鈕與三個畫面模式',()=>{
@@ -52,6 +52,6 @@ test('V3.1 概要只呈現已確認資料，建物資料不存在時隱藏卡片
   assert.match(app,/buildingCard\.hidden=!hasBuildingOperationalDataV31\(\)/);
   assert.match(app,/html\|\|overviewBuildingOperationalSummaryHtmlV31\(\)/);
   assert.match(app,/function overviewBuildingOperationalSummaryHtmlV31\(\)/);
-  assert.match(app,/已確認至少 \$\{confirmedMinimum\} 人/);
-  assert.match(app,/row\.status==='已疏散'/);
+  assert.match(app,/FCOperationalV31\.buildSituationLines/);
+  assert.deepEqual(require('../assets/operational-v31').buildSituationLines({},{}),[]);
 });
