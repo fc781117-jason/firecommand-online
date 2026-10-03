@@ -112,3 +112,15 @@ test('zone Undo keeps unrelated overrides and restores an existing manual overri
  assert.deepEqual(clone(run(c,'currentCase.tacticalZones.command')),before);
  assert.equal(run(c,'currentCase.tacticalZones.rehab.label'),'休息區');
 });
+test('live/practice initial, select, hose and cancel paths render one shared tactical hint; icon placement stays specific',()=>{
+ const c=app(),expected=run(c,'TACTICAL_INTERACTION_HINT_V31');
+ for(const mode of ['live','practice']){
+  run(c,`currentCase.mode='${mode}';deploymentMode='select';`);c.document.getElementById('deploymentActionHint').textContent='stale initial copy';
+  c.renderTacticalCanvasV3();assert.equal(c.document.getElementById('deploymentActionHint').textContent,expected);
+  for(const interaction of ['select','hose']){c.setDeploymentMode(interaction);assert.equal(c.document.getElementById('deploymentActionHint').textContent,expected);}
+  c.setDeploymentMode('hazard');assert.match(c.document.getElementById('deploymentActionHint').textContent,/選擇戰術圖示，再點畫布放置/);
+  c.setDeploymentMode('select');c.renderTacticalCanvasV3();assert.equal(c.document.getElementById('deploymentActionHint').textContent,expected);
+ }
+ for(const text of ['單點選取','再點同一物件','長按','車輛→人員','人員→車輛','圖示不可接線'])assert.ok(expected.includes(text),text);
+ const html=fs.readFileSync(require.resolve('../index.html'),'utf8');assert.match(html,/<p id="deploymentActionHint"><\/p>/);assert.doesNotMatch(html,/點第一台車選取；再點第二台車/);
+});

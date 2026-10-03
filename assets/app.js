@@ -1813,6 +1813,11 @@ function renderToolOptions(){
   updateMapUndoButton();
   syncBuildingBoxForm();
 }
+const TACTICAL_INTERACTION_HINT_V31='單點選取人員、車輛或圖示；再點同一物件開啟設定；長按可拖動。依序點車輛→車輛、車輛→人員或人員→車輛建立水線；圖示不可接線。';
+function renderDeploymentActionHintV31(){
+  const hint=$('deploymentActionHint');if(!hint)return;
+  hint.textContent=deploymentMode==='hazard'?'圖示放置模式：選擇戰術圖示，再點畫布放置；圖示不可連接水線。':TACTICAL_INTERACTION_HINT_V31;
+}
 function setDeploymentMode(mode='select'){
   deploymentMode=mode;
   document.querySelectorAll('[data-deploy-mode]').forEach(btn=>{
@@ -1821,8 +1826,7 @@ function setDeploymentMode(mode='select'){
   });
   selectedMapResource=null;
   if(mode!=='hose' && pendingTool?.type==='hoseConnect') pendingTool=null;
-  const hint=$('deploymentActionHint');
-  if(hint) hint.textContent=mode==='hose'?'水線模式：先點可供水車輛，再點另一台車、人員編組，或建物第一、二、三、四面。':mode==='hazard'?'危害模式：點下方危害圖示，再點地圖放置。':'選取模式：點資源後再點地圖，或直接拖曳地圖上的標示。';
+  renderDeploymentActionHintV31();
   renderDeploymentPalette();
 }
 function renderDeploymentPalette(){
@@ -1858,6 +1862,7 @@ function editTacticalZoneV31(id){
   $('deleteZoneV31').onclick=async()=>{if(!confirm(`確認刪除標示「${node.label}」？`))return;try{await patchTacticalZoneV31(id,{hidden:true},'刪除標示');closeActionSheet();toast('標示已刪除，可復原');}catch(error){$('zoneStatusV31').textContent=error.message;}};
 }
 function renderTacticalCanvasV3(){
+  renderDeploymentActionHintV31();
   const canvas=$('tacticalCanvasV3');if(!canvas||!currentCase||!window.FCScene32)return;
   tacticalSceneV3=FCScene32.build(currentCase,{vehicles:live.vehicles,crews:live.crews,hoses:live.hoses,hazards:live.hazards,sitreps:live.sitreps},{all:true});
   canvas.innerHTML=FCScene32.svg(tacticalSceneV3);
