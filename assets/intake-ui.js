@@ -169,6 +169,7 @@ async function commitIntake28(event,revision){
  if(id!==currentCaseId||event.authorUid!==profile.id)throw Error('案件或登入身分已變更');
  if(currentCase?.status==='closed')throw Error('案件已結束');
  if(currentCase?.mode==='practice'&&myTrainingRole()==='觀察員')throw Error('觀察員僅可閱覽');
+ if(window.FCAssignmentV32)event={...event,writes:event.writes.map(w=>w.coll==='crews'&&w.after?{...w,after:{...w.after,...assignmentTransitionV32(w.before||{},w.after,event.id,event.kind==='undo'?'undo':'confirmed-intake',w.id)}}:w)};
  if(firebaseEnabled){
   const ref=db.collection('cases').doc(id),evRef=ref.collection('intakeEvents').doc(event.id);
   return db.runTransaction(async tx=>{

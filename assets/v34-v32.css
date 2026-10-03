@@ -1,4 +1,4 @@
-.tactical-icon-palette-v3>summary{text-align:center;white-space:normal;max-width:100%;line-height:1.35}.tactical-icon-palette-v3>summary small{display:block;font-size:.75rem;font-weight:500}
+.tactical-icon-palette-v3>summary{display:flex!important;flex-direction:column;align-items:center!important;justify-content:center!important;text-align:center;white-space:normal;max-width:100%;line-height:1.35}.tactical-icon-palette-v3>summary small{display:block;font-size:.75rem;font-weight:500}
 #tacticalCanvasV3{height:460px;overflow:hidden;touch-action:none;position:relative;user-select:none;-webkit-user-select:none}
 #tacticalCanvasV3 .fc32{width:100%;min-width:0!important;height:100%;display:block;touch-action:none}
 .tactical-zoom-v32{display:flex;gap:6px;justify-content:flex-end;margin-bottom:6px}.tactical-zoom-v32 button{min-width:48px;min-height:48px}

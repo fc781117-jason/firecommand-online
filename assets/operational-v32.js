@@ -28,7 +28,7 @@ function buildOperationalSummary(c={},live={}){
   list(live.hoses).forEach(h=>deployment.push(`${h.sourceName||h.vehicleName||'起點待確認'} → ${h.targetName||'終點待確認'}｜${h.kind||'水線'}（${h.status||'僅圖面紀錄，供水待確認'}）`));
   const situation=[c.fireStatus,...list(live.sitreps).slice().sort((a,b)=>(b.eventAt||b.submittedAt||0)-(a.eventAt||a.submittedAt||0)).slice(0,5).map(r=>r.title||r.category)].filter(Boolean);
   const hazards=[c.hazardState==='none'?'已確認無危險物品':c.hazardItems,...list(live.hazards).map(h=>h.type)].filter(Boolean);
-  const support=list(c.supports).map(s=>typeof s==='string'?s:[s.unit||s.type,s.task||s.item,s.status||'需求已登錄'].filter(Boolean).join('｜'));
+  const support=(Array.isArray(c.supportRequests)?c.supportRequests:list(c.supports)).map(s=>typeof s==='string'?s:[s.unit||s.type,s.task||s.item,({requested:'需求已登錄',contacted:'已聯絡',arrived:'已到場',completed:'已完成'})[s.status]||s.status||'需求已登錄'].filter(Boolean).join('｜'));
   const timestamps=[['報案',c.reportedAt],['建立',c.createdAt],['結案',c.closedAt]].filter(([,v])=>v);
   return {incident,lifeSafety,situation,deployment,floors,hazards,support,timestamps};
 }

@@ -31,3 +31,20 @@ Rollback: revert Phase A commit on feature branch. Production unchanged.
 - Automated tests recorded separately; real iPhone camera/pinch/PWA and Firebase Storage persistence NOT TESTED.
 - Task segments, closure backend guards/snapshot, PWA push not delivered by Phase A.
 - Vercel scope reauthorization required for direct project/deployment inspection; never promote Preview without user approval.
+
+## Phase B — implemented, Preview regression pending
+
+- Compatible `crews.taskSegments[]` + `assignmentRevision`; no second crew collection.
+- Shared transition used by addItem/updateItem, field personnel form, and confirmed intake transaction (including undo).
+- Count-only changes keep status/timer; task/status/face/floor changes close prior segment and record new one. Legacy startAt is explicitly partial; absent times are not invented.
+- Manual crew updates use transaction + changed-field freshness check. Other clients cannot silently replace task data through this path.
+- Crew cards provide history. Operational report data includes per-segment work/REHAB totals and dispatch count. Timers are derived, no per-second writes.
+- Closure helper is unit-tested but NOT wired to formal closure yet. Phase C final snapshot/admin reopen/backend readonly remains unfinished; existing Rules are unchanged.
+- Phase D PWA/Push remains unfinished, not claimed enabled. There is no scoped server service credential/configuration verified in this session; scheduled background sender, recipient isolation and lock-screen receive must be implemented/validated before release.
+
+## Test checkpoint
+
+- `node scripts/verify.cjs`: 264/264 PASS (syntax + automated regression).
+- Phase A real Preview: structured overview, +/-/Fit SVG viewBox, resident compact/detail UI inspected.
+- Real iPhone, multi-touch, Storage upload persistence, authenticated multi-device conflict, push: NOT TESTED.
+- Do not upload this branch to Production as a complete V3.2 update. Continue C/D after obtaining authorized isolated backend and Vercel team access.
