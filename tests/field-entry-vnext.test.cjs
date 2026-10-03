@@ -27,7 +27,7 @@ test('Preview 的 vercel.app 子網域不得連正式 Firebase；固定正式網
 test('人員空白寫入後補3人更新同筆；失敗不清空草稿',async()=>{
   const c=app(),node=id=>c.document.getElementById(id),records=new Map();
   vm.runInContext(`currentCase={id:'case1',mode:'live',resourceRevision:0};currentCaseId='case1';profile={id:'admin',brigade:'第三大隊',email:'admin@example.com'};fbUser={uid:'admin'};firebaseEnabled=true;stagingPosition=()=>({lat:25,lng:121});renderLiveParts=()=>{};`,c);
-  c.db={collection:()=>({doc:id=>({id,collection:()=>({doc:key=>({id:key})})})}),runTransaction:async(fn)=>{const tx={get:async ref=>({exists:records.has(ref.id),data:()=>records.get(ref.id)}),set:(ref,data)=>records.set(ref.id,{...data}),update:(ref,data)=>{if(records.has(ref.id))records.set(ref.id,{...records.get(ref.id),...data});}};await fn(tx);}};
+  c.db={collection:()=>({doc:id=>({id,collection:()=>({doc:key=>({id:key})})})}),runTransaction:async(fn)=>{const tx={get:async ref=>({exists:ref.id==='case1'||records.has(ref.id),data:()=>ref.id==='case1'?{status:'active'}:records.get(ref.id)}),set:(ref,data)=>records.set(ref.id,{...data}),update:(ref,data)=>{if(records.has(ref.id))records.set(ref.id,{...records.get(ref.id),...data});}};await fn(tx);}};
   vm.runInContext('db=globalThis.db;firebase={firestore:{FieldValue:{increment:()=>1}}}',c);
   node('fieldCrewBrigade').value='第三大隊';node('fieldCrewUnit').value='淡水';node('fieldCrewCount').value='';node('fieldCrewTask').value='';
   await vm.runInContext('saveFieldCrew()',c);

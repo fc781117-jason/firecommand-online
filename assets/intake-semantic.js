@@ -158,7 +158,8 @@ function compile(items,state,caseData,roster,options={}){
    if(i.face&&!Core.faces.includes(i.face)){addError(i,'面向請選第一至第四面');continue;}
    if(i.kind==='crew'){
     if(num!==null&&(!Number.isInteger(num)||num<0||num>99)){addError(i,'人數請填0–99，支援中文數字');continue;}
-    intent={kind:'crew',key:i.id,line:i.evidence||'',unit:i.unit,brigade,group:i.group||'',count:num===null?undefined:num,mode:i.quantityMode||'set',face:i.face||undefined,task:i.task||undefined,status:i.task&&/內攻|進入|搜救|滅火|供水|警戒/.test(i.task)?'作業中':undefined,targetId:i.targetId||undefined,allowUnknown:!!i.allowUnknown||num===null&&/到場|報到|抵達/.test(i.evidence)&&!/未到|還沒|尚未|預計|建議|可能/.test(i.evidence),interior:!!i.interior};
+    const assignment=root.FCAssignmentV32||(typeof require==='function'?require('./assignment-v32.js'):null);
+    intent={kind:'crew',key:i.id,line:i.evidence||'',unit:i.unit,brigade,group:i.group||'',count:num===null?undefined:num,mode:i.quantityMode||'set',face:i.face||undefined,task:i.task||undefined,status:assignment?.statusForTask(i.task),targetId:i.targetId||undefined,allowUnknown:!!i.allowUnknown||num===null&&/到場|報到|抵達/.test(i.evidence)&&!/未到|還沒|尚未|預計|建議|可能/.test(i.evidence),interior:!!i.interior};
    }else if(i.kind==='vehicle'){
     const vehicle=(i.vehicle||'').replace(/\s/g,'');if(!vehicle.startsWith(i.unit)||!/^\d{2,3}$/.test(vehicle.slice(i.unit.length))){addError(i,'請填車輛編號，例如11或111；分隊會自動加上，完整車號也可');continue;}
     intent={kind:'vehicle',key:i.id,line:i.evidence,unit:i.unit,brigade,name:vehicle,face:i.face||undefined};

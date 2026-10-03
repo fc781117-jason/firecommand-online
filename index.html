@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="./assets/field-entry.css?v=34.2" />
   <link rel="stylesheet" href="./assets/v31.css?v=32" /><link rel="stylesheet" href="./assets/v30.css?v=32" />
   <link rel="stylesheet" href="./assets/v34-v3.css?v=34.3" />
+  <link rel="stylesheet" href="./assets/v34-v32.css?v=34.3" />
 </head>
 <body>
   <div id="toast" class="toast" hidden></div>
@@ -312,7 +313,7 @@
             <div id="summaryCards" class="h-scroll"></div>
             <section class="overview-brief-card">
               <div class="overview-brief-head"><div><div class="eyebrow">長官快速掌握</div><h3>即時案件概要</h3></div><span id="overviewUpdatedMeta" class="overview-updated-meta">自動更新</span></div>
-              <p id="overviewExecutiveText" class="overview-executive-text">案件資料彙整中。</p>
+              <div id="overviewExecutiveText" class="overview-executive-text">案件資料彙整中。</div>
             </section>
             <section id="overviewSituationCardV31" class="overview-brief-card" hidden>
               <div class="overview-brief-head"><div><div class="eyebrow">已確認情報</div><h3>目前戰情</h3></div></div>
@@ -657,7 +658,7 @@
 
         <section id="deploymentMapDetails" class="tactical-workspace-v3" aria-label="戰術部署圖">
           <div class="tactical-head-v3"><div><div class="eyebrow">消防戰術示意</div><h4>戰術部署圖</h4><p id="deploymentActionHint"></p></div><div class="tactical-head-actions"><button id="cancelHoseSelection" type="button" class="btn small ghost">取消選取</button><button id="mapUndoBtn" type="button" class="btn small ghost" disabled>↶ 復原</button></div></div>
-          <details id="tacticalIconPaletteV3" class="tactical-icon-palette-v3"><summary>戰術圖示</summary><div id="hazardPaletteV2" class="hazard-grid">
+          <details id="tacticalIconPaletteV3" class="tactical-icon-palette-v3"><summary>戰術圖示<small>前進指揮所・火點・危害物質等</small></summary><div id="hazardPaletteV2" class="hazard-grid">
             <button class="btn small ghost hazard-btn" data-hazard="起火點"><svg aria-hidden="true"><use href="#fc-icon-fire"></use></svg>起火點</button>
             <button class="btn small ghost hazard-btn" data-hazard="瓦斯"><svg aria-hidden="true"><use href="#fc-icon-gas"></use></svg>瓦斯</button>
             <button class="btn small ghost hazard-btn" data-hazard="高壓電"><svg aria-hidden="true"><use href="#fc-icon-electric"></use></svg>高壓電</button>
@@ -677,6 +678,7 @@
               <symbol id="fc-icon-ems" viewBox="0 0 24 24"><path d="M10 3h4v6h6v4h-6v8h-4v-8H4V9h6V3Z"/></symbol>
             </defs>
           </svg>
+          <div class="tactical-zoom-v32" aria-label="畫布縮放"><button id="tacticalZoomInV32" class="btn small ghost" aria-label="放大畫布">＋</button><button id="tacticalZoomOutV32" class="btn small ghost" aria-label="縮小畫布">－</button><button id="tacticalFitV32" class="btn small ghost">Fit</button></div>
           <div id="tacticalCanvasV3" class="tactical-canvas-v3" tabindex="0" aria-label="非導航底圖的消防戰術部署畫布"></div>
           <div id="tacticalCanvasStatusV3" class="hint" role="status">查看模式｜尚未選取資源</div>
         </section>
@@ -819,6 +821,8 @@
   <script src="./assets/intake-semantic.js?v=32"></script>
   <script src="./assets/v34-v3.js?v=34.3"></script>
   <script src="./assets/operational-v31.js?v=34.3"></script>
+  <script src="./assets/operational-v32.js?v=34.3"></script>
+  <script src="./assets/assignment-v32.js?v=34.3"></script>
   <script src="./assets/preview-demo-v31.js?v=34.3"></script>
   <script src="./assets/intake-ui.js?v=34.3"></script>
   <script src="./assets/auth28.js?v=32"></script>
