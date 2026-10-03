@@ -50,5 +50,8 @@ test('V3.1 概要只呈現已確認資料，建物資料不存在時隱藏卡片
   assert.match(html,/id="overviewSituationCardV31"[^>]*hidden/);
   assert.match(html,/id="overviewBuildingCardV31"[^>]*hidden/);
   assert.match(app,/buildingCard\.hidden=!hasBuildingOperationalDataV31\(\)/);
+  assert.match(app,/html\|\|overviewBuildingOperationalSummaryHtmlV31\(\)/);
+  assert.match(app,/function overviewBuildingOperationalSummaryHtmlV31\(\)/);
+  assert.match(app,/已確認至少 \$\{confirmedMinimum\} 人/);
   assert.match(app,/row\.status==='已疏散'/);
 });

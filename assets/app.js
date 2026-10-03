@@ -1704,24 +1704,29 @@ function renderOverviewContent(){
   const building=$('overviewBuildingSnapshot');
   if(building){
     const html=floorPlanSchematicHtml();
-    building.innerHTML=html||'<div class="overview-empty">尚未建立建物內部作戰圖；請至「部署」開啟建物作戰圖繪製。</div>';
+    building.innerHTML=html||overviewBuildingOperationalSummaryHtmlV31()||'<div class="overview-empty">尚未建立建物內部作戰圖；請至「部署」開啟建物作戰圖繪製。</div>';
   }
   renderOverviewSituationV31();
 }
 function buildingResidentEntriesV31(){return (currentCase?.buildingOps?.floorActions||[]).flatMap(entry=>(entry.residents||[]).map(row=>({floor:Number(entry.floor),floorAction:entry.action||'未標示',...row})));}
 function confirmedPatientEntriesV31(){return (live.sitreps||[]).map(row=>row.patient).filter(Boolean);}
 function hasBuildingOperationalDataV31(){const ops=currentCase?.buildingOps||{};return (ops.floorActions||[]).some(entry=>(entry.action&&entry.action!=='未標示')||(entry.residents||[]).length)||(ops.planMarkers||[]).length>0;}
+function overviewBuildingOperationalSummaryHtmlV31(){
+  const entries=(currentCase?.buildingOps?.floorActions||[]).filter(entry=>(entry.action&&entry.action!=='未標示')||(entry.residents||[]).length);
+  if(!entries.length)return '';
+  return `<div class="overview-building-operational-v31">${entries.map(entry=>{const rows=entry.residents||[],summary=window.FCV34V3?.floorResidentSummary(rows)||{households:rows.length,confirmedMinimum:0,pending:rows.length},status=entry.action&&entry.action!=='未標示'?`｜${entry.action}`:'',population=rows.length?(summary.pending?`｜已確認至少 ${summary.confirmedMinimum} 人｜${summary.pending} 戶人數待確認`:`｜已確認 ${summary.confirmedMinimum} 人`):'';return `<p><strong>${floorLabel(entry.floor)}${escapeHtml(status)}</strong>${rows.length?`｜${summary.households} 戶${escapeHtml(population)}`:''}${entry.note?`<br><span>${escapeHtml(entry.note)}</span>`:''}</p>`;}).join('')}</div>`;
+}
 function overviewSituationLinesV31(){
   const lines=[],residents=buildingResidentEntriesV31(),patients=confirmedPatientEntriesV31();
   if(currentCase?.trapped==='有')lines.push(Number(currentCase.trappedCount)>0?`已確認受困 ${Number(currentCase.trappedCount)} 人。`:'已確認有人受困，人數待確認。');
   else if(currentCase?.trapped==='無')lines.push('目前確認無人受困。');
   const evacuated=residents.filter(row=>row.status==='已疏散'),rescued=residents.filter(row=>row.status==='已救出'),hospitalized=[...residents.filter(row=>row.status==='送醫'),...patients.filter(row=>/送醫/.test(row.status||''))],fatal=[...residents.filter(row=>row.status==='死亡'),...patients.filter(row=>/死亡/.test(row.status||''))];
-  const completeResidents=residents.reduce((sum,row)=>sum+(window.FCV34V3?.residentTotal(row.maleCount,row.femaleCount)??0),0),pending=residents.filter(row=>window.FCV34V3?.residentTotal(row.maleCount,row.femaleCount)===null).length;
+  const confirmedMinimum=residents.reduce((sum,row)=>sum+(Number(row.maleCount)||0)+(Number(row.femaleCount)||0),0),pending=residents.filter(row=>window.FCV34V3?.residentTotal(row.maleCount,row.femaleCount)===null).length;
   if(evacuated.length)lines.push(`已確認 ${evacuated.length} 戶完成疏散。`);
   if(rescued.length)lines.push(`已確認救出 ${rescued.length} 戶住戶紀錄。`);
   if(hospitalized.length)lines.push(`已登錄送醫 ${hospitalized.length} 筆。`);
   if(fatal.length)lines.push(`已登錄死亡 ${fatal.length} 筆。`);
-  if(residents.length){const countText=pending?(completeResidents>0?`完整人數資料 ${completeResidents} 人，另有 ${pending} 戶人數待確認`:`${pending} 戶人數待確認`):`完整人數資料 ${completeResidents} 人`;lines.push(`建物住戶已記錄 ${residents.length} 戶；${countText}。`);}
+  if(residents.length){const countText=pending?(confirmedMinimum>0?`已確認至少 ${confirmedMinimum} 人，另有 ${pending} 戶人數待確認`:`${pending} 戶人數待確認`):`已確認 ${confirmedMinimum} 人`;lines.push(`建物住戶已記錄 ${residents.length} 戶；${countText}。`);}
   for(const entry of currentCase?.buildingOps?.floorActions||[]){const rows=entry.residents||[];if(!rows.length)continue;const summary=window.FCV34V3?.floorResidentSummary(rows),known=summary.confirmedMinimum>0?`，已確認至少 ${summary.confirmedMinimum} 人`:'';lines.push(`${floorLabel(entry.floor)}已記錄 ${summary.households} 戶${summary.pending?`${known}，${summary.pending} 戶人數待確認`:`，完整人數資料 ${summary.knownTotal} 人`}。`);}
   return lines;
 }
