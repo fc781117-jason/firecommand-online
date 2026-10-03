@@ -32,7 +32,7 @@ Rollback: revert Phase A commit on feature branch. Production unchanged.
 - Task segments, closure backend guards/snapshot, PWA push not delivered by Phase A.
 - Vercel scope reauthorization required for direct project/deployment inspection; never promote Preview without user approval.
 
-## Phase B — implemented, Preview regression pending
+## Phase B — implemented, local Preview regression checked
 
 - Compatible `crews.taskSegments[]` + `assignmentRevision`; no second crew collection.
 - Shared transition used by addItem/updateItem, field personnel form, and confirmed intake transaction (including undo).
@@ -48,3 +48,11 @@ Rollback: revert Phase A commit on feature branch. Production unchanged.
 - Phase A real Preview: structured overview, +/-/Fit SVG viewBox, resident compact/detail UI inspected.
 - Real iPhone, multi-touch, Storage upload persistence, authenticated multi-device conflict, push: NOT TESTED.
 - Do not upload this branch to Production as a complete V3.2 update. Continue C/D after obtaining authorized isolated backend and Vercel team access.
+
+## Handoff
+
+- Code HEAD: `0fb9c0fa2f174d18fd0c6366a710c63a1ba29ef5`; draft PR #7.
+- Preview deployment: `2G5PeCmk2oQoX3mUJVvmq8zEdXBE` (GitHub Vercel success).
+- Actual Preview personnel sheet REHAB → search transition and reload persistence checked with synthetic local data.
+- Complete scoped results, file list, screenshots, migration/rollback and blockers: `V32_TEST_RESULTS.md`.
+- Phase C/D still pending; no Production changes or merge.
