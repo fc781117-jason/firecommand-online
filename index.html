@@ -16,6 +16,8 @@
   <link rel="stylesheet" href="./assets/v34-v3.css?v=34.3" />
   <link rel="stylesheet" href="./assets/v34-v32.css?v=34.3" />
   <link rel="stylesheet" href="./assets/v34-v33.css?v=34.4" />
+  <link rel="stylesheet" href="./assets/firecommand-ui-tokens.css?v=1" />
+  <link rel="stylesheet" href="./assets/firecommand-ui-components.css?v=1" />
 </head>
 <body>
   <div id="toast" class="toast" hidden></div>
@@ -629,16 +631,25 @@
       </section>
 
       <section id="tacticalMapSection" class="map-section case-page-panel" data-case-page-panel="tacticalMapSection" hidden>
-        <div class="section-head compact">
-          <div><div class="eyebrow">部署</div><h3>人員、車輛與戰術部署圖</h3></div>
+        <div class="fc-ui-hero fc-ui-section-hero" aria-hidden="true"><div class="fc-ui-hero-copy"><span>FIREGROUND COMMAND</span><strong>專業指揮・守護每一刻</strong><small>人員・車輛・戰術部署</small></div></div>
+        <div class="section-head compact fc-ui-section-head">
+          <div><div class="eyebrow">現場資源與圖面</div><h3>部署</h3><p>人員、車輛與戰術部署圖</p></div>
+          <svg class="fc-ui-section-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="m12 2 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 15l9 5 9-5"/></svg>
         </div>
 
+        <svg class="fc-ui-sprite" aria-hidden="true" focusable="false"><defs>
+          <symbol id="fc-ui-crew" viewBox="0 0 24 24"><circle cx="9" cy="7" r="3"/><path d="M2 20v-2a7 7 0 0 1 14 0v2H2Zm15-16a3 3 0 0 1 0 6m1 3a6 6 0 0 1 4 6v1h-3"/></symbol>
+          <symbol id="fc-ui-vehicle" viewBox="0 0 24 24"><path d="M2 7h12v10H2V7Zm12 3h4l4 4v3h-8v-7Z"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/></symbol>
+          <symbol id="fc-ui-tactical" viewBox="0 0 24 24"><path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2V5Zm6-2v16m6-14v16"/><circle cx="13" cy="10" r="2"/></symbol>
+          <symbol id="fc-ui-building" viewBox="0 0 24 24"><path d="M3 21V5l9-3 9 3v16H3Zm6 0v-5h6v5M7 8h2m6 0h2M7 12h2m6 0h2"/></symbol>
+        </defs></svg>
+
         <div class="field-entry-bars" aria-label="現場資源快速登錄">
-          <details id="fieldCrewDetails" class="field-entry-bar"><summary><span>人員登錄／確認</span><small id="fieldCrewSummary">可先登錄單位，人數待補</small></summary><div class="field-entry-body">
+          <details id="fieldCrewDetails" class="field-entry-bar fc-ui-action-card fc-ui-crew-card"><summary><span><svg class="fc-ui-card-icon" aria-hidden="true"><use href="#fc-ui-crew"></use></svg>人員登錄／確認</span><small id="fieldCrewSummary">可先登錄單位，人數待補</small></summary><div class="field-entry-body">
             <div class="field-entry-grid crew-grid-v2"><label>資料類型<select id="fieldCrewKind"><option value="crew">人員／單位</option></select></label><label>大隊<select id="fieldCrewBrigade"></select></label><label>出勤總人數<select id="fieldCrewCount"></select></label><label>分隊<select id="fieldCrewUnit"></select></label></div><div class="field-entry-grid crew-grid-v2"><label>面向<select id="fieldCrewFace"><option value="">未指定</option><option>第一面</option><option>第二面</option><option>第三面</option><option>第四面</option></select></label><label>任務<select id="fieldCrewTask"><option value="">未指定</option><option>待命</option><option>滅火攻擊</option><option>人命搜救</option><option>內攻</option><option>警戒</option><option>供水</option><option>排煙</option><option>救護</option><option>休息</option><option>RIT</option><option value="其他">其他</option></select></label></div><label id="fieldCrewTaskOtherWrap" hidden>其他任務<input id="fieldCrewTaskOther" maxlength="80" placeholder="輸入特殊任務" /></label>
             <div id="fieldCrewSaveStatus" class="hint" role="status">尚未儲存</div><button id="fieldCrewSaveBtn" type="button" class="btn primary full">確認儲存人員／單位</button><div id="fieldCrewList" class="field-entry-list"></div>
           </div></details>
-          <details id="fieldVehicleDetails" class="field-entry-bar"><summary><span>車輛登錄／確認</span><small id="fieldVehicleSummary">只需大隊、單位、車號</small></summary><div class="field-entry-body">
+          <details id="fieldVehicleDetails" class="field-entry-bar fc-ui-action-card fc-ui-vehicle-card"><summary><span><svg class="fc-ui-card-icon" aria-hidden="true"><use href="#fc-ui-vehicle"></use></svg>車輛登錄／確認</span><small id="fieldVehicleSummary">只需大隊、單位、車號</small></summary><div class="field-entry-body">
             <div class="field-entry-grid"><label>大隊<select id="fieldVehicleBrigade"></select></label><label>分隊／單位<select id="fieldVehicleUnit"></select></label><label>車號<select id="fieldVehicleCode"><option value="">選擇車號</option><option value="11">11</option><option value="12">12</option><option value="16">16</option><option value="17">17</option><option value="21">21</option><option value="31">31</option><option value="41">41</option><option value="51">51</option><option value="61">61</option><option value="71">71</option><option value="81">81</option><option value="91">91</option><option value="custom">＋新增車號</option></select></label><span class="field-entry-spacer" aria-hidden="true"></span></div><label id="fieldVehicleCustomWrap" hidden>借車／特殊編號<input id="fieldVehicleCustomCode" maxlength="40" placeholder="輸入車輛編號；分隊名稱會自動加在前面" /></label>
             <div id="fieldVehicleSaveStatus" class="hint" role="status">尚未儲存</div><button id="fieldVehicleSaveBtn" type="button" class="btn primary full">確認儲存車輛</button><div id="fieldVehicleList" class="field-entry-list"></div>
           </div></details>
@@ -658,8 +669,8 @@
 
         <div class="field-drawing-divider" role="separator" aria-label="圖面">圖面</div>
         <div class="field-entry-bars field-drawing-bars" aria-label="現場圖面">
-        <details id="deploymentMapDetails" class="field-entry-bar drawing-accordion" aria-label="戰術部署圖">
-          <summary><span class="field-entry-heading">戰術部署圖<small>查看與編輯現場戰術部署</small></span></summary>
+        <details id="deploymentMapDetails" class="field-entry-bar drawing-accordion fc-ui-action-card fc-ui-map-card" aria-label="戰術部署圖">
+          <summary><span class="field-entry-heading"><svg class="fc-ui-card-icon" aria-hidden="true"><use href="#fc-ui-tactical"></use></svg>戰術部署圖<small>查看與編輯現場戰術部署</small></span></summary>
           <div class="field-entry-body tactical-workspace-v3">
           <div class="tactical-head-v3"><div><div class="eyebrow">消防戰術示意</div><h4>戰術部署圖</h4><p id="deploymentActionHint"></p></div><div class="tactical-head-actions"><button id="cancelHoseSelection" type="button" class="btn small ghost">取消選取</button><button id="mapUndoBtn" type="button" class="btn small ghost" disabled>↶ 復原</button></div></div>
           <details id="tacticalIconPaletteV3" class="tactical-icon-palette-v3"><summary>戰術圖示<small>前進指揮所・火點・危害物質等</small></summary><div id="hazardPaletteV2" class="hazard-grid">
@@ -688,8 +699,8 @@
           </div>
         </details>
 
-                <details id="buildingOpsDetails" class="field-entry-bar drawing-accordion">
-                  <summary><span class="field-entry-heading">建物繪圖<small>縱向剖面／水平俯視</small></span></summary>
+                <details id="buildingOpsDetails" class="field-entry-bar drawing-accordion fc-ui-action-card fc-ui-building-card">
+                  <summary><span class="field-entry-heading"><svg class="fc-ui-card-icon" aria-hidden="true"><use href="#fc-ui-building"></use></svg>建物繪圖<small>縱向剖面／水平俯視</small></span></summary>
                   <div class="field-entry-body building-drawing-body">
                     <div class="notice">點選「同步樓層」後，左側會依建物樓層產生縱向剖面圖；右側可切換火災樓層並標示起火點、受困者、死亡者、入口、隔間與水線。此資料會併入報告與操作紀錄。</div>
                     <div id="orientationHint" class="orientation-hint" hidden>

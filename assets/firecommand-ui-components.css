@@ -1,0 +1,76 @@
+/* Reusable visual components. The V1 application scope is the deployment page only. */
+.fc-ui-section-hero{position:relative;isolation:isolate;overflow:hidden;border-radius:var(--fc-ui-radius-lg);background-color:var(--fc-ui-brand-navy);color:#fff}
+.fc-ui-action-card{border:1px solid var(--fc-ui-border);border-radius:var(--fc-ui-radius-md);background:var(--fc-ui-surface);box-shadow:var(--fc-ui-shadow)}
+.fc-ui-metric-card{padding:var(--fc-ui-space-lg);border:1px solid var(--fc-ui-border);border-radius:var(--fc-ui-radius-md);background:var(--fc-ui-surface)}
+.fc-ui-metric-card strong{font-size:1.75rem;font-weight:var(--fc-ui-numeric-weight);font-variant-numeric:tabular-nums;color:var(--fc-ui-text-primary)}
+.fc-ui-status-chip{display:inline-flex;gap:var(--fc-ui-space-xs);align-items:center;padding:5px 10px;border-radius:var(--fc-ui-radius-pill);background:var(--fc-ui-surface-cool);color:var(--fc-ui-brand-navy);font-weight:var(--fc-ui-section-weight)}
+.fc-ui-alert-banner{padding:var(--fc-ui-space-md) var(--fc-ui-space-lg);border:1px solid var(--fc-ui-critical);border-radius:var(--fc-ui-radius-sm);background:#FFF1F0;color:#9D221F}
+.fc-ui-empty-state{padding:var(--fc-ui-space-xl);border:1px dashed var(--fc-ui-border);border-radius:var(--fc-ui-radius-md);background:var(--fc-ui-surface-soft);color:var(--fc-ui-text-secondary)}
+
+/* Deployment Golden Reference. IDs and native details are preserved. */
+#tacticalMapSection{padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;color:var(--fc-ui-text-primary);font-family:var(--fc-ui-font);min-width:0}
+#tacticalMapSection .fc-ui-hero{position:relative;display:flex;align-items:center;min-height:138px;isolation:isolate;overflow:hidden;border-radius:var(--fc-ui-radius-lg);background-color:var(--fc-ui-brand-navy);background-image:var(--fc-ui-hero-overlay),url('./firecommand-hero-v1.webp');background-size:cover;background-position:center;color:#fff;box-shadow:var(--fc-ui-shadow);padding:var(--fc-ui-space-xl)}
+#tacticalMapSection .fc-ui-hero:after{content:"";position:absolute;right:-14px;bottom:-5px;width:112px;height:7px;background:var(--fc-ui-critical);transform:rotate(-37deg);box-shadow:0 -12px 0 rgba(255,255,255,.75),0 12px 0 rgba(15,111,198,.8);opacity:.8;pointer-events:none}
+.fc-ui-hero-copy{display:grid;gap:4px;max-width:560px;text-shadow:0 2px 14px rgba(0,0,0,.38)}
+.fc-ui-hero-copy span{font-size:.7rem;font-weight:800;letter-spacing:.25em}
+.fc-ui-hero-copy strong{font-size:clamp(1.15rem,3vw,1.85rem);line-height:1.25;letter-spacing:.03em}
+.fc-ui-hero-copy small{font-size:.85rem;font-weight:650;letter-spacing:.04em;color:#E5F4FF}
+#tacticalMapSection .fc-ui-section-head{align-items:center;gap:var(--fc-ui-space-md);margin:var(--fc-ui-space-xl) 0 var(--fc-ui-space-lg);padding:0 var(--fc-ui-space-xs)}
+#tacticalMapSection .fc-ui-section-head .eyebrow{color:var(--fc-ui-brand-blue);font-size:.73rem;letter-spacing:.12em}
+#tacticalMapSection .fc-ui-section-head h3{color:var(--fc-ui-text-primary);font-size:clamp(1.45rem,4vw,1.85rem);font-weight:var(--fc-ui-title-weight);line-height:1.2;margin:3px 0}
+#tacticalMapSection .fc-ui-section-head p{color:var(--fc-ui-text-secondary);font-size:.93rem;font-weight:var(--fc-ui-body-weight)}
+.fc-ui-section-icon{flex:none;width:48px;height:48px;padding:9px;border-radius:var(--fc-ui-radius-sm);fill:none;stroke:var(--fc-ui-brand-blue);stroke-width:2.2;background:var(--fc-ui-surface-cool)}
+.fc-ui-sprite{position:absolute;width:0;height:0;overflow:hidden;pointer-events:none}
+#tacticalMapSection .field-entry-bars{gap:var(--fc-ui-space-md);margin:0}
+#tacticalMapSection .fc-ui-action-card{width:100%;overflow:visible;border-color:var(--fc-ui-border);border-radius:var(--fc-ui-radius-md);background:var(--fc-ui-surface);box-shadow:var(--fc-ui-shadow);color:var(--fc-ui-text-primary)}
+#tacticalMapSection .fc-ui-action-card[open]{border-color:#9EC8E6}
+#tacticalMapSection .fc-ui-action-card>summary{position:relative;min-height:100px;padding:var(--fc-ui-space-lg) 56px var(--fc-ui-space-lg) var(--fc-ui-space-lg);border-radius:var(--fc-ui-radius-md);background:var(--fc-ui-surface);cursor:pointer;color:var(--fc-ui-text-primary);touch-action:manipulation}
+#tacticalMapSection .fc-ui-action-card>summary:after{content:'›';right:var(--fc-ui-space-lg);top:50%;width:32px;height:32px;display:grid;place-items:center;border:1px solid var(--fc-ui-border);border-radius:50%;background:var(--fc-ui-surface);color:var(--fc-ui-brand-blue);font-size:28px;font-weight:500;line-height:1;transform:translateY(-50%) rotate(0deg);transition:transform .18s ease,background .18s ease}
+#tacticalMapSection .fc-ui-action-card[open]>summary:after{content:'›';transform:translateY(-50%) rotate(90deg);background:var(--fc-ui-surface-cool)}
+#tacticalMapSection .fc-ui-action-card>summary:focus-visible{outline:3px solid var(--fc-ui-brand-blue);outline-offset:-4px;border-radius:var(--fc-ui-radius-md)}
+#tacticalMapSection .fc-ui-action-card>summary>span{display:flex;align-items:center;gap:var(--fc-ui-space-md);font-size:1.05rem;font-weight:var(--fc-ui-title-weight);line-height:1.35;min-width:0}
+#tacticalMapSection .fc-ui-action-card>summary>small{display:block;margin:var(--fc-ui-space-sm) 0 0 60px;color:var(--fc-ui-text-secondary);font-size:.88rem;font-weight:650;line-height:1.35;overflow-wrap:anywhere}
+#tacticalMapSection .fc-ui-card-icon{flex:none;width:48px;height:48px;padding:10px;border-radius:var(--fc-ui-radius-sm);fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;background:var(--fc-ui-surface-cool);color:var(--fc-ui-brand-blue)}
+#tacticalMapSection .fc-ui-crew-card .fc-ui-card-icon{background:#FFF0EF;color:var(--fc-ui-critical)}
+#tacticalMapSection .fc-ui-vehicle-card .fc-ui-card-icon{background:#E9F5FC;color:#08729A}
+#tacticalMapSection .fc-ui-map-card .fc-ui-card-icon{background:#E5F8F2;color:#087C72}
+#tacticalMapSection .fc-ui-building-card .fc-ui-card-icon{background:#EAF3FD;color:var(--fc-ui-brand-blue)}
+#tacticalMapSection .fc-ui-action-card>summary .field-entry-heading{display:grid;grid-template-columns:48px minmax(0,1fr);column-gap:var(--fc-ui-space-md);row-gap:2px;align-items:center}
+#tacticalMapSection .fc-ui-action-card>summary .field-entry-heading svg{grid-column:1;grid-row:1/3}
+#tacticalMapSection .fc-ui-action-card>summary .field-entry-heading small{grid-column:2;grid-row:2;display:block;margin:0;color:var(--fc-ui-text-secondary);font-size:.88rem;font-weight:650;line-height:1.35}
+#tacticalMapSection .fc-ui-action-card>.field-entry-body{padding:var(--fc-ui-space-lg);border-color:var(--fc-ui-border);background:var(--fc-ui-surface-soft)}
+#tacticalMapSection .fc-ui-action-card .field-entry-list button{border-color:var(--fc-ui-border);color:var(--fc-ui-text-primary);border-radius:var(--fc-ui-radius-sm)}
+#tacticalMapSection .fc-ui-action-card select,#tacticalMapSection .fc-ui-action-card input,#tacticalMapSection .fc-ui-action-card textarea{min-height:var(--fc-ui-touch-min);border-color:var(--fc-ui-border);border-radius:var(--fc-ui-radius-sm);background:var(--fc-ui-surface);color:var(--fc-ui-text-primary)}
+#tacticalMapSection .fc-ui-action-card .btn{min-height:var(--fc-ui-touch-min);border-radius:var(--fc-ui-radius-sm)}
+#tacticalMapSection .fc-ui-action-card .btn.primary{min-height:var(--fc-ui-touch-primary);background:var(--fc-ui-brand-blue);color:#fff}
+#tacticalMapSection .fc-ui-action-card .btn.ghost{background:var(--fc-ui-surface);border-color:var(--fc-ui-border);color:var(--fc-ui-brand-navy)}
+#tacticalMapSection .fc-ui-action-card .btn.danger{background:var(--fc-ui-critical);color:#fff}
+#tacticalMapSection .field-drawing-divider{margin:var(--fc-ui-space-xl) 0 var(--fc-ui-space-lg);color:var(--fc-ui-text-secondary);font-size:.8rem;letter-spacing:.08em}
+#tacticalMapSection .field-drawing-divider:before,#tacticalMapSection .field-drawing-divider:after{background:var(--fc-ui-border)}
+#tacticalMapSection .fc-ui-map-card>.tactical-workspace-v3{margin:0;border:0;border-top:1px solid var(--fc-ui-border);border-radius:0;background:var(--fc-ui-surface-soft);box-shadow:none}
+#tacticalMapSection .fc-ui-building-card>.building-drawing-body{border-top:1px solid var(--fc-ui-border)}
+#tacticalMapSection .fc-ui-map-card .tactical-canvas-v3{background:var(--fc-ui-surface);border-color:var(--fc-ui-border)}
+#tacticalMapSection .fc-ui-action-card .tactical-icon-palette-v3{border-color:var(--fc-ui-border)}
+#tacticalMapSection .fc-ui-action-card .hint{color:var(--fc-ui-text-secondary)}
+
+/* Shared BottomNav skin is applied only while Deployment is the active case page. */
+body:has(#tacticalMapSection:not([hidden])) .case-page-nav{background:rgba(255,255,255,.97);border-color:var(--fc-ui-border)}
+body:has(#tacticalMapSection:not([hidden])) .case-nav-item.active{background:var(--fc-ui-brand-blue);border-color:var(--fc-ui-brand-blue);box-shadow:0 8px 20px rgba(15,111,198,.25);color:#fff}
+body:has(#tacticalMapSection:not([hidden])) .case-nav-item.active .case-nav-icon{color:var(--fc-ui-brand-blue);background:#fff}
+
+@media(min-width:760px){#tacticalMapSection>.field-entry-bars[aria-label="現場資源快速登錄"]{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){
+  #tacticalMapSection .fc-ui-hero{min-height:118px;padding:var(--fc-ui-space-lg);background-position:58% center;border-radius:var(--fc-ui-radius-md)}
+  #tacticalMapSection .fc-ui-hero-copy{max-width:75%}
+  #tacticalMapSection .fc-ui-hero-copy span{font-size:.58rem}
+  #tacticalMapSection .fc-ui-hero-copy strong{font-size:1.14rem}
+  #tacticalMapSection .fc-ui-hero-copy small{font-size:.72rem}
+  #tacticalMapSection .fc-ui-section-head{margin:var(--fc-ui-space-lg) 0 var(--fc-ui-space-md)}
+  #tacticalMapSection .fc-ui-action-card>summary{min-height:96px;padding:var(--fc-ui-space-md) 48px var(--fc-ui-space-md) var(--fc-ui-space-md)}
+  #tacticalMapSection .fc-ui-card-icon{width:44px;height:44px;padding:9px}
+  #tacticalMapSection .fc-ui-action-card>summary>small{margin-left:56px}
+  #tacticalMapSection .fc-ui-action-card>summary .field-entry-heading{grid-template-columns:44px minmax(0,1fr)}
+  #tacticalMapSection .fc-ui-action-card>.field-entry-body{padding:var(--fc-ui-space-md)}
+}
+@media(max-width:340px){#tacticalMapSection .fc-ui-action-card>summary>span{font-size:.98rem}#tacticalMapSection .fc-ui-hero-copy small{display:none}}
+@media(prefers-reduced-motion:reduce){#tacticalMapSection .fc-ui-action-card>summary:after{transition:none}}
