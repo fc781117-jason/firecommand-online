@@ -39,7 +39,7 @@ test('V3 人口未知與零不同，男女皆已知才計算總數',()=>{
 
 test('V3.3 部署首頁人車及兩圖同層入口，戰術畫布不是 Google Map',()=>{
   for(const id of ['fieldCrewDetails','fieldVehicleDetails','deploymentMapDetails','buildingOpsDetails','tacticalCanvasV3'])assert.match(html,new RegExp(`id="${id}"`));
-  assert.match(html,/id="deploymentMapDetails" class="field-entry-bar drawing-accordion"/);
+  assert.match(html,/id="deploymentMapDetails" class="field-entry-bar drawing-accordion\b/);
   assert.doesNotMatch(html,/id="fieldMapDetails"/);
   assert.doesNotMatch(html,/id="deploymentMapDetails"[^]*?id="map"/);
   assert.match(html,/class="deployment-text-capture" hidden/);
