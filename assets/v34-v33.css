@@ -1,0 +1,22 @@
+/* V3.3: one predictable accordion pattern for resources and drawing. */
+#tacticalMapSection .field-entry-bars{min-width:0}
+#tacticalMapSection .field-entry-bar{display:block;min-width:0;overflow:visible}
+#tacticalMapSection .field-entry-bar>summary{display:block;position:relative;min-height:78px;padding:13px 56px 13px 16px;line-height:1.4;overflow-wrap:anywhere;touch-action:manipulation}
+#tacticalMapSection .field-entry-bar>summary:after{position:absolute;right:18px;top:50%;transform:translateY(-50%)}
+#tacticalMapSection .field-entry-bar>summary:focus-visible{outline:3px solid #1869a7;outline-offset:2px;border-radius:13px}
+#tacticalMapSection .field-entry-heading,#tacticalMapSection .field-entry-bar>summary>span{display:block;font-size:16px}
+#tacticalMapSection .field-entry-bar>summary small{display:block;font-size:13px;line-height:1.45;font-weight:650;margin-top:4px;white-space:normal}
+#tacticalMapSection .field-entry-body{min-width:0}
+.field-drawing-divider{display:flex;align-items:center;gap:12px;margin:16px 2px 8px;color:#486777;font-size:13px;font-weight:800}
+.field-drawing-divider:before,.field-drawing-divider:after{content:"";height:1px;background:#c5d6df;flex:1}
+#deploymentMapDetails .tactical-workspace-v3{margin:0;border:0;border-top:1px solid #c8dce4;border-radius:0;background:transparent;box-shadow:none}
+#buildingOpsDetails .building-drawing-body{border-top:1px solid #c8dce4}
+#buildingOpsDetails.building-fullscreen>summary{display:none}
+#buildingOpsDetails.building-fullscreen>.building-drawing-body{min-height:100svh;padding:12px max(12px,env(safe-area-inset-right)) calc(18px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left))}
+.building-resident-details-v31 .floor-detail-v33{padding:11px 0;border-bottom:1px solid #cedfe6}
+.building-resident-details-v31 .floor-detail-v33:last-child{border-bottom:0}
+.floor-detail-v33 h4{font-size:15px;color:#173c51;line-height:1.45}
+.floor-detail-v33 ul{margin:9px 0 0;padding-left:1.25rem;display:grid;gap:10px}
+.floor-detail-v33 li{padding-left:5px;color:#31566a;line-height:1.5}
+.floor-detail-v33 li span{display:block;margin-left:7px}
+@media(max-width:600px){#tacticalMapSection .field-entry-bar>summary{min-height:84px;padding-right:54px}.field-drawing-divider{margin-top:12px}}

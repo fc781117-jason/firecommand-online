@@ -475,6 +475,7 @@ function bindEvents(){
   document.querySelectorAll('.arrival-detail-input').forEach(el => el.addEventListener('change', () => { renderArrivalStatusCards(); renderCommandGuide(); if(!['contactState','ritState','hazardState','supportState'].includes(el.name))saveCaseInfo(false,false); }));
   ['detailPurpose','detailFireStatus','detailNotes','buildingStructure','detailFloors','detailFireFloor','fireObservedFloor','fireObservedSide','fireSmokeColor','fireSmokeVolume','fireFlameState','fireObservation','trappedCountArrival','arrivalAddressInput','firstSideCustom'].forEach(id => $(id)?.addEventListener('change', () => { syncSopDerivedFields(); renderCommandGuide(); saveCaseInfo(false,false); }));
   bindExclusiveDetails(['crewStatusDetails','vehicleStatusDetails']);
+  bindExclusiveDetails(['deploymentMapDetails','buildingOpsDetails']);
   bindExclusiveDetails(['sitrepFireDetails','sitrepPatientDetails']);
 }
 
@@ -2955,11 +2956,6 @@ function initFieldEntryControls(){
   $('fieldVehicleCode')?.addEventListener('change',()=>fieldEntryStatus('fieldVehicleSaveStatus','尚未儲存'));
   $('fieldVehicleCode')?.addEventListener('change',()=>{$('fieldVehicleCustomWrap').hidden=$('fieldVehicleCode').value!=='custom';if(!$('fieldVehicleCustomWrap').hidden)$('fieldVehicleCustomCode').focus();});
   $('fieldVehicleCustomCode')?.addEventListener('input',()=>fieldEntryStatus('fieldVehicleSaveStatus','尚未儲存'));
-  $('openBuildingDrawing')?.addEventListener('click',()=>{$('buildingOpsDetails').open=true;$('buildingOpsDetails').scrollIntoView({behavior:'smooth'});});
-  document.querySelectorAll('[data-field-map-tool]').forEach(button=>button.addEventListener('click',()=>{
-    setDeploymentMode(button.dataset.fieldMapTool);renderTacticalCanvasV3();
-    $('deploymentMapDetails').scrollIntoView({behavior:'smooth'});
-  }));
   $('fieldCrewList')?.addEventListener('click',event=>{
     const button=event.target.closest('[data-field-crew]');if(!button)return;
     const crew=live.crews.find(c=>c.id===button.dataset.fieldCrew);if(!crew)return;
@@ -2973,7 +2969,8 @@ function renderFieldEntries(){
   if(!fieldCrewDirty&&!fieldCrewExpected&&selectedFieldCrew().length===1)loadSelectedCrew();
   const s=FCFieldEntry.summary(live.crews);
   $('fieldCrewSummary').textContent=`${s.units} 筆｜已確認小計 ${s.known} 人${s.pending?`｜${s.pending} 筆人數待補`:''}`;
-  $('fieldVehicleSummary').textContent=`${live.vehicles.length} 台｜新車先列待定位`;
+  const unplaced=live.vehicles.filter(v=>!v.positionManual).length;
+  $('fieldVehicleSummary').textContent=`已登錄 ${live.vehicles.length} 台${unplaced?`｜${unplaced} 台待定位`:''}`;
   $('fieldCrewList').innerHTML=live.crews.map(c=>`<button type="button" data-field-crew="${escapeHtml(c.id)}">${escapeHtml(c.unit||'未辨識單位')}｜${FCFieldEntry.countLabel(c)}｜${escapeHtml(c.task||'未指定')}${c.leader?'｜編組 '+escapeHtml(c.leader):''}</button>`).join('')||'<span class="hint">尚無人員／單位紀錄</span>';
   $('fieldVehicleList').innerHTML=live.vehicles.map(v=>`<span class="readonly-card">${escapeHtml(vehicleDisplayName(v))}｜${v.positionManual?'已人工定位':'待定位'}</span>`).join('')||'<span class="hint">尚無車輛紀錄</span>';
 }
@@ -4526,7 +4523,10 @@ async function saveResidentV3(floor,id,existing={}){const savedCaseId=currentCas
 function renderBuildingResidentDetailsV31(){
   const slot=$('buildingResidentDetailsV31');if(!slot)return;const entries=currentCase?.buildingOps?.floorActions||[],withRows=entries.filter(entry=>(entry.residents||[]).length);
   slot.hidden=!withRows.length;if(!withRows.length){slot.innerHTML='';return;}
-  slot.innerHTML=`<div class="panel-title">樓層詳細資料</div>${withRows.map(entry=>{const rows=entry.residents||[],summary=window.FCV34V3?.floorResidentSummary(rows),details=rows.map(row=>{const pop=window.FCV34V3?.residentPopulationLabel(row.maleCount,row.femaleCount)||'人數未完整';return `${row.unitNo||'戶號待補'}${row.contact?row.contact:''}，${pop}${row.status?`，${row.status}`:''}`;}).join('；');return `<p><strong>${floorLabel(entry.floor)}：</strong>共記錄 ${summary.households} 戶。${escapeHtml(details)}。</p>`;}).join('')}`;
+  slot.innerHTML=`<div class="panel-title">樓層詳細資料</div>${withRows.map(entry=>{
+    const summary=window.FCOperationalV32.floorDetail(entry);
+    return `<section class="floor-detail-v33"><h4>${escapeHtml(summary.heading)}</h4><ul>${summary.residents.map(row=>`<li><strong>${escapeHtml(row.label)}</strong><span>${escapeHtml(row.demographics)}</span><span>${escapeHtml(row.population)}</span><span>狀態：${escapeHtml(row.status)}</span>${row.note?`<span>補充：${escapeHtml(row.note)}</span>`:''}</li>`).join('')}</ul></section>`;
+  }).join('')}`;
 }
 async function deleteResidentV3(floor,id){
   const entry=getBuildingOps().floorActions.find(x=>Number(x.floor)===Number(floor)),row=(entry?.residents||[]).find(r=>r.id===id);if(!row||!confirm(`確認刪除 ${floorLabel(floor)}「${row.unitNo||'未命名住戶'}」？`))return;

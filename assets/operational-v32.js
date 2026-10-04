@@ -12,6 +12,16 @@ function trappedSummary(c={}){
 function residentsSummary(rows){return rows.reduce((s,{resident:r})=>{const p=previous.population(r);s.households++;s.male+=p.male??0;s.female+=p.female??0;s.minimum+=p.minimum;if(!p.complete)s.pending++;return s;},{households:0,male:0,female:0,minimum:0,pending:0});}
 function populationLine(s){return `${s.pending?'已確認至少':'已確認'} ${s.minimum} 人${s.pending?`｜${s.pending} 戶人口待確認`:''}`;}
 function shortUnit(row){const v=text(row.unitNo)||text(row.address);return v.match(/(?:\d+(?:之\d+)?號.*|[A-Za-zＡ-Ｚａ-ｚ]戶.*)$/)?.[0]||v||'戶號待確認';}
+function floorDetail(entry={}){
+  const residents=list(entry.residents),s=residentsSummary(residents.map(resident=>({resident})));
+  const allEvacuated=!!residents.length&&residents.every(r=>r.status==='已疏散');
+  const total=s.pending?`已確認至少${s.minimum}人｜${s.pending}戶人口未完整`:`共${s.minimum}人${allEvacuated?'｜全數疏散':''}`;
+  return {floor:entry.floor,heading:`${Number(entry.floor)<0?'B'+Math.abs(entry.floor):entry.floor+'F'}｜${s.households}戶｜${total}`,households:s.households,residents:residents.map(row=>{
+    const p=previous.population(row);
+    const demographics=[p.male===null?'男性人數待確認':`男${p.male}`,p.female===null?'女性人數待確認':`女${p.female}`].join('｜');
+    return {label:shortUnit(row),demographics,population:p.complete?`共${p.total}人`:`已確認至少${p.minimum}人｜人口未完整`,status:text(row.status)||'待確認',note:text(row.note)};
+  })};
+}
 function buildOperationalSummary(c={},live={}){
   const residents=previous.getLatestResidents(c),rs=residentsSummary(residents),patients=previous.getPatientSummaries(live.sitreps);
   const incident=[['地址',c.confirmedAddress||c.correctedAddress||c.address||c.reportedAddress],['案件',c.type],['建物',[c.buildingStructure,c.floors?`地上${c.floors}樓`:''].filter(Boolean).join('／')],['起火',c.fireFloor],['狀態',c.fireStatus]].filter(([,v])=>v!=null&&v!=='');
@@ -41,6 +51,6 @@ function buildOperationalSummary(c={},live={}){
 }
 function summaryText(s){return [s.incident.map(([k,v])=>`${k}：${v}`).join('\n'),...['lifeSafety','situation','deployment','hazards','support'].map(k=>s[k].join('\n')),...s.floors.map(f=>`${Number(f.floor)<0?'B'+Math.abs(f.floor):f.floor+'F'}\n${f.lines.join('\n')}`)].filter(Boolean).join('\n\n');}
 function viewportPoint(view,point,size,zoom){const next=Math.max(.6,Math.min(2.5,zoom));const w=size.w/next,h=size.h/next;return {zoom:next,x:point.x-(point.x-view.x)*w/view.w,y:point.y-(point.y-view.y)*h/view.h,w,h};}
-root.FCOperationalV32={buildOperationalSummary,residentsSummary,populationLine,shortUnit,summaryText,viewportPoint,count,trappedSummary};
+root.FCOperationalV32={buildOperationalSummary,residentsSummary,populationLine,shortUnit,floorDetail,summaryText,viewportPoint,count,trappedSummary};
 if(typeof module!=='undefined')module.exports=root.FCOperationalV32;
 })(typeof window==='undefined'?globalThis:window);

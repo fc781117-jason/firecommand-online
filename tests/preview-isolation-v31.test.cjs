@@ -6,12 +6,12 @@ function setup(verified=true){const c=app();c.location=c.window.location;c.confi
 
 test('server enables only exact authorized Preview branch, never client supplied env/query',async()=>{
  const {default:handler}=await import('../api/preview-mode.js');const oldEnv=process.env.VERCEL_ENV,oldRef=process.env.VERCEL_GIT_COMMIT_REF;
- try{for(const env of ['preview','production','development','PREVIEW','',undefined])for(const branch of ['feature/v34-2-field-revision-v3-1','feature/v34-2-field-revision-v3-2','main','master','another-branch',undefined]){
+ try{for(const env of ['preview','production','development','PREVIEW','',undefined])for(const branch of ['feature/v34-2-field-revision-v3-1','feature/v34-2-field-revision-v3-2','feature/v34-2-field-revision-v3-3','main','master','another-branch',undefined]){
   if(env===undefined)delete process.env.VERCEL_ENV;else process.env.VERCEL_ENV=env;
   if(branch===undefined)delete process.env.VERCEL_GIT_COMMIT_REF;else process.env.VERCEL_GIT_COMMIT_REF=branch;
   const res={headers:{},setHeader(k,v){this.headers[k]=v;},status(s){this.code=s;return this;},json(data){this.data=data;return this;}};
   handler({method:'GET',query:{target:'preview',demoEnabled:'true'},headers:{'x-vercel-env':'preview'}},res);
-  assert.equal(res.data.demoEnabled,env==='preview'&&['feature/v34-2-field-revision-v3-1','feature/v34-2-field-revision-v3-2'].includes(branch),`${env}/${branch}`);
+  assert.equal(res.data.demoEnabled,env==='preview'&&['feature/v34-2-field-revision-v3-1','feature/v34-2-field-revision-v3-2','feature/v34-2-field-revision-v3-3'].includes(branch),`${env}/${branch}`);
   assert.deepEqual(Object.keys(res.data).sort(),['demoEnabled','target']);assert.equal(res.code,200);
   for(const name of ['Cache-Control','Vercel-CDN-Cache-Control','CDN-Cache-Control'])assert.match(res.headers[name],/no-store/);
  }

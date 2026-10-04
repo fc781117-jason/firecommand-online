@@ -38,9 +38,10 @@ test('人員空白寫入後補3人更新同筆；失敗不清空草稿',async()=
   node('fieldCrewCount').value='-1';await vm.runInContext('saveFieldCrew()',c);
   assert.equal(records.get(key).count,3);assert.equal(node('fieldCrewCount').value,'-1');
 });
-test('V2 三個外層入口、獨立欄位及資料規則存在；舊資料沒有 count 不會強制遷移',()=>{
+test('V3.3 人車獨立入口、同層圖面與資料規則存在；舊資料沒有 count 不會強制遷移',()=>{
   const html=fs.readFileSync(require.resolve('../index.html'),'utf8'),rules=fs.readFileSync(require.resolve('../firebase/firestore.rules'),'utf8');
-  for(const id of ['fieldCrewDetails','fieldVehicleDetails','fieldMapDetails','fieldCrewCount','fieldVehicleCode','hazardPaletteV2'])assert.ok(html.includes(`id="${id}"`));
+  for(const id of ['fieldCrewDetails','fieldVehicleDetails','deploymentMapDetails','buildingOpsDetails','fieldCrewCount','fieldVehicleCode','hazardPaletteV2'])assert.ok(html.includes(`id="${id}"`));
+  assert.doesNotMatch(html,/id="fieldMapDetails"/);
   assert.doesNotMatch(html,/data-field-map-tool="hazard"/);assert.doesNotMatch(html,/data-field-map-tool="hose"/);
   assert.match(rules,/function validCrewCount\(\)/);assert.match(rules,/request\.resource\.data\.count == null/);
 });

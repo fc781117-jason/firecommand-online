@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="./assets/v31.css?v=32" /><link rel="stylesheet" href="./assets/v30.css?v=32" />
   <link rel="stylesheet" href="./assets/v34-v3.css?v=34.3" />
   <link rel="stylesheet" href="./assets/v34-v32.css?v=34.3" />
+  <link rel="stylesheet" href="./assets/v34-v33.css?v=34.4" />
 </head>
 <body>
   <div id="toast" class="toast" hidden></div>
@@ -641,7 +642,6 @@
             <div class="field-entry-grid"><label>大隊<select id="fieldVehicleBrigade"></select></label><label>分隊／單位<select id="fieldVehicleUnit"></select></label><label>車號<select id="fieldVehicleCode"><option value="">選擇車號</option><option value="11">11</option><option value="12">12</option><option value="16">16</option><option value="17">17</option><option value="21">21</option><option value="31">31</option><option value="41">41</option><option value="51">51</option><option value="61">61</option><option value="71">71</option><option value="81">81</option><option value="91">91</option><option value="custom">＋新增車號</option></select></label><span class="field-entry-spacer" aria-hidden="true"></span></div><label id="fieldVehicleCustomWrap" hidden>借車／特殊編號<input id="fieldVehicleCustomCode" maxlength="40" placeholder="輸入車輛編號；分隊名稱會自動加在前面" /></label>
             <div id="fieldVehicleSaveStatus" class="hint" role="status">尚未儲存</div><button id="fieldVehicleSaveBtn" type="button" class="btn primary full">確認儲存車輛</button><div id="fieldVehicleList" class="field-entry-list"></div>
           </div></details>
-          <details id="fieldMapDetails" class="field-entry-bar"><summary><span>圖面</span><small>戰術部署／建物繪圖</small></summary><div class="field-entry-body"><button type="button" class="field-entry-link" data-field-map-tool="select">戰術部署圖 <span>查看與編輯</span></button><button type="button" class="field-entry-link" id="openBuildingDrawing">建物繪圖 <span>進入同一案件的建物圖</span></button></div></details>
         </div>
 
         <details class="deployment-text-capture" hidden><summary>部署文字紀錄與圖文核對</summary>
@@ -656,7 +656,11 @@
           <div id="deploymentTextReference" class="deployment-text-reference" hidden></div>
         </details>
 
-        <section id="deploymentMapDetails" class="tactical-workspace-v3" aria-label="戰術部署圖">
+        <div class="field-drawing-divider" role="separator" aria-label="圖面">圖面</div>
+        <div class="field-entry-bars field-drawing-bars" aria-label="現場圖面">
+        <details id="deploymentMapDetails" class="field-entry-bar drawing-accordion" aria-label="戰術部署圖">
+          <summary><span class="field-entry-heading">戰術部署圖<small>查看與編輯現場戰術部署</small></span></summary>
+          <div class="field-entry-body tactical-workspace-v3">
           <div class="tactical-head-v3"><div><div class="eyebrow">消防戰術示意</div><h4>戰術部署圖</h4><p id="deploymentActionHint"></p></div><div class="tactical-head-actions"><button id="cancelHoseSelection" type="button" class="btn small ghost">取消選取</button><button id="mapUndoBtn" type="button" class="btn small ghost" disabled>↶ 復原</button></div></div>
           <details id="tacticalIconPaletteV3" class="tactical-icon-palette-v3"><summary>戰術圖示<small>前進指揮所・火點・危害物質等</small></summary><div id="hazardPaletteV2" class="hazard-grid">
             <button class="btn small ghost hazard-btn" data-hazard="起火點"><svg aria-hidden="true"><use href="#fc-icon-fire"></use></svg>起火點</button>
@@ -681,12 +685,12 @@
           <div class="tactical-zoom-v32" aria-label="畫布縮放"><button id="tacticalZoomInV32" class="btn small ghost" aria-label="放大畫布">＋</button><button id="tacticalZoomOutV32" class="btn small ghost" aria-label="縮小畫布">－</button><button id="tacticalFitV32" class="btn small ghost">Fit</button></div>
           <div id="tacticalCanvasV3" class="tactical-canvas-v3" tabindex="0" aria-label="非導航底圖的消防戰術部署畫布"></div>
           <div id="tacticalCanvasStatusV3" class="hint" role="status">查看模式｜尚未選取資源</div>
-        </section>
+          </div>
+        </details>
 
-        <div id="buildingSection" class="stack">
-                <details id="buildingOpsDetails" class="accordion">
-                  <summary><span>建物內部作戰圖｜縱向剖面 / 水平俯視</span><span class="chevron">›</span></summary>
-                  <div class="accordion-body">
+                <details id="buildingOpsDetails" class="field-entry-bar drawing-accordion">
+                  <summary><span class="field-entry-heading">建物繪圖<small>縱向剖面／水平俯視</small></span></summary>
+                  <div class="field-entry-body building-drawing-body">
                     <div class="notice">點選「同步樓層」後，左側會依建物樓層產生縱向剖面圖；右側可切換火災樓層並標示起火點、受困者、死亡者、入口、隔間與水線。此資料會併入報告與操作紀錄。</div>
                     <div id="orientationHint" class="orientation-hint" hidden>
                       <b>建議將手機轉為橫向</b><span>橫向可取得較大的繪圖區；直向仍可完整操作。</span>
@@ -736,7 +740,7 @@
                     </div>
                   </div>
                 </details>
-              </div>
+        </div>
       </section>
 <section id="aiSection" class="stack case-page-panel" data-case-page-panel="aiSection" hidden>
         <details class="accordion">
