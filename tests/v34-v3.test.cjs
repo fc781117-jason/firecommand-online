@@ -37,9 +37,10 @@ test('V3 人口未知與零不同，男女皆已知才計算總數',()=>{
   assert.equal(V3.residentPopulationLabel(null,2),'至少 2 人／人數未完整');
 });
 
-test('V3 部署首頁只有人員、車輛、圖面三個逐層入口，戰術畫布不是 Google Map',()=>{
-  for(const id of ['fieldCrewDetails','fieldVehicleDetails','fieldMapDetails','tacticalCanvasV3'])assert.match(html,new RegExp(`id="${id}"`));
-  assert.match(html,/id="deploymentMapDetails" class="tactical-workspace-v3"/);
+test('V3.3 部署首頁人車及兩圖同層入口，戰術畫布不是 Google Map',()=>{
+  for(const id of ['fieldCrewDetails','fieldVehicleDetails','deploymentMapDetails','buildingOpsDetails','tacticalCanvasV3'])assert.match(html,new RegExp(`id="${id}"`));
+  assert.match(html,/id="deploymentMapDetails" class="field-entry-bar drawing-accordion"/);
+  assert.doesNotMatch(html,/id="fieldMapDetails"/);
   assert.doesNotMatch(html,/id="deploymentMapDetails"[^]*?id="map"/);
   assert.match(html,/class="deployment-text-capture" hidden/);
 });
