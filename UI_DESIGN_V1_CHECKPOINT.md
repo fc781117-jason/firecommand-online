@@ -31,3 +31,7 @@
 - Preview 指向獨立分支，PR 以 V3.3 分支為 base，避免將未合併 V3.x 誤上 Production。
 - 無資料遷移、Rules 或環境變數操作。
 - 回退只需使 Preview 分支回到基準 SHA；不會改動正式資料。正式發布須另行確認。
+
+## Preview 入口修正
+
+首次 Preview 雖已建置，`/api/preview-mode` 的精確允許清單遺漏此 UI 分支，手機登入按鈕因此停用。後續提交只將 `feature/firecommand-ui-deployment-v1` 加入 Preview 示範允許清單，並擴充相同測試矩陣。Production、其他分支及實際 Firebase 案件的隔離條件保持不變；此項屬驗收入口修復，沒有更動業務功能。
