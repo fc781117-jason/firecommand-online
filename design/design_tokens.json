@@ -1,0 +1,48 @@
+{
+  "name": "FireCommand Commercial Light Tactical V1",
+  "mode": "light-first-high-contrast",
+  "colors": {
+    "brandNavy": "#0B3A6B",
+    "brandBlue": "#0F6FC6",
+    "surface": "#FFFFFF",
+    "surfaceSoft": "#F5F9FC",
+    "surfaceCool": "#EDF5FB",
+    "textPrimary": "#0C2942",
+    "textSecondary": "#52697C",
+    "border": "#C9DCE9",
+    "critical": "#E3322E",
+    "warning": "#F28B21",
+    "success": "#138A68",
+    "info": "#1677C8"
+  },
+  "radius": {
+    "small": 12,
+    "medium": 18,
+    "large": 24,
+    "pill": 999
+  },
+  "spacing": {
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "xxl": 32
+  },
+  "touch": {
+    "minimumTargetPx": 48,
+    "primaryTargetPx": 56
+  },
+  "typography": {
+    "family": "system-ui, -apple-system, BlinkMacSystemFont, 'Noto Sans TC', sans-serif",
+    "titleWeight": 800,
+    "sectionWeight": 750,
+    "bodyWeight": 500,
+    "numericWeight": 800
+  },
+  "effects": {
+    "shadow": "0 10px 30px rgba(12, 41, 66, 0.10)",
+    "border": "1px solid #C9DCE9",
+    "heroOverlay": "linear-gradient(90deg, rgba(4,35,65,.90), rgba(4,35,65,.30))"
+  }
+}

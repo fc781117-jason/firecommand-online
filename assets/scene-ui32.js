@@ -1,7 +1,7 @@
 /* Shared scene controls. Loaded before app.js; installed at app initialization. */
 let sceneView32={all:false,scale:6,fit:true},roadDraft32=null,roadClicks32=null;
 function currentScene32(){return FCScene32.build(currentCase||{},live,sceneView32);}
-function deploymentSchematic32(){const s=currentScene32();return `<div class="scene32-card"><div class="scene32-tools"><b>戰術部署圖</b><button type="button" data-scene32="close">10m近距離</button><button type="button" data-scene32="fit">部署全景</button><button type="button" data-scene32="all">${sceneView32.all?'聚焦火場':'顯示遠處資料'}${s.far.length?'（'+s.far.length+'）':''}</button></div>${s.far.length&&!sceneView32.all?`<p class="scene32-note">畫面外：${s.far.map(n=>escapeHtml(n.label)).join('、')}；資料仍保留。</p>`:''}<p class="scene32-note">自動排列為示意位置；10 m 比例尺依設定座標計算，可依底圖校正。</p><div class="scene32-scroll ${sceneView32.fit?'scene32-fit':''}">${FCScene32.svg(s)}</div>${s.notes.length?`<p class="scene32-note">${s.notes.map(escapeHtml).join('；')}</p>`:''}</div>`;}
+function deploymentSchematic32(){const s=FCScene32.build(currentCase||{},live,{all:true,scale:6,fit:true});return `<div class="scene32-card scene32-readonly"><div class="scene32-tools"><b>戰術部署圖</b></div><div class="scene32-scroll scene32-fit">${FCScene32.svg(s)}</div>${s.notes.length?`<p class="scene32-note">${s.notes.map(escapeHtml).join('；')}</p>`:''}</div>`;}
 function bindScene32(host){
  if(!host)return;host.querySelectorAll('[data-scene32]').forEach(b=>b.onclick=()=>{if(b.dataset.scene32==='all')sceneView32.all=!sceneView32.all;else {sceneView32.scale=b.dataset.scene32==='close'?8:6;sceneView32.fit=b.dataset.scene32!=='close';}renderOverviewContent();renderDeployment32();});
  const svg=host.querySelector('.fc32');if(!svg)return;
@@ -62,7 +62,7 @@ async function applyRoad32(){
 }
 function installScene32(){
  deploymentSchematicHtml=deploymentSchematic32;renderMap=renderGoogle32;fitMapToIncident=mapFocus32;
- const base=renderOverviewContent;renderOverviewContent=function(){base();const host=$('overviewDeploymentSnapshot');if(host&&currentCase)host.innerHTML=deploymentSchematic32();bindScene32(host);renderDeployment32();};
+ const base=renderOverviewContent;renderOverviewContent=function(){base();const host=$('overviewDeploymentSnapshot');if(host&&currentCase)host.innerHTML=deploymentSchematic32();renderDeployment32();};
  if($('fitMapBtn')){$('fitMapBtn').textContent='10m近距離';$('fitMapBtn').onclick=()=>{sceneView32.scale=8;sceneView32.fit=false;renderDeployment32();mapFocus32();};}
  if($('suggestRoad32'))$('suggestRoad32').onclick=()=>suggestRoad32();if($('drawRoad32'))$('drawRoad32').onclick=()=>beginRoad32();if($('applyRoad32'))$('applyRoad32').onclick=()=>applyRoad32().catch(e=>roadMessage32(e.message));
  if($('reverseRoad32'))$('reverseRoad32').onclick=()=>{if(roadDraft32){roadDraft32.points.reverse();renderGoogle32();roadMessage32('已反轉，第一點為頭車；請確認後套用。');}};

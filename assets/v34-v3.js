@@ -33,7 +33,18 @@ function stripIncomplete(text=''){
 }
 function parseOptionalCount(value){if(value===null||value===undefined||value==='')return {valid:true,value:null};const n=Number(value);return {valid:Number.isInteger(n)&&n>=0,value:Number.isInteger(n)&&n>=0?n:null};}
 function residentTotal(male,female){const m=parseOptionalCount(male),f=parseOptionalCount(female);return m.valid&&f.valid&&m.value!==null&&f.value!==null?m.value+f.value:null;}
-function floorResidentSummary(rows=[]){return (rows||[]).reduce((s,r)=>{const total=residentTotal(r.maleCount??r.male,r.femaleCount??r.female);return {households:s.households+1,knownTotal:s.knownTotal+(total===null?0:total),pending:s.pending+(total===null?1:0)};},{households:0,knownTotal:0,pending:0});}
-root.FCV34V3={tasks,taskChoice,validTask,deploymentClauses,deploymentSpeech,stripIncomplete,parseOptionalCount,residentTotal,floorResidentSummary};
+function residentPopulation(male,female){
+  const m=parseOptionalCount(male),f=parseOptionalCount(female),valid=m.valid&&f.valid;
+  const minimum=(m.value??0)+(f.value??0),complete=valid&&m.value!==null&&f.value!==null;
+  return {valid,complete,total:complete?minimum:null,minimum};
+}
+function floorResidentSummary(rows=[]){return (rows||[]).reduce((s,r)=>{const p=residentPopulation(r.maleCount??r.male,r.femaleCount??r.female);return {households:s.households+1,knownTotal:s.knownTotal+(p.total??0),confirmedMinimum:s.confirmedMinimum+p.minimum,pending:s.pending+(p.complete?0:1)};},{households:0,knownTotal:0,confirmedMinimum:0,pending:0});}
+function residentPopulationLabel(male,female){const p=residentPopulation(male,female);if(p.complete)return `共 ${p.total} 人`;return p.minimum>0?`至少 ${p.minimum} 人／人數未完整`:'人數未完整';}
+function composeResidentAddress(base,unit,floor){return [base,unit,floor].map(value=>String(value||'').trim()).filter(Boolean).join(' ');}
+function residentAddressDraft(existing={},base='',unit='',floor=''){
+  const manual=existing.addressMode==='manual'||(existing.addressMode!=='auto'&&typeof existing.address==='string'&&existing.address.trim()!=='');
+  return {mode:manual?'manual':'auto',address:manual?existing.address:composeResidentAddress(base,unit,floor)};
+}
+root.FCV34V3={composeResidentAddress,residentAddressDraft,tasks,taskChoice,validTask,deploymentClauses,deploymentSpeech,stripIncomplete,parseOptionalCount,residentTotal,residentPopulation,residentPopulationLabel,floorResidentSummary};
 if(typeof module!=='undefined')module.exports=root.FCV34V3;
 })(typeof window==='undefined'?globalThis:window);

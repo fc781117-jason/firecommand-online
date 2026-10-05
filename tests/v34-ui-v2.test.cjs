@@ -7,8 +7,9 @@ const {app}=require('./app-harness.cjs');
 const html=fs.readFileSync(require.resolve('../index.html'),'utf8');
 const appCode=fs.readFileSync(require.resolve('../assets/app.js'),'utf8');
 
-test('V2 SOP 六個真實入口與圖面分層均在案件頁，沒有預選111',()=>{
-  for(const id of ['contactRows','addContactBtn','hazardSavedCard','hazardPhoto','supportDetailFields','ritBrigade','ritUnitSelect','fieldCrewDetails','fieldVehicleDetails','fieldMapDetails','hazardPaletteV2','cancelHoseSelection'])assert.match(html,new RegExp(`id="${id}"`));
+test('V3.3 SOP 六個真實入口與同層圖面均在案件頁，沒有預選111',()=>{
+  for(const id of ['contactRows','addContactBtn','hazardSavedCard','hazardPhoto','supportDetailFields','ritBrigade','ritUnitSelect','fieldCrewDetails','fieldVehicleDetails','deploymentMapDetails','buildingOpsDetails','hazardPaletteV2','cancelHoseSelection'])assert.match(html,new RegExp(`id="${id}"`));
+  assert.doesNotMatch(html,/id="fieldMapDetails"/);
   assert.match(html,/data-support-kind="fire"/);assert.match(html,/data-support-kind="external"/);
   assert.match(html,/id="fieldVehicleCode"[^]*?value="custom">＋新增車號/);
   assert.doesNotMatch(html,/id="fieldVehicleCode"[^]*?value="111">111/);

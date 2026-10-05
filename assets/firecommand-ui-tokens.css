@@ -1,0 +1,34 @@
+/* FireCommand Commercial Light Tactical V1. Shared visual tokens; no state or behavior. */
+:root{
+  --fc-ui-brand-navy:#0B3A6B;
+  --fc-ui-brand-blue:#0F6FC6;
+  --fc-ui-surface:#FFFFFF;
+  --fc-ui-surface-soft:#F5F9FC;
+  --fc-ui-surface-cool:#EDF5FB;
+  --fc-ui-text-primary:#0C2942;
+  --fc-ui-text-secondary:#52697C;
+  --fc-ui-border:#C9DCE9;
+  --fc-ui-critical:#E3322E;
+  --fc-ui-warning:#F28B21;
+  --fc-ui-success:#138A68;
+  --fc-ui-info:#1677C8;
+  --fc-ui-radius-sm:12px;
+  --fc-ui-radius-md:18px;
+  --fc-ui-radius-lg:24px;
+  --fc-ui-radius-pill:999px;
+  --fc-ui-space-xs:4px;
+  --fc-ui-space-sm:8px;
+  --fc-ui-space-md:12px;
+  --fc-ui-space-lg:16px;
+  --fc-ui-space-xl:24px;
+  --fc-ui-space-xxl:32px;
+  --fc-ui-touch-min:48px;
+  --fc-ui-touch-primary:56px;
+  --fc-ui-font:system-ui,-apple-system,BlinkMacSystemFont,'Noto Sans TC',sans-serif;
+  --fc-ui-title-weight:800;
+  --fc-ui-section-weight:750;
+  --fc-ui-body-weight:500;
+  --fc-ui-numeric-weight:800;
+  --fc-ui-shadow:0 10px 30px rgba(12,41,66,.10);
+  --fc-ui-hero-overlay:linear-gradient(90deg,rgba(4,35,65,.90),rgba(4,35,65,.30));
+}
