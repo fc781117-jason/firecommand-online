@@ -74,12 +74,12 @@ body:has(#appScreen:not([hidden])){background:var(--fc-ui-surface-soft);color:va
 #sitrepSection .sitrep-detail{color:var(--fc-ui-text-secondary)}
 
 /* More: same action cards on its sheet and destination pages. */
-#appScreen .app-action-panel{background:var(--fc-ui-surface-soft);color:var(--fc-ui-text-primary);border-radius:var(--fc-ui-radius-lg) var(--fc-ui-radius-lg) 0 0}
-#appScreen .app-action-handle{background:var(--fc-ui-border)}
-#appScreen .app-action-head h3{color:var(--fc-ui-brand-navy)}
-#appScreen .action-grid{gap:var(--fc-ui-space-md)}
-#appScreen .action-option{min-height:var(--fc-ui-touch-primary);padding:var(--fc-ui-space-lg);border-color:var(--fc-ui-border);border-radius:var(--fc-ui-radius-sm);background:#fff;color:var(--fc-ui-text-primary);box-shadow:var(--fc-ui-shadow);line-height:1.35;overflow-wrap:anywhere}
-#appScreen .action-option.danger{border-color:#F0B5B2;background:#FFF3F2;color:#A72624}
+body:has(#appScreen:not([hidden])) #appActionSheet .app-action-panel{background:var(--fc-ui-surface-soft);color:var(--fc-ui-text-primary);border-radius:var(--fc-ui-radius-lg) var(--fc-ui-radius-lg) 0 0}
+body:has(#appScreen:not([hidden])) #appActionSheet .app-action-handle{background:var(--fc-ui-border)}
+body:has(#appScreen:not([hidden])) #appActionSheet .app-action-head h3{color:var(--fc-ui-brand-navy)}
+body:has(#appScreen:not([hidden])) #appActionSheet .action-grid{gap:var(--fc-ui-space-md)}
+body:has(#appScreen:not([hidden])) #appActionSheet .action-option{min-height:var(--fc-ui-touch-primary);padding:var(--fc-ui-space-lg);border-color:var(--fc-ui-border);border-radius:var(--fc-ui-radius-sm);background:#fff;color:var(--fc-ui-text-primary);box-shadow:var(--fc-ui-shadow);line-height:1.35;overflow-wrap:anywhere}
+body:has(#appScreen:not([hidden])) #appActionSheet .action-option.danger{border-color:#F0B5B2;background:#FFF3F2;color:#A72624}
 #dashboardSection .section-head h3{color:var(--fc-ui-text-primary)}
 #dashboardSection :is(#statusCards,#crewCards,#vehicleCards) .mini-card{border-color:var(--fc-ui-border);background:#fff}
 #aiSection .ai-advice-display,#reportSection .report-preview{border-color:var(--fc-ui-border);background:#fff;color:var(--fc-ui-text-primary)}
@@ -91,7 +91,7 @@ body:has(#appScreen:not([hidden])){background:var(--fc-ui-surface-soft);color:va
   :is(#caseInfo,#arrivalSection,#sitrepSection,#aiSection,#dashboardSection,#assessmentSection,#reportSection) .accordion-body{padding:var(--fc-ui-space-md)}
   #sitrepSection .sitrep-entry-accordion>summary{padding:var(--fc-ui-space-md)}
   #caseInfo :is(.overview-brief-card,.overview-visual-card){padding:var(--fc-ui-space-md)}
-  #appScreen .action-option{padding:var(--fc-ui-space-md)}
+  body:has(#appScreen:not([hidden])) #appActionSheet .action-option{padding:var(--fc-ui-space-md)}
 }
 @media(max-width:360px){#sitrepSection .sitrep-page-head{align-items:flex-start;flex-wrap:wrap}}
 @media(prefers-reduced-motion:reduce){#appScreen .case-page-panel{animation:none}}

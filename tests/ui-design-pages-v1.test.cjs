@@ -21,6 +21,7 @@ test('approved token layer precedes the page skin, and all four actual case entr
     assert.match(html,new RegExp(`data-case-page="${page}"`));
   }
   assert.match(html,/id="moreNavBtn"/);
+  assert.match(html,/<\/section>\s*<section id="appActionSheet"/);
 });
 
 test('page skin keeps real SOP, situation, overview, and More controls and shared token values',()=>{
@@ -30,6 +31,7 @@ test('page skin keeps real SOP, situation, overview, and More controls and share
   for(const token of ['--fc-ui-brand-blue','--fc-ui-brand-navy','--fc-ui-border','--fc-ui-touch-min','--fc-ui-touch-primary'])assert.ok(css.includes(`var(${token})`));
   assert.ok(fs.statSync(path.join(root,'assets/ui-section-mark.svg')).size>100);
   assert.match(css,/url\('\.\/ui-section-mark\.svg'\)/);
+  assert.match(css,/body:has\(#appScreen:not\(\[hidden\]\)\) #appActionSheet \.action-option/);
   assert.doesNotMatch(css,/url\('https?:/);
   assert.doesNotMatch(css,/#tacticalMapSection\s+\.tactical-canvas/);
 });
