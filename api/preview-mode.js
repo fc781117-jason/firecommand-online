@@ -7,7 +7,7 @@ export default function handler(req,res){
   if(req.method!=='GET')return res.status(405).json({demoEnabled:false,target:'unavailable'});
   const value=process.env.VERCEL_ENV;
   const target=['preview','production','development'].includes(value)?value:'unavailable';
-  // This review fixture belongs only to the authorized revision branch.
-  const demoEnabled=target==='preview'&&['feature/v34-2-field-revision-v3-1','feature/v34-2-field-revision-v3-2','feature/v34-2-field-revision-v3-3','feature/firecommand-ui-deployment-v1'].includes(process.env.VERCEL_GIT_COMMIT_REF);
+  // Local-only fixture on explicitly reviewed Preview branches; Production always denied.
+  const demoEnabled=target==='preview'&&['feature/v34-2-field-revision-v3-1','feature/v34-2-field-revision-v3-2','feature/v34-2-field-revision-v3-3','feature/firecommand-ui-deployment-v1','feature/firecommand-ui-pages-v1'].includes(process.env.VERCEL_GIT_COMMIT_REF);
   return res.status(200).json({demoEnabled,target});
 }
