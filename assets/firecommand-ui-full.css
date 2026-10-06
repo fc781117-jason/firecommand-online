@@ -1,0 +1,127 @@
+/* Commercial Light Tactical: full app skin, built on approved V1 tokens.
+   No route, data, permission, or interaction changes. */
+.fc-ui-global-sprite{position:absolute;width:0;height:0;overflow:hidden;pointer-events:none}
+#appScreen{--bg:var(--fc-ui-surface-soft);--panel:var(--fc-ui-surface);--panel2:var(--fc-ui-surface-cool);--text:var(--fc-ui-text-primary);--muted:var(--fc-ui-text-secondary);--line:var(--fc-ui-border);--dark:var(--fc-ui-brand-navy);--blue:var(--fc-ui-brand-blue);--blue2:var(--fc-ui-surface-cool);--shadow:var(--fc-ui-shadow);--radius:var(--fc-ui-radius-md);font-family:var(--fc-ui-font);color:var(--fc-ui-text-primary)}
+body:has(#appScreen:not([hidden])){background:var(--fc-ui-surface-soft)}
+.fc-ui-brand-lockup{display:inline-flex;align-items:center;gap:10px;color:var(--fc-ui-brand-navy);font-size:1rem;letter-spacing:.02em}
+.fc-ui-brand-lockup svg{width:34px;height:34px;color:var(--fc-ui-critical)}
+#appScreen .topbar{display:flex;gap:10px;flex-wrap:wrap;padding:10px max(12px,env(safe-area-inset-right)) 10px max(12px,env(safe-area-inset-left));background:rgba(255,255,255,.98);color:var(--fc-ui-text-primary);border-bottom:1px solid var(--fc-ui-border);box-shadow:0 4px 18px rgba(12,41,66,.08)}
+#appScreen .topbar>div:first-child{flex:1 1 160px;min-width:0}
+#appScreen .brand-mini{display:flex;align-items:center;gap:7px;color:var(--fc-ui-brand-navy);font-size:clamp(1rem,4vw,1.25rem);line-height:1.15}
+#appScreen .fc-ui-brand-icon{width:28px;height:28px;flex:none;color:var(--fc-ui-critical)}
+#appScreen .topbar .app-version{font-size:.7em;letter-spacing:0;border:1px solid #B5D9F1;border-radius:var(--fc-ui-radius-pill);padding:3px 7px;background:var(--fc-ui-surface-cool);color:var(--fc-ui-brand-navy)}
+#appScreen .topbar .user-line{color:var(--fc-ui-text-secondary);white-space:normal;text-align:left;overflow-wrap:anywhere;line-height:1.25}
+#appScreen .topbar .btn{min-height:var(--fc-ui-touch-min);border:1px solid var(--fc-ui-border);background:#fff;color:var(--fc-ui-brand-navy);box-shadow:none}
+#appScreen .topbar .btn:hover{background:var(--fc-ui-surface-cool)}
+.fc-ui-inline-icon{width:19px;height:19px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:middle}
+#appScreen #logoutBtn{display:inline-flex;align-items:center;justify-content:center;gap:6px}
+
+/* Brand photography remains above controls; data fields and tactical canvases stay flat. */
+#homePage .fc-ui-home-hero{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:5px;min-height:150px;margin-bottom:var(--fc-ui-space-lg);padding:var(--fc-ui-space-xl);background-image:var(--fc-ui-hero-overlay),url('./firecommand-hero-v1.webp');background-position:center 42%;background-size:cover;box-shadow:var(--fc-ui-shadow)}
+.fc-ui-home-hero span{font-size:.68rem;font-weight:800;letter-spacing:.24em}
+.fc-ui-home-hero strong{font-size:clamp(1.2rem,4vw,1.85rem);line-height:1.22;letter-spacing:.03em;text-shadow:0 2px 10px #001B33A6}
+.fc-ui-home-hero small{font-size:.84rem;line-height:1.4;color:#E5F4FF}
+
+/* Existing static pages, case cards, forms, and training cards. */
+#appScreen :is(.section-head h2,.section-head h3,.detail-title-wrap h2){color:var(--fc-ui-text-primary);line-height:1.28}
+#appScreen :is(.eyebrow,.brand-kicker){color:var(--fc-ui-brand-blue)}
+#appScreen :is(.card,.case-card,.accordion,.form-card,.practice-join-card,.practice-intro,.training-stream){border-color:var(--fc-ui-border);border-radius:var(--fc-ui-radius-md);background:var(--fc-ui-surface);box-shadow:var(--fc-ui-shadow)}
+#appScreen .case-card{border-left:4px solid var(--fc-ui-brand-blue)}
+#appScreen .case-no{color:var(--fc-ui-brand-blue)}
+#appScreen .case-summary,#appScreen .subline{color:var(--fc-ui-text-secondary)}
+#appScreen :is(.case-card,.accordion,.form-card,.practice-join-card,.practice-intro) :is(input,select,textarea){max-width:100%;border-color:var(--fc-ui-border);background:#fff;color:var(--fc-ui-text-primary)}
+#appScreen :is(input,select,textarea):focus-visible{outline:3px solid #9AD1F4;outline-offset:1px}
+#appScreen .btn.primary{background:var(--fc-ui-brand-blue);color:#fff}
+#appScreen .btn.danger{background:var(--fc-ui-critical);color:#fff}
+#appScreen .btn.ghost{border-color:var(--fc-ui-border);background:#fff;color:var(--fc-ui-brand-navy)}
+#appScreen :is(.btn,.action-option,.home-mode-btn){min-height:var(--fc-ui-touch-min);border-radius:var(--fc-ui-radius-sm)}
+#appScreen :is(#caseForm,#profileForm) .btn.primary,#appScreen .btn.primary.full{min-height:var(--fc-ui-touch-primary)}
+#appScreen .home-mode-btn.active{border-color:var(--fc-ui-brand-blue);background:var(--fc-ui-brand-blue);color:#fff}
+#appScreen .home-mode-switch{border-color:var(--fc-ui-border);background:var(--fc-ui-surface-cool)}
+#appScreen .tag.blue{border-color:var(--fc-ui-border);background:var(--fc-ui-surface-cool);color:var(--fc-ui-brand-navy)}
+#appScreen .tag.green{color:#0B684F}
+#appScreen .tag.red{color:#A72624}
+#appScreen .notice:not(.danger){border-color:var(--fc-ui-border);background:var(--fc-ui-surface-cool);color:var(--fc-ui-text-secondary)}
+#appScreen .troubleshooting-accordion>summary{color:var(--fc-ui-brand-navy);background:var(--fc-ui-surface)}
+#appScreen .troubleshooting-card{border-color:var(--fc-ui-border);background:#fff}
+
+/* Icon + text on each actual case route. The earlier generic mark is retired. */
+#appScreen .case-nav-icon{display:grid;place-items:center;width:32px;height:32px;padding:5px;background:var(--fc-ui-surface-cool);color:var(--fc-ui-brand-navy)}
+#appScreen .case-nav-icon svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+#appScreen .case-nav-item.active .case-nav-icon{background:#fff;color:var(--fc-ui-brand-blue)}
+#appScreen .case-nav-item.active{background:var(--fc-ui-brand-blue);border-color:var(--fc-ui-brand-blue);color:#fff}
+#appScreen .case-page-nav{background:rgba(255,255,255,.97);border-color:var(--fc-ui-border)}
+.fc-ui-title-icon{width:38px;height:38px;flex:none;padding:8px;border-radius:var(--fc-ui-radius-sm);background:var(--fc-ui-surface-cool);fill:none;stroke:var(--fc-ui-brand-blue);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+:is(#caseInfo,#arrivalSection,#aiSection,#dashboardSection,#assessmentSection,#reportSection) .accordion>summary>span:first-child:before{content:none}
+#appScreen :is(#createCaseDetails,#caseInfo,#arrivalSection,#sitrepSection,#aiSection,#dashboardSection,#assessmentSection,#reportSection) .accordion>summary{min-height:var(--fc-ui-touch-primary);color:var(--fc-ui-text-primary)}
+#appScreen .fc-ui-section-heading{align-items:center;justify-content:flex-start;gap:var(--fc-ui-space-md)}
+#sitrepSection .sitrep-page-head>div{flex:1}
+#sitrepSection .sitrep-entry-accordion>summary:before{content:none}
+#sitrepSection .sitrep-entry-accordion>summary .fc-ui-fire-title{color:var(--fc-ui-critical);background:#FFF1F0;stroke:none}
+
+/* More is a sibling of appScreen. It is styled only while the app is visible. */
+body:has(#appScreen:not([hidden])) #appActionSheet .more-grid{display:grid;gap:var(--fc-ui-space-md);grid-template-columns:repeat(2,minmax(0,1fr))}
+body:has(#appScreen:not([hidden])) #appActionSheet .more-grid button{display:flex;align-items:center;gap:var(--fc-ui-space-md);min-width:0;min-height:82px;padding:var(--fc-ui-space-md);border:1px solid var(--fc-ui-border);border-radius:var(--fc-ui-radius-md);background:#fff;color:var(--fc-ui-text-primary);text-align:left;box-shadow:var(--fc-ui-shadow)}
+body:has(#appScreen:not([hidden])) #appActionSheet .more-grid button>span:nth-child(2){min-width:0;flex:1;overflow-wrap:anywhere}
+.fc-ui-more-icon{width:40px;height:40px;flex:none;padding:9px;border-radius:var(--fc-ui-radius-sm);background:var(--fc-ui-surface-cool);fill:none;stroke:var(--fc-ui-brand-blue);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.fc-ui-more-arrow{font-size:1.6rem;color:var(--fc-ui-brand-blue)}
+
+/* Account management is a nested administrative page, with the same palette. */
+#appScreen #adminSection{width:min(1180px,calc(100% - 24px));margin:10px auto}
+#appScreen #accountAdminDetails{border-color:var(--fc-ui-border);background:#fff}
+#appScreen #accountAdminDetails>summary{min-height:var(--fc-ui-touch-primary);color:var(--fc-ui-brand-navy)}
+#appScreen .account-summary button{border-color:var(--fc-ui-border);background:var(--fc-ui-surface-soft);color:var(--fc-ui-text-primary)}
+#appScreen .account-summary button[aria-pressed="true"]{border-color:var(--fc-ui-brand-blue);background:var(--fc-ui-surface-cool)}
+#appScreen .account-admin-body .user-admin-card{border-color:var(--fc-ui-border);background:#fff}
+#appScreen .account-search-row,#appScreen .account-status-filters{background:#fff}
+#appScreen .account-status-filters button[aria-pressed="true"]{background:var(--fc-ui-brand-blue);border-color:var(--fc-ui-brand-blue);color:#fff}
+#appScreen .account-owner-note summary{display:flex;align-items:center;gap:8px}
+#appScreen .account-owner-note .fc-ui-inline-icon{color:var(--fc-ui-brand-blue)}
+
+/* Deeper field cards share the same surfaces; SVG tactical markers retain their own palette. */
+#appScreen :is(.arrival-detail-panel,.deployment-sop-group,.contact-row,.saved-record,.resident-card-v3,.building-resident-details-v31,.sitrep-card,.operational-section-v32,.report-card){border-color:var(--fc-ui-border);background:#fff;color:var(--fc-ui-text-primary)}
+#appScreen :is(.arrival-detail-panel,.deployment-sop-group,.contact-row,.saved-record,.resident-card-v3,.building-resident-details-v31,.sitrep-card,.report-card){border-radius:var(--fc-ui-radius-md)}
+#appScreen :is(.resident-card-v3,.sitrep-card,.report-card){box-shadow:0 3px 12px rgba(12,41,66,.06)}
+#appScreen :is(.resident-card-v3,.operational-section-v32) :is(p,dd,li){color:var(--fc-ui-text-secondary)}
+#appScreen .operational-section-v32 h4,#appScreen .floor-detail-v33 h4{color:var(--fc-ui-brand-navy)}
+#appScreen .floor-detail-v33{border-color:var(--fc-ui-border)}
+#appScreen .resident-total-v3{border-color:var(--fc-ui-border);background:var(--fc-ui-surface-cool);color:var(--fc-ui-brand-navy)}
+#appScreen .private-photo img{border:1px solid var(--fc-ui-border);border-radius:var(--fc-ui-radius-sm)}
+#appScreen :is(.choice-chip,.support-grid label,.floor-tool-palette button){border-color:var(--fc-ui-border);background:#fff;color:var(--fc-ui-text-primary)}
+#appScreen :is(.choice-chip:has(input:checked),.support-grid label:has(input:checked),.floor-tool-palette button.active-choice){border-color:var(--fc-ui-brand-blue)!important;background:var(--fc-ui-brand-navy)!important;color:#fff!important}
+#appScreen :is(.choice-chip,.support-grid label,.floor-tool-palette button){min-height:var(--fc-ui-touch-min)}
+#appScreen .floor-tool-palette button{display:inline-flex;align-items:center;gap:7px}
+#appScreen .floor-tool-palette button svg{width:21px;height:21px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+#appScreen .floor-tool-palette button[data-floor-tool="起火點"],#appScreen .floor-tool-palette button[data-floor-tool="死亡者"]{color:#A72624}
+#appScreen .floor-tool-palette button[data-floor-tool="待救者"]{color:#0B684F}
+#appScreen .floor-tool-palette button[data-floor-tool="起火點"] svg{fill:currentColor;stroke:none}
+#appScreen .floor-marker .fc-floor-icon{display:block;width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.floor-scheme-svg{fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* Login, onboarding, and approval share the light operation surface. */
+:is(.auth-screen,.profile-screen,.approval-screen){background:var(--fc-ui-surface-soft);color:var(--fc-ui-text-primary);font-family:var(--fc-ui-font)}
+:is(.auth-screen,.approval-screen) .brand-card,.profile-screen .form-card{border-color:var(--fc-ui-border);border-radius:var(--fc-ui-radius-lg);background:#fff;box-shadow:var(--fc-ui-shadow)}
+:is(.auth-screen,.approval-screen) .brand-card{border-top:6px solid var(--fc-ui-brand-blue)}
+:is(.auth-screen,.profile-screen,.approval-screen) :is(h1,h2,h3){color:var(--fc-ui-text-primary)}
+:is(.auth-screen,.profile-screen,.approval-screen) .btn.primary{min-height:var(--fc-ui-touch-primary);background:var(--fc-ui-brand-blue);color:#fff}
+:is(.auth-screen,.profile-screen,.approval-screen) .btn.ghost{min-height:var(--fc-ui-touch-min);border-color:var(--fc-ui-border);background:#fff;color:var(--fc-ui-brand-navy)}
+:is(.auth-screen,.profile-screen,.approval-screen) :is(input,select,textarea){min-height:var(--fc-ui-touch-min);border-color:var(--fc-ui-border);color:var(--fc-ui-text-primary)}
+
+@media(max-width:799px){
+  #appScreen .topbar{gap:8px}
+  #appScreen .case-page-nav{overflow-x:visible}
+  #appScreen .case-nav-item{flex:1 1 0;min-width:0;gap:3px;min-height:64px;font-size:clamp(.65rem,2.8vw,.83rem)}
+  #appScreen .case-nav-icon{width:32px;height:30px}
+  #homePage .fc-ui-home-hero{min-height:132px;padding:var(--fc-ui-space-lg);background-position:58% center}
+  body:has(#appScreen:not([hidden])) #appActionSheet .more-grid{gap:var(--fc-ui-space-sm)}
+  body:has(#appScreen:not([hidden])) #appActionSheet .more-grid button{min-height:74px;padding:var(--fc-ui-space-md);font-size:.88rem}
+}
+@media(max-width:360px){
+  #appScreen .topbar .btn{padding:8px}
+  #appScreen .brand-mini{font-size:1rem}
+  #appScreen .topbar .app-version{padding:2px 5px}
+  #appScreen .case-nav-icon{width:28px;height:28px}
+  #appScreen .case-nav-icon svg{width:21px;height:21px}
+  body:has(#appScreen:not([hidden])) #appActionSheet .more-grid{grid-template-columns:1fr}
+}
+@media(prefers-reduced-motion:reduce){#appScreen .case-page-panel{animation:none}}

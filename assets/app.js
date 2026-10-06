@@ -3873,7 +3873,7 @@ function floorPlanSchematicHtml(){
   if(!markers.length) return '';
   const W=900,H=480;
   const lineHtml=markers.filter(m=>m.x2!==undefined).map(m=>`<line x1="${(m.x/100*W).toFixed(1)}" y1="${(m.y/100*H).toFixed(1)}" x2="${(m.x2/100*W).toFixed(1)}" y2="${(m.y2/100*H).toFixed(1)}" class="floor-scheme-line ${markerClass(m.type)}"/><text x="${(((m.x+m.x2)/200)*W).toFixed(1)}" y="${((((m.y+m.y2)/200)*H)-5).toFixed(1)}" class="floor-scheme-label">${m.note?escapeHtml(m.note):''}</text>`).join('');
-  const pointHtml=markers.filter(m=>m.x2===undefined).map(m=>`<g><circle cx="${(m.x/100*W).toFixed(1)}" cy="${(m.y/100*H).toFixed(1)}" r="18" class="floor-scheme-point ${markerClass(m.type)}"/><text x="${(m.x/100*W).toFixed(1)}" y="${(m.y/100*H+5).toFixed(1)}" class="floor-scheme-icon">${escapeHtml(markerIcon(m.type))}</text><text x="${(m.x/100*W).toFixed(1)}" y="${(m.y/100*H+39).toFixed(1)}" class="floor-scheme-label">${m.note?escapeHtml(m.note):''}</text></g>`).join('');
+  const pointHtml=markers.filter(m=>m.x2===undefined).map(m=>`<g><circle cx="${(m.x/100*W).toFixed(1)}" cy="${(m.y/100*H).toFixed(1)}" r="18" class="floor-scheme-point ${markerClass(m.type)}"/><svg x="${(m.x/100*W-12).toFixed(1)}" y="${(m.y/100*H-12).toFixed(1)}" width="24" height="24" viewBox="0 0 24 24" class="floor-scheme-svg">${floorIconPaths(m.type)}</svg><text x="${(m.x/100*W).toFixed(1)}" y="${(m.y/100*H+39).toFixed(1)}" class="floor-scheme-label">${m.note?escapeHtml(m.note):''}</text></g>`).join('');
   return `<div class="report-schematic-card"><div class="report-schematic-head"><strong>${escapeHtml(floorLabel(selected))} 建物內部作戰示意圖</strong><span>依現場繪圖資料正式化呈現</span></div><svg class="report-schematic floor" viewBox="0 0 ${W} ${H}" role="img" aria-label="建物內部作戰示意圖"><rect width="${W}" height="${H}" class="scheme-bg"/><defs><pattern id="floorGrid" width="45" height="45" patternUnits="userSpaceOnUse"><path d="M45 0H0V45" class="scheme-grid"/></pattern></defs><rect width="${W}" height="${H}" fill="url(#floorGrid)"/>${lineHtml}${pointHtml}</svg></div>`;
 }
 function reportHtmlFromText(text){
@@ -4597,7 +4597,7 @@ function renderFloorPlan(){
       const handles=selected&&!floorPlanLocked?`<button type="button" class="floor-line-handle start" style="left:${m.x}%;top:${m.y}%" data-line-endpoint="start" data-marker-id="${m.id}" aria-label="調整線段起點"></button><button type="button" class="floor-line-handle end" style="left:${m.x2}%;top:${m.y2}%" data-line-endpoint="end" data-marker-id="${m.id}" aria-label="調整線段終點"></button>`:'';
       return `<button type="button" class="floor-line ${markerClass(m.type)}${selected}" style="left:${m.x}%;top:${m.y}%;width:${len}%;transform:rotate(${angle}deg)" data-marker-id="${m.id}" title="${m.note?escapeHtml(m.note):''}"><span>${m.note?escapeHtml(m.note):''}</span></button>${handles}`;
     }
-    return `<button type="button" class="floor-marker ${markerClass(m.type)}${selected}" style="left:${m.x}%;top:${m.y}%" data-marker-id="${m.id}" title="${m.note?escapeHtml(m.note):''}">${markerIcon(m.type)}<span>${escapeHtml(m.label||m.type)}</span></button>`;
+    return `<button type="button" class="floor-marker ${markerClass(m.type)}${selected}" style="left:${m.x}%;top:${m.y}%" data-marker-id="${m.id}" title="${m.note?escapeHtml(m.note):''}"><svg class="fc-floor-icon" aria-hidden="true" viewBox="0 0 24 24">${floorIconPaths(m.type)}</svg><span>${escapeHtml(m.label||m.type)}</span></button>`;
   }).join('');
   canvas.querySelectorAll('[data-marker-id]:not([data-line-endpoint])').forEach(btn => {
     btn.addEventListener('click', ev => {
@@ -4613,7 +4613,18 @@ function renderFloorPlan(){
   canvas.querySelectorAll('[data-line-endpoint]').forEach(handle=>handle.addEventListener('pointerdown',ev=>startLineEndpointDrag(ev,handle.dataset.markerId,handle.dataset.lineEndpoint)));
   updateFloorCommandState();
 }
-function markerIcon(t){ return {'起火點':'🔥','待救者':'🟢','死亡者':'🔴','入口':'🚪','水線':'💧','隔間':'▦','危害物':'☣️'}[t] || '•'; }
+function floorIconPaths(t){
+  const paths={
+    '起火點':'<path d="M12 2c1 3-1 5-1 7-1-1-2-3-1-5-4 3-6 7-6 10a8 8 0 0 0 16 0c0-5-3-9-8-12Z"/><path d="M12 12c-2 2-3 4-3 5a3 3 0 0 0 6 0c0-2-1-4-3-5Z"/>',
+    '待救者':'<circle cx="12" cy="7" r="3"/><path d="M4 21v-2a8 8 0 0 1 16 0v2M12 12v5"/>',
+    '死亡者':'<circle cx="12" cy="7" r="3"/><path d="M4 21v-2a8 8 0 0 1 16 0v2M9 17l6 3m0-3-6 3"/>',
+    '入口':'<path d="M5 22V3a1 1 0 0 1 1-1h12v20M3 22h18M9 12h1"/>',
+    '水線':'<path d="M12 2c-3 5-7 9-7 13a7 7 0 0 0 14 0c0-4-4-8-7-13Z"/>',
+    '隔間':'<path d="M2 5h20v14H2V5Zm0 5h20M2 15h20M8 5v5m8 0v5m-8 0v4"/>',
+    '危害物':'<path d="m12 3 10 18H2L12 3Z"/><path d="M12 9v5m0 3h.01"/>'
+  };
+  return paths[t]||'<circle cx="12" cy="12" r="5"/>';
+}
 function markerClass(t){ return {'起火點':'fire','待救者':'rescue','死亡者':'fatal','入口':'entry','水線':'hose','隔間':'wall','危害物':'hazard'}[t] || ''; }
 function floorPointFromEvent(ev){
   const rect = $('floorPlanCanvas').getBoundingClientRect();
@@ -5088,7 +5099,7 @@ async function authenticatedAI(url,options={}){
 }
 function initV27(){
  $('practiceInstructorMode').onchange=()=>{const human=$('practiceInstructorMode').value==='human';$('practiceHostRole').disabled=human;};
- $('moreNavBtn').onclick=()=>{openActionSheet('更多功能',`<div class="more-grid">${[['aiSection','AI 建議與化災資料'],['dashboardSection','人員與車輛'],['reportSection','進度報告'],['assessmentSection','檢討評估']].map(([id,label])=>`<button type="button" class="btn ghost" data-more-page="${id}">${label}</button>`).join('')}</div>`);$('appActionBody').querySelectorAll('[data-more-page]').forEach(b=>b.onclick=()=>{switchCasePage(b.dataset.morePage);closeActionSheet();});};
+ $('moreNavBtn').onclick=()=>{openActionSheet('更多功能',`<div class="more-grid">${[['aiSection','AI 建議與化災資料','fc-ui-spark'],['dashboardSection','人員與車輛','fc-ui-people'],['reportSection','進度報告','fc-ui-report'],['assessmentSection','檢討評估','fc-ui-shield']].map(([id,label,icon])=>`<button type="button" class="btn ghost" data-more-page="${id}"><svg class="fc-ui-more-icon" aria-hidden="true"><use href="#${icon}"/></svg><span>${label}</span><span class="fc-ui-more-arrow" aria-hidden="true">›</span></button>`).join('')}</div>`);$('appActionBody').querySelectorAll('[data-more-page]').forEach(b=>b.onclick=()=>{switchCasePage(b.dataset.morePage);closeActionSheet();});};
  $('submitPracticeResponse').onclick=safeRun27(submitTrainingResponse);
  $('endPracticeBtn').onclick=safeRun27(async()=>{if(isHumanInstructor())await trainingCommit({type:'finish',reason:'真人教官判定演練結束'});});
  $('parseDeploymentBtn').onclick=safeRun27(parseDeployment27);

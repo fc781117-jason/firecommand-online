@@ -19,13 +19,34 @@
   <link rel="stylesheet" href="./assets/firecommand-ui-tokens.css?v=1" />
   <link rel="stylesheet" href="./assets/firecommand-ui-components.css?v=1" />
   <link rel="stylesheet" href="./assets/firecommand-ui-pages.css?v=1" />
+  <link rel="stylesheet" href="./assets/firecommand-ui-full.css?v=1" />
 </head>
 <body>
+  <svg class="fc-ui-global-sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><defs>
+    <symbol id="fc-ui-flame" viewBox="0 0 24 24"><path d="M12.8 1.5c1.1 3.8-.8 5.4-1.4 7.1C10.2 7.3 9.7 5.8 10 4c-3.9 3.2-6.2 6.4-6.2 10.3a8.2 8.2 0 0 0 16.4 0c0-4.6-2.5-8.7-7.4-12.8Z" fill="currentColor"/><path d="M12.1 10.7c.5 1.7-.7 2.6-1.5 3.5-.8-.7-1-1.4-.8-2.1-2 2.1-2.6 3.5-2.6 4.7a4.8 4.8 0 0 0 9.6 0c0-2.3-1.5-4.4-4.7-6.1Z" fill="#fff"/></symbol>
+    <symbol id="fc-ui-clipboard" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="18" rx="2"/><path d="M9 4V2h6v2M8 10h8M8 14h8M8 18h5"/></symbol>
+    <symbol id="fc-ui-pulse" viewBox="0 0 24 24"><path d="M2 12h4l2-5 4 11 2-6h8"/></symbol>
+    <symbol id="fc-ui-overview" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h6"/></symbol>
+    <symbol id="fc-ui-layers" viewBox="0 0 24 24"><path d="m12 2 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 15l9 5 9-5"/></symbol>
+    <symbol id="fc-ui-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></symbol>
+    <symbol id="fc-ui-person" viewBox="0 0 24 24"><circle cx="12" cy="7" r="4"/><path d="M4 22v-3a8 8 0 0 1 16 0v3"/></symbol>
+    <symbol id="fc-ui-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></symbol>
+    <symbol id="fc-ui-pin" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></symbol>
+    <symbol id="fc-ui-spark" viewBox="0 0 24 24"><path d="m12 2 1.9 6.1L20 10l-6.1 1.9L12 18l-1.9-6.1L4 10l6.1-1.9L12 2Zm7 15 .7 2.3L22 20l-2.3.7L19 23l-.7-2.3L16 20l2.3-.7L19 17Z"/></symbol>
+    <symbol id="fc-ui-report" viewBox="0 0 24 24"><path d="M6 2h9l4 4v16H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z"/><path d="M15 2v5h4M8 12h8M8 16h8"/></symbol>
+    <symbol id="fc-ui-people" viewBox="0 0 24 24"><circle cx="9" cy="7" r="3"/><path d="M2 21v-2a7 7 0 0 1 14 0v2H2Zm15-17a3 3 0 0 1 0 6m1 3a6 6 0 0 1 4 6v2"/></symbol>
+    <symbol id="fc-ui-exit" viewBox="0 0 24 24"><path d="M13 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8M10 12h11m-4-4 4 4-4 4"/></symbol>
+    <symbol id="fc-ui-shield" viewBox="0 0 24 24"><path d="m12 2 9 4v6c0 5-3.5 8.5-9 10-5.5-1.5-9-5-9-10V6l9-4Z"/><path d="m8 12 3 3 5-6"/></symbol>
+    <symbol id="fc-ui-door" viewBox="0 0 24 24"><path d="M5 22V3a1 1 0 0 1 1-1h12v20M3 22h18M9 12h1"/></symbol>
+    <symbol id="fc-ui-drop" viewBox="0 0 24 24"><path d="M12 2c-3 5-7 9-7 13a7 7 0 0 0 14 0c0-4-4-8-7-13Z"/></symbol>
+    <symbol id="fc-ui-wall" viewBox="0 0 24 24"><path d="M2 5h20v14H2V5Zm0 5h20M2 15h20M8 5v5m8 0v5m-8 0v4"/></symbol>
+    <symbol id="fc-ui-hazard" viewBox="0 0 24 24"><path d="m12 3 10 18H2L12 3Z"/><path d="M12 9v5m0 3h.01"/></symbol>
+  </defs></svg>
   <div id="toast" class="toast" hidden></div>
 
   <section id="authScreen" class="screen auth-screen">
     <div class="brand-card">
-      <div class="brand-kicker">FireCommand</div>
+      <div class="brand-kicker fc-ui-brand-lockup"><svg aria-hidden="true"><use href="#fc-ui-flame"/></svg>FireCommand</div>
       <h1>火場指揮系統</h1>
       <p>火場指揮、到場回報、戰術部署、戰情彙整與進度報告產出的行動化指揮工具。</p>
       <div id="authRecoveryCard" class="auth-recovery-card" hidden>
@@ -96,10 +117,10 @@
   <section id="appScreen" class="screen app-screen" hidden>
     <header class="topbar">
       <div>
-        <div class="brand-mini">FireCommand <span class="app-version">v34.2</span></div>
+        <div class="brand-mini"><svg class="fc-ui-brand-icon" aria-hidden="true"><use href="#fc-ui-flame"/></svg>FireCommand <span class="app-version">v34.2</span></div>
         <button id="profileQuickEditBtn" type="button" class="user-line user-profile-button" aria-label="開啟個人資訊及修改火場代號"><span id="userLine">—</span></button>
       </div>
-      <button id="adminManageBtn" class="btn small ghost" type="button" hidden>帳號管理 <span id="adminManageBadge" class="account-pending-badge" hidden></span></button><button id="logoutBtn" class="btn small ghost">登出</button>
+      <button id="adminManageBtn" class="btn small ghost" type="button" hidden>帳號管理 <span id="adminManageBadge" class="account-pending-badge" hidden></span></button><button id="logoutBtn" class="btn small ghost"><svg class="fc-ui-inline-icon" aria-hidden="true"><use href="#fc-ui-exit"/></svg>登出</button>
     </header>
 
     <section id="previewDemoControlsV31" class="page" hidden aria-label="合成示範控制">
@@ -168,7 +189,7 @@
             <div id="accountActiveFilters" class="account-active-filters" aria-live="polite"></div>
             <div id="accountResultCount" class="hint" aria-live="polite"></div>
             <div id="userAdminList" class="user-admin-list" aria-live="polite"></div>
-            <details class="account-owner-note"><summary>🔒 最高管理員設定</summary><p>fc781117@gmail.com 為核心帳號，由既有程式與 Firestore Rules 保護，不會出現在可停權清單中。</p></details>
+            <details class="account-owner-note"><summary><svg class="fc-ui-inline-icon" aria-hidden="true"><use href="#fc-ui-shield"/></svg>最高管理員設定</summary><p>fc781117@gmail.com 為核心帳號，由既有程式與 Firestore Rules 保護，不會出現在可停權清單中。</p></details>
           </div>
         </details>
       </section>
@@ -177,6 +198,7 @@
 
 
     <main id="homePage" class="page">
+      <div class="fc-ui-home-hero fc-ui-section-hero" aria-label="FireCommand 指揮系統"><span>FIREGROUND COMMAND</span><strong>專業指揮・守護每一刻</strong><small>案件建立、現場部署與戰情彙整</small></div>
       <div class="section-head">
         <div>
           <div class="eyebrow">案件首頁</div>
@@ -194,7 +216,7 @@
 
       <details id="createCaseDetails" class="accordion">
         <summary>
-          <span>新增案件 / 貼上派遣令</span><span class="chevron">›</span>
+          <span><svg class="fc-ui-title-icon" aria-hidden="true"><use href="#fc-ui-clipboard"/></svg>新增案件 / 貼上派遣令</span><span class="chevron">›</span>
         </summary>
         <form id="caseForm" class="accordion-body">
           <div class="field"><label>案件地址</label><input id="caseAddress" required autocomplete="off" placeholder="例：新北市蘆洲區長榮路792號" />
@@ -288,11 +310,11 @@
 
       <div class="case-workspace">
         <nav class="case-page-nav" id="casePageNav" aria-label="案件功能分頁">
-          <button type="button" class="case-nav-item" data-case-page="arrivalSection"><span class="case-nav-icon">SOP</span><span>流程</span></button>
-          <button type="button" class="case-nav-item" data-case-page="sitrepSection"><span class="case-nav-icon">報</span><span>戰情</span></button>
-          <button type="button" class="case-nav-item overview-nav active" data-case-page="caseInfo"><span class="case-nav-icon">▣</span><span>概要</span></button>
-          <button type="button" class="case-nav-item" data-case-page="tacticalMapSection"><span class="case-nav-icon">圖</span><span>部署</span></button>
-          <button type="button" class="case-nav-item" id="moreNavBtn"><span class="case-nav-icon">•••</span><span>更多</span></button>
+          <button type="button" class="case-nav-item" data-case-page="arrivalSection"><span class="case-nav-icon"><svg aria-hidden="true"><use href="#fc-ui-clipboard"/></svg></span><span>流程</span></button>
+          <button type="button" class="case-nav-item" data-case-page="sitrepSection"><span class="case-nav-icon"><svg aria-hidden="true"><use href="#fc-ui-pulse"/></svg></span><span>戰情</span></button>
+          <button type="button" class="case-nav-item overview-nav active" data-case-page="caseInfo"><span class="case-nav-icon"><svg aria-hidden="true"><use href="#fc-ui-overview"/></svg></span><span>概要</span></button>
+          <button type="button" class="case-nav-item" data-case-page="tacticalMapSection"><span class="case-nav-icon"><svg aria-hidden="true"><use href="#fc-ui-layers"/></svg></span><span>部署</span></button>
+          <button type="button" class="case-nav-item" id="moreNavBtn"><span class="case-nav-icon"><svg aria-hidden="true"><use href="#fc-ui-more"/></svg></span><span>更多</span></button>
         </nav>
         <section id="practiceSessionPanel" class="practice-session-panel" hidden>
           <div class="practice-session-head"><div><div class="eyebrow">模擬演練 · 不列入實戰</div><h3 id="practiceSessionTitle">虛擬火場</h3><p id="practiceRoleStatus" class="hint"></p></div><div class="practice-room-code">房號 <b id="practiceRoomCode">------</b></div></div>
@@ -311,7 +333,7 @@
 
       <section id="caseInfo" class="stack case-page-panel" data-case-page-panel="caseInfo">
         <details class="accordion" open>
-          <summary><span>案件概要｜即時彙整</span><span class="chevron">›</span></summary>
+          <summary><span><svg class="fc-ui-title-icon" aria-hidden="true"><use href="#fc-ui-overview"/></svg>案件概要｜即時彙整</span><span class="chevron">›</span></summary>
           <div class="accordion-body overview-readonly">
             <div class="notice compact overview-lock-note">本頁僅供掌握現況，不提供直接修改。開案資料由建立案件時輸入；後續變化由「流程 SOP」、「戰情」及「部署」資料自動更新，避免重複填寫或誤觸。</div>
             <div id="summaryCards" class="h-scroll"></div>
@@ -337,7 +359,7 @@
           </div>
         </details>
         <details id="incidentLocationDetails" class="accordion">
-          <summary><span>案件定位／導航</span><span class="chevron">›</span></summary>
+          <summary><span><svg class="fc-ui-title-icon" aria-hidden="true"><use href="#fc-ui-pin"/></svg>案件定位／導航</span><span class="chevron">›</span></summary>
           <div class="accordion-body">
             <div class="notice compact">這裡保留真實地址、GPS 與導航定位；戰術部署圖另用消防示意畫布，兩者不強迫疊合。</div>
             <div id="googlePlacesSearchHost" class="google-places-host" aria-label="Google 地址自動完成"></div>
@@ -354,7 +376,7 @@
 
       <section id="arrivalSection" class="stack case-page-panel" data-case-page-panel="arrivalSection" hidden>
         <details class="accordion" open>
-          <summary><span>流程 SOP｜到建火人支初破警</span><span class="chevron">›</span></summary>
+          <summary><span><svg class="fc-ui-title-icon" aria-hidden="true"><use href="#fc-ui-clipboard"/></svg>流程 SOP｜到建火人支初破警</span><span class="chevron">›</span></summary>
           <div class="accordion-body">
             <div class="h-scroll command-stage-cards" id="commandStageCards" aria-label="到建火人支初提示卡片">
               <button type="button" class="stage-card" data-stage="到"><b>到</b><span>到達 / 指揮權</span></button>
@@ -598,12 +620,12 @@
 
       <section id="sitrepSection" class="stack case-page-panel" data-case-page-panel="sitrepSection" hidden>
         <div class="accordion important-accordion sitrep-page-shell">
-          <div class="sitrep-page-head"><div><div class="eyebrow">戰情回報</div><h3>請選擇回報類型</h3></div><span class="tag blue">點選後展開</span></div>
+          <div class="sitrep-page-head"><svg class="fc-ui-title-icon" aria-hidden="true"><use href="#fc-ui-pulse"/></svg><div><div class="eyebrow">戰情回報</div><h3>請選擇回報類型</h3></div><span class="tag blue">點選後展開</span></div>
           <div class="accordion-body sitrep-page-body">
             <div class="notice compact">事件時間預設為現在；補述可改事件時間，系統仍記錄實際上傳時間。</div>
             <div class="sitrep-choice-list">
               <details id="sitrepFireDetails" class="sub-accordion sitrep-entry-accordion">
-                <summary><span><b>戰情回報｜火勢狀況</b><small>火勢、搜救、部署、水線與突發事件</small></span><span class="chevron">›</span></summary>
+                <summary><svg class="fc-ui-title-icon fc-ui-fire-title" aria-hidden="true"><use href="#fc-ui-flame"/></svg><span><b>戰情回報｜火勢狀況</b><small>火勢、搜救、部署、水線與突發事件</small></span><span class="chevron">›</span></summary>
                 <div class="sitrep-entry-body">
                 <div class="two-col compact-grid"><div class="field"><label>大隊</label><select id="sitrepBrigade"></select></div><div class="field"><label>單位</label><select id="sitrepUnit"></select></div></div>
                 <div class="two-col compact-grid"><div class="field"><label>類型</label><select id="sitrepCategory"><option>火勢回報</option><option>突發事件</option><option>人車移動</option><option>部署更新</option><option>水線 / 水源</option><option>搜救進度</option><option>支援需求</option><option>危害 / 安全</option><option>PAR / RIT</option><option>其他</option></select></div><div class="field"><label>事件時間</label><input id="sitrepEventAt" type="datetime-local" /></div></div>
@@ -613,7 +635,7 @@
                 </div>
               </details>
               <details id="sitrepPatientDetails" class="sub-accordion sitrep-entry-accordion">
-                <summary><span><b>戰情回報｜傷患者</b><small>尋獲、救出、救護處置與送醫</small></span><span class="chevron">›</span></summary>
+                <summary><svg class="fc-ui-title-icon" aria-hidden="true"><use href="#fc-ui-person"/></svg><span><b>戰情回報｜傷患者</b><small>尋獲、救出、救護處置與送醫</small></span><span class="chevron">›</span></summary>
                 <div class="sitrep-entry-body">
                 <div class="two-col compact-grid"><div class="field"><label>大隊</label><select id="patientBrigade"></select></div><div class="field"><label>單位</label><select id="patientUnit"></select></div></div>
                 <div class="field"><label>患者紀錄<select id="patientRecordV31"><option value="">新增患者（同一患者請選既有紀錄）</option></select></label></div>
@@ -728,13 +750,13 @@
                         <div class="two-col compact-grid">
                           <div class="field"><label>樓層</label><select id="floorPlanLevel"></select></div>
                           <div class="field"><label>繪圖工具</label><div id="floorToolPalette" class="floor-tool-palette">
-                            <button type="button" draggable="true" data-floor-tool="起火點">🔥 起火點</button>
-                            <button type="button" draggable="true" data-floor-tool="待救者">🟢 待救者</button>
-                            <button type="button" draggable="true" data-floor-tool="死亡者">🔴 死亡者</button>
-                            <button type="button" draggable="true" data-floor-tool="入口">🚪 入口</button>
-                            <button type="button" draggable="true" data-floor-tool="水線">💧 水線</button>
-                            <button type="button" draggable="true" data-floor-tool="隔間">▦ 隔間線</button>
-                            <button type="button" draggable="true" data-floor-tool="危害物">☣️ 危害物</button>
+                            <button type="button" draggable="true" data-floor-tool="起火點"><svg aria-hidden="true"><use href="#fc-ui-flame"/></svg>起火點</button>
+                            <button type="button" draggable="true" data-floor-tool="待救者"><svg aria-hidden="true"><use href="#fc-ui-person"/></svg>待救者</button>
+                            <button type="button" draggable="true" data-floor-tool="死亡者"><svg aria-hidden="true"><use href="#fc-ui-person"/></svg>死亡者</button>
+                            <button type="button" draggable="true" data-floor-tool="入口"><svg aria-hidden="true"><use href="#fc-ui-door"/></svg>入口</button>
+                            <button type="button" draggable="true" data-floor-tool="水線"><svg aria-hidden="true"><use href="#fc-ui-drop"/></svg>水線</button>
+                            <button type="button" draggable="true" data-floor-tool="隔間"><svg aria-hidden="true"><use href="#fc-ui-wall"/></svg>隔間線</button>
+                            <button type="button" draggable="true" data-floor-tool="危害物"><svg aria-hidden="true"><use href="#fc-ui-hazard"/></svg>危害物</button>
                           </div></div>
                         </div>
                         <div class="drawing-command-bar">
@@ -756,7 +778,7 @@
       </section>
 <section id="aiSection" class="stack case-page-panel" data-case-page-panel="aiSection" hidden>
         <details class="accordion">
-          <summary><span>注意事項建議 / OpenAI 戰術建議</span><span class="chevron">›</span></summary>
+          <summary><span><svg class="fc-ui-title-icon" aria-hidden="true"><use href="#fc-ui-spark"/></svg>注意事項建議 / OpenAI 戰術建議</span><span class="chevron">›</span></summary>
           <div class="accordion-body">
             <div class="notice compact">依火場作業要點、到場回報、戰情、人車水線與建物作戰圖產生現場注意事項建議；僅供指揮官輔助判斷。</div>
             <div class="button-row">
@@ -770,7 +792,7 @@
       </section>
 
       <section id="dashboardSection" class="stack case-page-panel" data-case-page-panel="dashboardSection" hidden>
-        <div class="section-head compact"><div><div class="eyebrow">人車掌控</div><h3>戰力、任務、休息與水線狀態</h3></div></div>
+        <div class="section-head compact fc-ui-section-heading"><svg class="fc-ui-title-icon" aria-hidden="true"><use href="#fc-ui-people"/></svg><div><div class="eyebrow">人車掌控</div><h3>戰力、任務、休息與水線狀態</h3></div></div>
         <div id="statusCards" class="h-scroll"></div>
         <details id="crewStatusDetails" class="accordion"><summary><span>單位人員狀態</span><span class="chevron">›</span></summary><div id="crewCards" class="accordion-body h-scroll"></div></details>
         <details id="vehicleStatusDetails" class="accordion"><summary><span>車輛狀態</span><span class="chevron">›</span></summary><div id="vehicleCards" class="accordion-body h-scroll"></div></details>
@@ -779,7 +801,7 @@
 
       <section id="assessmentSection" class="stack case-page-panel" data-case-page-panel="assessmentSection" hidden>
         <details class="accordion">
-          <summary><span>檢討及評估優化報告（結案後才能使用）</span><span class="chevron">›</span></summary>
+          <summary><span><svg class="fc-ui-title-icon" aria-hidden="true"><use href="#fc-ui-shield"/></svg>檢討及評估優化報告（結案後才能使用）</span><span class="chevron">›</span></summary>
           <div class="accordion-body">
             <div class="notice">本功能為結案後使用，避免火場進行中誤觸消耗 token。結案後會彙整人車水線、戰情回報、傷患者、作業時間、部署與 AI 建議，另行產生檢討及策進建議，不會混入火場進度報告。</div>
             <div class="button-row">
@@ -793,7 +815,7 @@
       </section>
 
       <section id="reportSection" class="stack case-page-panel" data-case-page-panel="reportSection" hidden>
-        <details class="accordion" open><summary><span>進度報告產出</span><span class="chevron">›</span></summary>
+        <details class="accordion" open><summary><span><svg class="fc-ui-title-icon" aria-hidden="true"><use href="#fc-ui-report"/></svg>進度報告產出</span><span class="chevron">›</span></summary>
           <div class="accordion-body">
             <div class="notice compact">產出給長官檢閱的正式火場進度報告。系統會彙整案件概要、到場回報、部署概況、各單位戰情、人車水線統計與建物作戰圖，並使用 OpenAI 輔助潤稿；檢討及後續評估另由「檢討及評估優化報告」產生。</div>
             <div class="button-row">
