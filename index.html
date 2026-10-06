@@ -20,6 +20,7 @@
   <link rel="stylesheet" href="./assets/firecommand-ui-components.css?v=1" />
   <link rel="stylesheet" href="./assets/firecommand-ui-pages.css?v=1" />
   <link rel="stylesheet" href="./assets/firecommand-ui-full.css?v=1" />
+  <link rel="stylesheet" href="./assets/firecommand-ui-shared-hero.css?v=1" />
 </head>
 <body>
   <svg class="fc-ui-global-sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><defs>
@@ -316,6 +317,14 @@
           <button type="button" class="case-nav-item" data-case-page="tacticalMapSection"><span class="case-nav-icon"><svg aria-hidden="true"><use href="#fc-ui-layers"/></svg></span><span>部署</span></button>
           <button type="button" class="case-nav-item" id="moreNavBtn"><span class="case-nav-icon"><svg aria-hidden="true"><use href="#fc-ui-more"/></svg></span><span>更多</span></button>
         </nav>
+        <div id="caseHero" class="fc-ui-hero fc-ui-section-hero fc-ui-case-hero" aria-label="案件功能視覺橫幅">
+          <div class="fc-ui-hero-copy">
+            <span>FIREGROUND COMMAND</span>
+            <strong id="caseHeroTitle">指揮總覽</strong>
+            <small id="caseHeroSubtitle">戰情、人命與部署重點</small>
+          </div>
+          <svg class="fc-ui-hero-emblem" aria-hidden="true"><use href="#fc-ui-flame"/></svg>
+        </div>
         <section id="practiceSessionPanel" class="practice-session-panel" hidden>
           <div class="practice-session-head"><div><div class="eyebrow">模擬演練 · 不列入實戰</div><h3 id="practiceSessionTitle">虛擬火場</h3><p id="practiceRoleStatus" class="hint"></p></div><div class="practice-room-code">房號 <b id="practiceRoomCode">------</b></div></div>
           <div class="training-toolbar"><span id="practiceProgress"></span><div class="training-clock"><span id="practiceClockLabel">反應時間</span><strong id="practiceCountdown" role="timer">--:--</strong></div><button id="togglePracticeRunBtn" type="button" class="btn small primary">開始演練</button></div>
@@ -654,7 +663,6 @@
       </section>
 
       <section id="tacticalMapSection" class="map-section case-page-panel" data-case-page-panel="tacticalMapSection" hidden>
-        <div class="fc-ui-hero fc-ui-section-hero" aria-hidden="true"><div class="fc-ui-hero-copy"><span>FIREGROUND COMMAND</span><strong>專業指揮・守護每一刻</strong><small>人員・車輛・戰術部署</small></div></div>
         <div class="section-head compact fc-ui-section-head">
           <div><div class="eyebrow">現場資源與圖面</div><h3>部署</h3><p>人員、車輛與戰術部署圖</p></div>
           <svg class="fc-ui-section-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="m12 2 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 15l9 5 9-5"/></svg>

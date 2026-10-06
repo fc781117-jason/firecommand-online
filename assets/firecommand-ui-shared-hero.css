@@ -1,0 +1,58 @@
+/* One branded photo treatment throughout the real app. Photos are decorative,
+   while controls, tactical data, and operational text stay high contrast. */
+#appScreen .topbar{
+  position:relative;
+  background-color:#fff;
+  background-image:linear-gradient(90deg,rgba(255,255,255,.98) 0%,rgba(255,255,255,.95) 54%,rgba(255,255,255,.77) 100%),url('./firecommand-hero-v1.webp');
+  background-size:cover;
+  background-position:center 34%;
+  border-bottom:2px solid var(--fc-ui-brand-blue);
+}
+#appScreen .topbar:after{content:"";position:absolute;right:0;bottom:0;width:58px;height:3px;background:var(--fc-ui-critical);pointer-events:none}
+#appScreen .topbar>div:first-child,#appScreen .topbar>.btn{position:relative;z-index:1}
+#appScreen .case-workspace{grid-template-areas:'nav hero' 'nav content'}
+body.in-training #appScreen .case-workspace{grid-template-areas:'nav hero' 'nav practice' 'nav content'}
+#appScreen .fc-ui-case-hero{
+  grid-area:hero;min-width:0;
+  display:flex;position:relative;align-items:center;justify-content:space-between;
+  min-height:138px;margin:0 0 var(--fc-ui-space-lg);padding:var(--fc-ui-space-xl);
+  border-radius:var(--fc-ui-radius-lg);color:#fff;isolation:isolate;overflow:hidden;
+  background-color:var(--fc-ui-brand-navy);
+  background-image:var(--fc-ui-hero-overlay),url('./firecommand-hero-v1.webp');
+  background-size:cover;background-position:center 46%;box-shadow:var(--fc-ui-shadow);
+}
+#appScreen .fc-ui-case-hero:after,#homePage .fc-ui-home-hero:after{
+  content:"";position:absolute;right:-15px;bottom:10px;width:90px;height:5px;
+  background:var(--fc-ui-critical);transform:rotate(-36deg);
+  box-shadow:0 -11px 0 rgba(255,255,255,.75),0 11px 0 rgba(15,111,198,.85);
+  pointer-events:none;
+}
+#appScreen .fc-ui-case-hero .fc-ui-hero-copy{position:relative;z-index:1;max-width:70%;gap:6px}
+#appScreen .fc-ui-case-hero .fc-ui-hero-copy strong{font-size:clamp(1.3rem,4vw,2rem)}
+#appScreen .fc-ui-case-hero .fc-ui-hero-copy small{line-height:1.35}
+#appScreen .fc-ui-hero-emblem{width:48px;height:48px;position:relative;z-index:1;align-self:flex-start;padding:10px;border-radius:14px;background:rgba(255,255,255,.18);color:#fff;flex:none}
+#homePage .fc-ui-home-hero{position:relative;isolation:isolate;overflow:hidden}
+/* Authentication and onboarding have the same visual language without putting
+   photography behind editable fields or sensitive account details. */
+:is(.auth-screen,.approval-screen) .brand-card:before,.profile-screen .page.narrow:before{
+  content:"";display:block;height:110px;margin:-28px -28px 22px;
+  border-radius:var(--fc-ui-radius-lg) var(--fc-ui-radius-lg) 0 0;
+  background-image:var(--fc-ui-hero-overlay),url('./firecommand-hero-v1.webp');
+  background-size:cover;background-position:61% center;
+}
+.profile-screen .page.narrow:before{height:116px;margin:0 0 var(--fc-ui-space-lg);border-radius:var(--fc-ui-radius-lg)}
+body:has(#appScreen:not([hidden])) #appActionSheet .app-action-head{
+  background-image:linear-gradient(90deg,rgba(255,255,255,.98),rgba(255,255,255,.85)),url('./firecommand-hero-v1.webp');
+  background-size:cover;background-position:center 42%;
+}
+@media(max-width:600px){
+  #appScreen .fc-ui-case-hero{min-height:124px;padding:var(--fc-ui-space-lg);border-radius:var(--fc-ui-radius-md);background-position:58% center}
+  #appScreen .fc-ui-case-hero .fc-ui-hero-copy{max-width:79%}
+  #appScreen .fc-ui-case-hero .fc-ui-hero-copy span{font-size:.58rem}
+  #appScreen .fc-ui-case-hero .fc-ui-hero-copy strong{font-size:1.25rem}
+  #appScreen .fc-ui-case-hero .fc-ui-hero-copy small{font-size:.75rem}
+  #appScreen .fc-ui-hero-emblem{width:34px;height:34px;padding:7px}
+  :is(.auth-screen,.approval-screen) .brand-card:before{height:92px;margin:-20px -20px 18px}
+}
+@media(max-width:799px),(orientation:portrait) and (max-width:999px){#appScreen .case-workspace{display:block}}
+@media(max-width:340px){#appScreen .fc-ui-case-hero .fc-ui-hero-copy{max-width:85%}#appScreen .fc-ui-hero-emblem{width:28px;height:28px;padding:5px}}

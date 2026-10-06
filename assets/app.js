@@ -4029,7 +4029,23 @@ function updateArrivalConditionalPanels(){
 function switchCasePage(targetId='caseInfo', resetScroll=true){
   const allowed = ['caseInfo','arrivalSection','sitrepSection','tacticalMapSection','aiSection','dashboardSection','reportSection','assessmentSection'];
   const next = allowed.includes(targetId) ? targetId : 'caseInfo';
+  const heroCopy = {
+    caseInfo:['指揮總覽','戰情、人命與部署重點'],
+    arrivalSection:['SOP 流程','到場回報與現場確認'],
+    sitrepSection:['戰情回報','火勢、人命與重要變化'],
+    tacticalMapSection:['戰術部署','人員、車輛與圖面'],
+    aiSection:['AI 輔助','資訊整理與判斷參考'],
+    dashboardSection:['資源總覽','人員與車輛動態'],
+    reportSection:['進度報告','已確認資訊彙整'],
+    assessmentSection:['檢討評估','結案後回顧與策進']
+  };
   activeCasePage = next;
+  const hero = $('caseHero');
+  if(hero){
+    $('caseHeroTitle').textContent = heroCopy[next][0];
+    $('caseHeroSubtitle').textContent = heroCopy[next][1];
+    hero.dataset.page = next;
+  }
   document.querySelectorAll('[data-case-page-panel]').forEach(panel => {
     panel.hidden = panel.dataset.casePagePanel !== next;
   });
