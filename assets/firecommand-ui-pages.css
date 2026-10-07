@@ -1,0 +1,97 @@
+/* Commercial Light Tactical: the existing case pages and More sheet.
+   Presentation only. Page IDs, form controls, handlers, and data remain intact. */
+
+body:has(#appScreen:not([hidden])){background:var(--fc-ui-surface-soft);color:var(--fc-ui-text-primary);font-family:var(--fc-ui-font)}
+#appScreen .topbar{background:rgba(11,58,107,.97);color:#fff;box-shadow:0 4px 18px rgba(12,41,66,.16)}
+#appScreen .topbar .user-line{color:#E2F1FB}
+#appScreen .detail-title-wrap h2{color:var(--fc-ui-text-primary);white-space:normal;overflow-wrap:anywhere;line-height:1.3}
+#appScreen .detail-title-wrap .eyebrow{color:var(--fc-ui-brand-blue)}
+#appScreen .detail-header .btn{min-height:var(--fc-ui-touch-min);color:var(--fc-ui-brand-navy);border-color:var(--fc-ui-border);background:var(--fc-ui-surface)}
+
+/* One navigation system on all case pages. Existing active class is the source of truth. */
+#appScreen .case-page-nav{border-color:var(--fc-ui-border);border-radius:var(--fc-ui-radius-md);background:rgba(255,255,255,.97);box-shadow:var(--fc-ui-shadow)}
+#appScreen .case-nav-item{min-height:var(--fc-ui-touch-primary);border-radius:var(--fc-ui-radius-sm);color:var(--fc-ui-text-secondary)}
+#appScreen .case-nav-icon{background:var(--fc-ui-surface-cool);color:var(--fc-ui-brand-navy)}
+#appScreen .case-nav-item.active{background:var(--fc-ui-brand-blue);border-color:var(--fc-ui-brand-blue);color:#fff;box-shadow:0 8px 20px rgba(15,111,198,.25)}
+#appScreen .case-nav-item.active .case-nav-icon{background:#fff;color:var(--fc-ui-brand-blue)}
+#appScreen .case-nav-item:focus-visible,#appScreen .app-action-panel button:focus-visible{outline:3px solid var(--fc-ui-brand-blue);outline-offset:2px}
+
+/* Style A page panels: use the existing accordion and form markup. */
+:is(#caseInfo,#arrivalSection,#sitrepSection,#aiSection,#dashboardSection,#assessmentSection,#reportSection){font-family:var(--fc-ui-font);color:var(--fc-ui-text-primary);min-width:0}
+:is(#caseInfo,#arrivalSection,#sitrepSection,#aiSection,#dashboardSection,#assessmentSection,#reportSection) :is(.accordion,.sub-accordion,.card,.mini-card,.form-card){border-color:var(--fc-ui-border);background:var(--fc-ui-surface);border-radius:var(--fc-ui-radius-md);box-shadow:var(--fc-ui-shadow)}
+:is(#caseInfo,#arrivalSection,#sitrepSection,#aiSection,#dashboardSection,#assessmentSection,#reportSection) .accordion>summary{min-height:var(--fc-ui-touch-primary);padding:var(--fc-ui-space-lg);color:var(--fc-ui-text-primary);background:var(--fc-ui-surface);line-height:1.35;touch-action:manipulation}
+:is(#caseInfo,#arrivalSection,#aiSection,#dashboardSection,#assessmentSection,#reportSection) .accordion>summary>span:first-child{display:flex;gap:var(--fc-ui-space-md);align-items:center;min-width:0;overflow-wrap:anywhere}
+:is(#caseInfo,#arrivalSection,#aiSection,#dashboardSection,#assessmentSection,#reportSection) .accordion>summary>span:first-child:before{content:"";flex:none;width:38px;height:38px;border-radius:var(--fc-ui-radius-sm);background:var(--fc-ui-surface-cool) center/22px no-repeat url('./ui-section-mark.svg')}
+:is(#caseInfo,#arrivalSection,#sitrepSection,#aiSection,#dashboardSection,#assessmentSection,#reportSection) .accordion[open]>summary{border-bottom:1px solid var(--fc-ui-border)}
+:is(#caseInfo,#arrivalSection,#sitrepSection,#aiSection,#dashboardSection,#assessmentSection,#reportSection) .accordion-body{padding:var(--fc-ui-space-lg);background:var(--fc-ui-surface-soft)}
+:is(#caseInfo,#arrivalSection,#sitrepSection,#aiSection,#dashboardSection,#assessmentSection,#reportSection) .chevron{color:var(--fc-ui-brand-blue)}
+:is(#caseInfo,#arrivalSection,#sitrepSection,#aiSection,#dashboardSection,#assessmentSection,#reportSection) .eyebrow{color:var(--fc-ui-brand-blue)}
+:is(#caseInfo,#arrivalSection,#sitrepSection,#aiSection,#dashboardSection,#assessmentSection,#reportSection) .hint{color:var(--fc-ui-text-secondary)}
+:is(#caseInfo,#arrivalSection,#sitrepSection,#aiSection,#dashboardSection,#assessmentSection,#reportSection) :is(input,select,textarea){min-height:var(--fc-ui-touch-min);max-width:100%;border-color:var(--fc-ui-border);border-radius:var(--fc-ui-radius-sm);background:#fff;color:var(--fc-ui-text-primary)}
+:is(#caseInfo,#arrivalSection,#sitrepSection,#aiSection,#dashboardSection,#assessmentSection,#reportSection) :is(input,select,textarea):focus-visible{outline:3px solid #9AD1F4;outline-offset:1px}
+:is(#caseInfo,#arrivalSection,#sitrepSection,#aiSection,#dashboardSection,#assessmentSection,#reportSection) .btn{min-height:var(--fc-ui-touch-min);border-radius:var(--fc-ui-radius-sm)}
+:is(#caseInfo,#arrivalSection,#sitrepSection,#aiSection,#dashboardSection,#assessmentSection,#reportSection) .btn.primary{min-height:var(--fc-ui-touch-primary);background:var(--fc-ui-brand-blue);color:#fff}
+:is(#caseInfo,#arrivalSection,#sitrepSection,#aiSection,#dashboardSection,#assessmentSection,#reportSection) .btn.ghost{border-color:var(--fc-ui-border);background:#fff;color:var(--fc-ui-brand-navy)}
+:is(#caseInfo,#arrivalSection,#sitrepSection,#aiSection,#dashboardSection,#assessmentSection,#reportSection) .btn.danger{background:var(--fc-ui-critical);color:#fff}
+
+/* Overview remains read only and scannable. Its current generated content is untouched. */
+#caseInfo .overview-readonly{gap:var(--fc-ui-space-lg)}
+#caseInfo .overview-lock-note{border-color:var(--fc-ui-border);background:var(--fc-ui-surface-cool);color:var(--fc-ui-text-secondary)}
+#caseInfo :is(.overview-brief-card,.overview-visual-card){border-color:var(--fc-ui-border);border-radius:var(--fc-ui-radius-md);background:#fff;box-shadow:var(--fc-ui-shadow);padding:var(--fc-ui-space-lg)}
+#caseInfo :is(.overview-brief-head,.overview-visual-head) h3,#caseInfo .overview-visual-head h4{color:var(--fc-ui-text-primary);line-height:1.25}
+#caseInfo .overview-updated-meta{border-color:var(--fc-ui-border);background:var(--fc-ui-surface-cool);color:var(--fc-ui-brand-navy)}
+#caseInfo .overview-executive-text{color:var(--fc-ui-text-primary);text-align:left}
+#caseInfo .overview-schematic-host{border-color:var(--fc-ui-border);background:var(--fc-ui-surface-soft)}
+#caseInfo #summaryCards .mini-card{min-width:150px;border-color:var(--fc-ui-border);background:#fff}
+#caseInfo #summaryCards .metric{color:var(--fc-ui-brand-navy);font-variant-numeric:tabular-nums}
+#caseInfo .overview-edit-hint{color:var(--fc-ui-text-secondary)}
+
+/* SOP: eight existing stage buttons and the corresponding confirmation cards. */
+#arrivalSection .command-stage-cards,#arrivalSection .arrival-status-cards{gap:var(--fc-ui-space-sm)}
+#arrivalSection .stage-card,#arrivalSection .arrival-status-card{min-height:var(--fc-ui-touch-primary);border-color:var(--fc-ui-border);border-radius:var(--fc-ui-radius-sm);background:#fff;color:var(--fc-ui-text-primary);box-shadow:none}
+#arrivalSection .stage-card span,#arrivalSection .arrival-status-card span{color:var(--fc-ui-text-secondary)}
+#arrivalSection .stage-card.active,#arrivalSection .arrival-status-card.expanded,#arrivalSection .arrival-status-card.selected.expanded{border-color:var(--fc-ui-brand-navy);background:var(--fc-ui-brand-navy);color:#fff}
+#arrivalSection .stage-card.active span,#arrivalSection .arrival-status-card.expanded span,#arrivalSection .arrival-status-card.expanded em{color:#E5F4FF}
+#arrivalSection .stage-card.stage-complete:not(.active){border-color:#91CCB7;background:#EAF8F3}
+#arrivalSection .stage-card.stage-partial:not(.active){border-color:#F2CB96;background:#FFF7EC}
+#arrivalSection .stage-card.stage-missing:not(.active),#arrivalSection .arrival-status-card.required-missing:not(.expanded){border-color:#F0B5B2;background:#FFF3F2}
+#arrivalSection .arrival-detail-panel,#arrivalSection .deployment-sop-group{border-color:var(--fc-ui-border);border-radius:var(--fc-ui-radius-md);background:#fff;box-shadow:none}
+#arrivalSection .field-inline-title{color:var(--fc-ui-brand-navy)}
+
+/* Situation: type selection stays inline, with existing submit semantics. */
+#sitrepSection .sitrep-page-shell{border-color:var(--fc-ui-border);background:#fff}
+#sitrepSection .sitrep-page-head{padding:var(--fc-ui-space-lg);border-bottom:1px solid var(--fc-ui-border)}
+#sitrepSection .sitrep-page-head h3{color:var(--fc-ui-text-primary);font-size:1.2rem}
+#sitrepSection .sitrep-page-head .tag{background:var(--fc-ui-surface-cool);border-color:var(--fc-ui-border);color:var(--fc-ui-brand-navy)}
+#sitrepSection .sitrep-entry-accordion{border:1px solid var(--fc-ui-border);background:#fff;box-shadow:none;overflow:hidden}
+#sitrepSection .sitrep-entry-accordion>summary{min-height:80px;padding:var(--fc-ui-space-lg);background:#fff;color:var(--fc-ui-text-primary)}
+#sitrepSection .sitrep-entry-accordion>summary:before{content:"";flex:none;width:38px;height:38px;border-radius:var(--fc-ui-radius-sm);background:var(--fc-ui-surface-cool) center/22px no-repeat url('./ui-section-mark.svg')}
+#sitrepSection .sitrep-entry-accordion>summary span:first-of-type{min-width:0;flex:1}
+#sitrepSection .sitrep-entry-accordion>summary small{color:var(--fc-ui-text-secondary);font-size:.82rem;line-height:1.4}
+#sitrepSection .sitrep-entry-accordion[open]>summary{border-bottom:1px solid var(--fc-ui-border)}
+#sitrepSection .sitrep-entry-body{padding:var(--fc-ui-space-lg);background:var(--fc-ui-surface-soft)}
+#sitrepSection .sitrep-card{border-color:var(--fc-ui-border);background:#fff;color:var(--fc-ui-text-primary)}
+#sitrepSection .sitrep-detail{color:var(--fc-ui-text-secondary)}
+
+/* More: same action cards on its sheet and destination pages. */
+body:has(#appScreen:not([hidden])) #appActionSheet .app-action-panel{background:var(--fc-ui-surface-soft);color:var(--fc-ui-text-primary);border-radius:var(--fc-ui-radius-lg) var(--fc-ui-radius-lg) 0 0}
+body:has(#appScreen:not([hidden])) #appActionSheet .app-action-handle{background:var(--fc-ui-border)}
+body:has(#appScreen:not([hidden])) #appActionSheet .app-action-head h3{color:var(--fc-ui-brand-navy)}
+body:has(#appScreen:not([hidden])) #appActionSheet .action-grid{gap:var(--fc-ui-space-md)}
+body:has(#appScreen:not([hidden])) #appActionSheet .action-option{min-height:var(--fc-ui-touch-primary);padding:var(--fc-ui-space-lg);border-color:var(--fc-ui-border);border-radius:var(--fc-ui-radius-sm);background:#fff;color:var(--fc-ui-text-primary);box-shadow:var(--fc-ui-shadow);line-height:1.35;overflow-wrap:anywhere}
+body:has(#appScreen:not([hidden])) #appActionSheet .action-option.danger{border-color:#F0B5B2;background:#FFF3F2;color:#A72624}
+#dashboardSection .section-head h3{color:var(--fc-ui-text-primary)}
+#dashboardSection :is(#statusCards,#crewCards,#vehicleCards) .mini-card{border-color:var(--fc-ui-border);background:#fff}
+#aiSection .ai-advice-display,#reportSection .report-preview{border-color:var(--fc-ui-border);background:#fff;color:var(--fc-ui-text-primary)}
+
+@media(max-width:799px){
+  #appScreen .case-page-nav{border-radius:var(--fc-ui-radius-md) var(--fc-ui-radius-md) 0 0;padding-bottom:calc(7px + env(safe-area-inset-bottom,0px))}
+  #appScreen .case-nav-item{flex:1 1 0;min-width:0;min-height:var(--fc-ui-touch-primary);padding:6px 2px;white-space:normal;line-height:1.2}
+  #appScreen .case-nav-icon{min-height:24px}
+  :is(#caseInfo,#arrivalSection,#sitrepSection,#aiSection,#dashboardSection,#assessmentSection,#reportSection) .accordion-body{padding:var(--fc-ui-space-md)}
+  #sitrepSection .sitrep-entry-accordion>summary{padding:var(--fc-ui-space-md)}
+  #caseInfo :is(.overview-brief-card,.overview-visual-card){padding:var(--fc-ui-space-md)}
+  body:has(#appScreen:not([hidden])) #appActionSheet .action-option{padding:var(--fc-ui-space-md)}
+}
+@media(max-width:360px){#sitrepSection .sitrep-page-head{align-items:flex-start;flex-wrap:wrap}}
+@media(prefers-reduced-motion:reduce){#appScreen .case-page-panel{animation:none}}
