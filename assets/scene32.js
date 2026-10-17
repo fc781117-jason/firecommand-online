@@ -48,7 +48,7 @@ function build(c,state,options={}){
   const f=p.face||'第一面',inside=!/待命|休息|撤出/.test(p.status||'')&&(p.interior||/內攻|進入/.test(p.task||''));let at=xy(b,p);
   if(!p.positionManual){if(inside){const n=interiors[f]||0;interiors[f]=n+1;at=pos(f,'interior',n);}
    else if(p.status==='待命'||!p.task||p.task==='待部署')at=standbyPoint(standby++);
-   else {const n=outside[f]||0;outside[f]=n+1;at=pos(f,'standby',n);}}
+   else {const n=outside[f]||0;outside[f]=n+1;at=pos(f,'crew',n);}}
   make('crews',p,at,crewName(p),{type:'crew',inside,detail:[p.countUnknown?'人數待補':p.count+'人',p.status,p.floor,p.task,c.ritSet&&c.ritUnit===p.unit?'RIT':''].filter(Boolean).join('｜')});
  }
  if(c.ritSet&&c.ritUnit&&!nodes.some(n=>n.coll==='crews'&&n.item.unit===c.ritUnit))notes.push(c.ritUnit+'已指定RIT，人員位置待登錄');
