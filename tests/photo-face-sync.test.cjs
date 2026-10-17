@@ -53,3 +53,22 @@ test('iPhone 非 JPEG 原始圖片可先嘗試轉成 JPEG 後再送既有 Storag
   assert.match(app,/image\/jpeg',\.84/);
   assert.match(app,/contentType:upload\.type\|\|'image\/jpeg'/);
 });
+
+test('拍照選檔後立即產生本機縮圖，不必等待 Storage 上傳完成',async()=>{
+  const vm=require('node:vm');
+  const {app}=require('./app-harness.cjs');
+  const c=app(),slot=c.document.getElementById('photoSlot');
+  slot.appendChild=child=>{slot.child=child;};
+  c.document.createElement=()=>({src:'',alt:'',isConnected:true});
+  c.FileReader=class{
+    readAsDataURL(){this.result='data:image/jpeg;base64,ZmFrZQ==';this.onload?.();}
+  };
+  vm.runInContext("showLocalPhotoPreview({type:'image/jpeg',size:128},document.getElementById('photoSlot'))",c);
+  assert.equal(slot.child?.src,'data:image/jpeg;base64,ZmFrZQ==');
+
+  const cached={dataset:{localPhotoKey:'room|contacts|c1'},innerHTML:'',isConnected:true,appendChild(child){this.child=child;}};
+  await vm.runInContext("cacheLocalPhotoPreview('contacts','c1',{type:'image/jpeg',size:128},'room')",c);
+  c.applyRoot={querySelectorAll(){return[cached];}};
+  vm.runInContext('applyLocalPhotoPreviews(applyRoot)',c);
+  assert.equal(cached.child?.src,'data:image/jpeg;base64,ZmFrZQ==');
+});
