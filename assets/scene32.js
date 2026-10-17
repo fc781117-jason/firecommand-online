@@ -35,7 +35,7 @@ function build(c,state,options={}){
   const f=v.face||'第一面',isHead=(heads[f]||[]).some(h=>h.id===v.id);let p=xy(b,v),heading=v.heading31;
   if(!v.positionManual){
    if(v.zoneType==='ambulance'||(/救護/.test(v.type)&&zoneMap.ambulance)){const af=zoneMap.ambulance?.face||f;p=pos(af,'ambulance',ambulances[af]||0);ambulances[af]=(ambulances[af]||0)+1;}
-   else {const n=isHead?0:Number.isInteger(v.queueOrder)?v.queueOrder:(counts[f]||((heads[f]||[]).length?1:0));counts[f]=Math.max(counts[f]||0,n+1);p=pos(f,'vehicle',n);heading=(270+faces.indexOf(f)*90+b.rotationDeg+360)%360;
+   else {const n=isHead?0:Number.isInteger(v.queueOrder)?v.queueOrder:(counts[f]||((heads[f]||[]).length?1:0));counts[f]=Math.max(counts[f]||0,n+1);p=pos(f,'vehicle',n);heading=(270-faces.indexOf(f)*90+b.rotationDeg+360)%360;
     const road=c.deploymentRoads32?.[f];if(road?.points?.length>=2){const route=road.points.map(pt=>xy(b,pt)),rp=roadPoint(route,n*12);if(rp){p=rp;heading=rp.heading;}else notes.push(v.name+'超出已指定道路長度，請延長道路');}
    }
   }
@@ -61,7 +61,7 @@ function build(c,state,options={}){
  for(const h of s.hazards||[])make('hazards',h,xy(b,h),zoneLabel(h.type),{type:'zone',zoneType:zoneIcon(h.type),detail:'手動標示'});
  if(standby&&!zoneMap.standby?.hidden&&!sourceZoneIds.has('standby32')){const z=zoneMap.standby||{},at=Number.isFinite(z.lat)&&Number.isFinite(z.lng)?xy(b,z):standbyPoint(0);if(!Number.isFinite(z.lat))at.y+=7;make('zones',{...z,id:'standby32'},at,z.label||'待命區',{type:'zone',zoneType:'rehab',detail:z.note||''});}
  const corners=[[-b.widthM/2,-b.heightM/2],[b.widthM/2,-b.heightM/2],[b.widthM/2,b.heightM/2],[-b.widthM/2,b.heightM/2]].map(p=>local(...p));
- const entrances=[local(0,-b.heightM/2),local(b.widthM/2,0),local(0,b.heightM/2),local(-b.widthM/2,0)];
+ const entrances=[local(0,-b.heightM/2),local(-b.widthM/2,0),local(0,b.heightM/2),local(b.widthM/2,0)];
  const hoses=(s.hoses||[]).map(h=>{let source=map.get(h.sourceId||h.vehicleId);if(!source&&(h.sourceName||h.vehicleName))source=nodes.find(v=>v.label===(h.sourceName||h.vehicleName));
   if(!source&&h.targetType==='buildingFace'){const hs=heads[h.targetName]||[];if(hs.length===1)source=map.get(hs[0].id);}
   if(!source){notes.push((h.port||'水線')+'供水來源待確認');return {...h,missing:true};}return {...h,source};});
@@ -71,7 +71,7 @@ function build(c,state,options={}){
   const start={x:a.x+direction.x*2.8+normal.x*spread,y:a.y+direction.y*2.8+normal.y*spread};
   let end=map.get(h.targetId),path;
   if(h.targetType==='buildingFace'){
-   const fi=Math.max(0,faces.indexOf(h.targetName)),entry=entrances[fi],same=peers.filter(x=>x.targetType==='buildingFace'&&x.targetName===h.targetName),j=same.indexOf(h),offset=(j-(same.length-1)/2)*2.5,tangent=rotate({x:1,y:0},fi*90+b.rotationDeg),gate={x:entry.x+tangent.x*offset,y:entry.y+tangent.y*offset};
+   const fi=Math.max(0,faces.indexOf(h.targetName)),entry=entrances[fi],same=peers.filter(x=>x.targetType==='buildingFace'&&x.targetName===h.targetName),j=same.indexOf(h),offset=(j-(same.length-1)/2)*2.5,tangent=rotate({x:1,y:0},-fi*90+b.rotationDeg),gate={x:entry.x+tangent.x*offset,y:entry.y+tangent.y*offset};
    const bend={x:(start.x+gate.x)/2+normal.x*spread*2,y:(start.y+gate.y)/2+normal.y*spread*2};
    path=[start,bend,gate];const crew=nodes.filter(p=>p.type==='crew'&&p.inside&&p.item.unit===(h.owner||h.unit)&&p.item.face===h.targetName);if(crew.length===1)path.push({x:crew[0].x,y:crew[0].y});
   }else if(end)path=[start,{x:(start.x+end.x)/2+normal.x*spread*2,y:(start.y+end.y)/2+normal.y*spread*2},{x:end.x,y:end.y}];
