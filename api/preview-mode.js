@@ -8,6 +8,6 @@ export default function handler(req,res){
   const value=process.env.VERCEL_ENV;
   const target=['preview','production','development'].includes(value)?value:'unavailable';
   // Local-only fixture on explicitly reviewed Preview branches; Production always denied.
-  const demoEnabled=target==='preview'&&['feature/v34-2-field-revision-v3-1','feature/v34-2-field-revision-v3-2','feature/v34-2-field-revision-v3-3','feature/firecommand-ui-deployment-v1','feature/firecommand-ui-pages-v1'].includes(process.env.VERCEL_GIT_COMMIT_REF);
+  const demoEnabled=target==='preview'&&['feature/v34-2-field-revision-v3-1','feature/v34-2-field-revision-v3-2','feature/v34-2-field-revision-v3-3','feature/firecommand-ui-deployment-v1','feature/firecommand-ui-pages-v1','feature/photo-face-sync-20261017'].includes(process.env.VERCEL_GIT_COMMIT_REF);
   return res.status(200).json({demoEnabled,target});
 }
