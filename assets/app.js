@@ -2153,17 +2153,37 @@ function readSupports(){ return Array.from(document.querySelectorAll('.support-g
 function applySupportValues(values=[]){ document.querySelectorAll('.support-grid input').forEach(x=>{ x.checked = values.includes(x.value); }); }
 
 let contactEdit=null;
+const localPhotoPreviewCache=new Map();
+function photoPreviewCacheKey(scope,key,caseId=currentCaseId){return `${caseId||'no-case'}|${scope}|${key}`;}
+function cacheLocalPhotoPreview(scope,key,file,caseId=currentCaseId){
+  if(!file)return Promise.resolve('');
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>{const data=String(reader.result||'');if(data)localPhotoPreviewCache.set(photoPreviewCacheKey(scope,key,caseId),data);resolve(data);};
+    reader.onerror=()=>reject(reader.error||new Error('照片預覽讀取失敗'));
+    reader.readAsDataURL(file);
+  });
+}
+function clearLocalPhotoPreview(scope,key,caseId=currentCaseId){localPhotoPreviewCache.delete(photoPreviewCacheKey(scope,key,caseId));}
+function applyLocalPhotoPreviews(root){
+  if(!root)return;
+  for(const slot of root.querySelectorAll('[data-local-photo-key]')){
+    const data=localPhotoPreviewCache.get(slot.dataset.localPhotoKey);if(!data)continue;
+    slot.innerHTML='';
+    const img=document.createElement('img');img.src=data;img.alt='剛拍攝的照片預覽，正在同步';slot.appendChild(img);
+  }
+}
 function readContacts(){return currentCase?.contacts||[];}
 function contactKey(row,index){return row.id||`legacy_${index}`;}
 function contactDetail(row={}){return String(row.detail||[row.appearance,row.note].filter(Boolean).join('／')||'').trim();}
-function contactCardHtml(row={},actions=''){
- const pending=row.photoStatus==='pending';
- return `<div class="contact-card-body"><div class="contact-card-copy"><strong>${escapeHtml(row.name||'姓名待補')}</strong><p>${escapeHtml(row.phone||'電話待補')}</p><p>${escapeHtml(contactDetail(row)||'穿著／特徵／補充待補')}</p>${pending?'<p class="photo-pending">照片待重新上傳</p>':row.photoStatus==='local-demo'?'<p>合成照片｜本機示範，非雲端上傳</p>':''}<div class="record-actions">${actions}</div></div><div class="private-photo" data-photo-path="${escapeHtml(row.photoPath||'')}">${pending&&!row.photoPath?'照片待補':''}</div></div>`;
+function contactCardHtml(row={},actions='',previewKey=''){
+ const pending=row.photoStatus==='pending',hasLocal=!!(previewKey&&localPhotoPreviewCache.has(previewKey)),photoPath=hasLocal?'':(row.photoPath||'');
+ return `<div class="contact-card-body"><div class="contact-card-copy"><strong>${escapeHtml(row.name||'姓名待補')}</strong><p>${escapeHtml(row.phone||'電話待補')}</p><p>${escapeHtml(contactDetail(row)||'穿著／特徵／補充待補')}</p>${pending&&!hasLocal?'<p class="photo-pending">照片待重新上傳</p>':pending&&hasLocal?'<p class="photo-pending">照片同步中</p>':row.photoStatus==='local-demo'?'<p>合成照片｜本機示範，非雲端上傳</p>':''}<div class="record-actions">${actions}</div></div><div class="private-photo" data-photo-path="${escapeHtml(photoPath)}" data-local-photo-key="${escapeHtml(previewKey||'')}">${pending&&!row.photoPath&&!hasLocal?'照片待補':''}</div></div>`;
 }
 function renderContactRows(rows=[]){
   const wrap=$('contactRows');if(!wrap)return;
   if(contactEdit?.caseId!==currentCaseId)contactEdit=null;
-  wrap.innerHTML=rows.map((r,index)=>`<article class="contact-row saved-record" data-contact-index="${index}">${contactCardHtml(r,`<button type="button" class="btn small ghost" data-edit-contact="${index}">修改</button><button type="button" class="btn small danger" data-delete-contact="${index}">刪除</button>`)}</article>`).join('');
+  wrap.innerHTML=rows.map((r,index)=>{const key=contactKey(r,index),previewKey=photoPreviewCacheKey('contacts',key);return `<article class="contact-row saved-record" data-contact-index="${index}">${contactCardHtml(r,`<button type="button" class="btn small ghost" data-edit-contact="${index}">修改</button><button type="button" class="btn small danger" data-delete-contact="${index}">刪除</button>`,previewKey)}</article>`;}).join('');
   if(contactEdit){const r=contactEdit.data;wrap.insertAdjacentHTML('beforeend',`<div class="contact-row contact-editor"><div class="two-col compact-form"><div class="field"><label>姓名<input data-contact-field="name" value="${escapeHtml(r.name||'')}" /></label></div><div class="field"><label>電話<input data-contact-field="phone" inputmode="tel" value="${escapeHtml(r.phone||'')}" /></label></div></div><div class="field"><label>穿著／特徵／補充<textarea data-contact-field="detail" rows="3">${escapeHtml(contactDetail(r))}</textarea></label></div><label class="photo-input">拍照／更換照片<input id="contactPhotoInput" type="file" accept="image/*" capture="environment" /></label><div id="contactPhotoPreview" class="local-photo-preview"></div><div id="contactSaveStatus" class="hint" role="status">尚未儲存</div><div class="record-actions"><button type="button" class="btn small ghost" id="cancelContactEdit">取消</button><button type="button" class="btn primary" id="saveContactBtn">確認儲存</button></div></div>`);}
   wrap.querySelectorAll('[data-edit-contact]').forEach(btn=>btn.onclick=()=>{const index=Number(btn.dataset.editContact);contactEdit={caseId:currentCaseId,key:contactKey(rows[index],index),data:{...rows[index]}};renderContactRows(rows);});
   wrap.querySelectorAll('[data-delete-contact]').forEach(btn=>btn.onclick=()=>deleteContact(Number(btn.dataset.deleteContact)));
@@ -2171,6 +2191,7 @@ function renderContactRows(rows=[]){
   $('contactPhotoInput')?.addEventListener('change',e=>{showLocalPhotoPreview(e.target.files[0],$('contactPhotoPreview'));fieldEntryStatus('contactSaveStatus','尚未儲存');});
   if($('cancelContactEdit'))$('cancelContactEdit').onclick=()=>{contactEdit=null;renderContactRows(currentCase.contacts||[]);};
   if($('saveContactBtn'))$('saveContactBtn').onclick=saveContactRecord;
+  applyLocalPhotoPreviews(wrap);
   loadPrivatePhotos(wrap);
 }
 function addContactRow(){contactEdit={caseId:currentCaseId,key:null,data:{name:'',phone:'',detail:''}};renderContactRows(currentCase?.contacts||[]);}
@@ -2187,20 +2208,40 @@ async function updateCaseSection(revisionKey,derive){
 function assertCaseEditor(){assertDemoCaseAccessV31();if(!currentCase||currentCase.status==='closed')throw Error('案件未開啟');if(currentCase.mode==='practice'&&myTrainingRole()==='觀察員')throw Error('觀察員僅可閱覽');}
 async function saveContactRecord(){const savedCaseId=currentCaseId;const edit=contactEdit;if(!edit)return;const button=$('saveContactBtn'),file=$('contactPhotoInput')?.files[0];button.disabled=true;fieldEntryStatus('contactSaveStatus','儲存中');
  try{assertCaseEditor();const data={name:String(edit.data.name||'').trim(),phone:String(edit.data.phone||'').trim(),detail:contactDetail(edit.data),appearance:contactDetail(edit.data),note:''};if(![data.name,data.phone,data.detail].some(Boolean))throw Error('請至少填一項關係人資訊');const key=edit.key||uid('contact');
+  if(file){try{await cacheLocalPhotoPreview('contacts',key,file,savedCaseId);}catch{}}
   await updateCaseSection('contactsRevision',c=>{const rows=[...(c.contacts||[])],index=rows.findIndex((r,n)=>contactKey(r,n)===key);if(edit.key&&index<0)throw Error('版本衝突待處理：此關係人已被移除');const row={...(index>=0?rows[index]:{}),...data,...(file?{photoStatus:'pending'}:{}),id:index>=0?(rows[index].id||key):key};if(index<0)rows.push(row);else rows[index]=row;return {contacts:rows,contactFound:true,contactState:'found'};});contactEdit=null;renderContactRows(currentCase.contacts||[]);
-  if(file){try{if(currentCaseId!==savedCaseId)return;const photoPath=await uploadCasePhoto('contacts',key,file);if(currentCaseId!==savedCaseId)return;await updateCaseSection('contactsRevision',c=>({contacts:(c.contacts||[]).map((r,n)=>contactKey(r,n)===key?{...r,photoPath,photoStatus:'ready'}:r)}));renderContactRows(currentCase.contacts||[]);toast('關係人與照片已同步儲存');}catch(err){if(currentCaseId!==savedCaseId)return;await updateCaseSection('contactsRevision',c=>({contacts:(c.contacts||[]).map((r,n)=>contactKey(r,n)===key?{...r,photoStatus:'pending'}:r)}));toast(`文字已儲存；照片未完成：${err.message}。請修改後重試。`,6500);contactEdit={caseId:currentCaseId,key,data};renderContactRows(currentCase.contacts||[]);fieldEntryStatus('contactSaveStatus','文字已同步儲存；照片待重新上傳');return;}}
+  if(file){try{if(currentCaseId!==savedCaseId)return;const photoPath=await uploadCasePhoto('contacts',key,file);if(currentCaseId!==savedCaseId)return;await updateCaseSection('contactsRevision',c=>({contacts:(c.contacts||[]).map((r,n)=>contactKey(r,n)===key?{...r,photoPath,photoStatus:'ready'}:r)}));clearLocalPhotoPreview('contacts',key,savedCaseId);renderContactRows(currentCase.contacts||[]);toast('關係人與照片已同步儲存');}catch(err){if(currentCaseId!==savedCaseId)return;await updateCaseSection('contactsRevision',c=>({contacts:(c.contacts||[]).map((r,n)=>contactKey(r,n)===key?{...r,photoStatus:'pending'}:r)}));toast(`文字已儲存；照片未完成：${err.message}。請修改後重試。`,6500);contactEdit={caseId:currentCaseId,key,data};renderContactRows(currentCase.contacts||[]);fieldEntryStatus('contactSaveStatus','文字已同步儲存；照片待重新上傳');return;}}
   else toast('關係人已同步儲存');setRadioValue('contactState','found');
  }catch(err){fieldEntryStatus('contactSaveStatus',`儲存失敗：${err.message}`);}finally{if(button.isConnected)button.disabled=false;}}
-async function deleteContact(index){const row=currentCase?.contacts?.[index];if(!row||!confirm(`確認刪除關係人「${row.name||'未命名'}」？`))return;const key=contactKey(row,index);try{assertCaseEditor();await updateCaseSection('contactsRevision',c=>({contacts:(c.contacts||[]).filter((r,n)=>contactKey(r,n)!==key)}));contactEdit=null;renderContactRows(currentCase.contacts||[]);try{await removeCasePhoto(row.photoPath);}catch{toast('關係人已刪除；舊照片清理失敗，請交由管理員檢查');return;}toast('已刪除關係人');}catch(err){toast(`刪除失敗：${err.message}`);}}
+async function deleteContact(index){const row=currentCase?.contacts?.[index];if(!row||!confirm(`確認刪除關係人「${row.name||'未命名'}」？`))return;const key=contactKey(row,index);try{assertCaseEditor();await updateCaseSection('contactsRevision',c=>({contacts:(c.contacts||[]).filter((r,n)=>contactKey(r,n)!==key)}));clearLocalPhotoPreview('contacts',key);contactEdit=null;renderContactRows(currentCase.contacts||[]);try{await removeCasePhoto(row.photoPath);}catch{toast('關係人已刪除；舊照片清理失敗，請交由管理員檢查');return;}toast('已刪除關係人');}catch(err){toast(`刪除失敗：${err.message}`);}}
 async function removeCasePhoto(path){if(path&&firebaseEnabled&&path.startsWith(`case-private/${currentCaseId}/`))await firebase.storage().ref(path).delete();}
-function showLocalPhotoPreview(file,slot){if(!file||!slot)return;const url=URL.createObjectURL(file);slot.innerHTML='';const img=document.createElement('img');img.src=url;img.alt='尚未儲存的照片預覽';img.onload=()=>URL.revokeObjectURL(url);slot.appendChild(img);}
+function showLocalPhotoPreview(file,slot){
+ if(!file||!slot)return;slot.innerHTML='';
+ const show=src=>{if(!src||!slot.isConnected)return;slot.innerHTML='';const img=document.createElement('img');img.src=src;img.alt='尚未儲存的照片預覽';slot.appendChild(img);};
+ const reader=new FileReader();reader.onload=()=>show(String(reader.result||''));reader.onerror=()=>{try{const url=URL.createObjectURL(file);show(url);setTimeout(()=>URL.revokeObjectURL(url),30000);}catch{slot.textContent='照片已選取，預覽暫無法顯示';}};reader.readAsDataURL(file);
+}
+function normalizeCasePhoto(file){
+ return new Promise((resolve,reject)=>{
+  if(!file||!String(file.type||'').startsWith('image/')){reject(new Error('請選擇圖片檔案'));return;}
+  if(file.size>12*1024*1024){reject(new Error('原始照片請控制在 12 MB 以下'));return;}
+  if(['image/jpeg','image/png','image/webp'].includes(file.type)&&file.size<5*1024*1024){resolve(file);return;}
+  let url='';try{url=URL.createObjectURL(file);}catch{reject(new Error('無法讀取照片'));return;}
+  const img=new Image();
+  img.onload=()=>{try{
+    const maxEdge=2200,scale=Math.min(1,maxEdge/Math.max(img.naturalWidth||img.width||1,img.naturalHeight||img.height||1)),w=Math.max(1,Math.round((img.naturalWidth||img.width)*scale)),h=Math.max(1,Math.round((img.naturalHeight||img.height)*scale)),canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;const ctx=canvas.getContext('2d');ctx.drawImage(img,0,0,w,h);
+    canvas.toBlob(blob=>{URL.revokeObjectURL(url);if(!blob){reject(new Error('照片格式無法轉換'));return;}if(blob.size>=5*1024*1024){reject(new Error('照片轉換後仍超過 5 MB，請改用較小照片'));return;}resolve(blob);},'image/jpeg',.84);
+  }catch(err){URL.revokeObjectURL(url);reject(err);}};
+  img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('此照片格式無法在目前裝置轉換，請使用 JPG、PNG、WebP 或 iPhone 相容格式'));};
+  img.src=url;
+ });
+}
 async function uploadCasePhoto(folder,key,file){
  assertCaseEditor();
  if(!['contacts','hazards'].includes(folder))throw Error('不支援的案件照片分類');
  if(!firebaseEnabled||!firebase.storage)throw Error('照片需在已連線且具有案件權限的環境上傳；此示範只保留文字並標示照片待重試');
- if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>=5*1024*1024)throw Error('請使用 5 MB 以下的 JPG、PNG 或 WebP');
+ const upload=await normalizeCasePhoto(file);
  const caseId=currentCaseId,path=`case-private/${caseId}/${folder}/${encodeURIComponent(key)}-${uid('photo')}`;
- await firebase.storage().ref(path).put(file,{contentType:file.type,customMetadata:{caseId}});
+ await firebase.storage().ref(path).put(upload,{contentType:upload.type||'image/jpeg',customMetadata:{caseId}});
  if(caseId!==currentCaseId)throw Error('案件已切換，請返回原案件重新確認照片');
  return path;
 }
@@ -2220,13 +2261,13 @@ function renderHazardRecord(){
  const el=$('hazardSavedCard');if(!el||!currentCase)return;
  const r=currentCase.hazardRecord||((currentCase.hazardItems||currentCase.hazardContact)?{items:currentCase.hazardItems,contact:currentCase.hazardContact,phone:currentCase.hazardPhone,appearance:currentCase.hazardAppearance}:null);
  const person=r?{name:r.contactInfo?.name||r.contact||'',phone:r.contactInfo?.phone||r.phone||'',detail:r.contactInfo?.detail||r.appearance||'',photoPath:r.contactInfo?.photoPath||r.photoPath||'',photoStatus:r.contactInfo?.photoStatus||r.photoStatus||''}:null;
- el.innerHTML=r?`<article class="contact-row saved-record hazard-contact-card"><div class="hazard-record-title"><b>危險物／危害資訊</b><p>${escapeHtml(r.items||'待補')}</p></div>${contactCardHtml(person,`<button class="btn small ghost" id="editHazardBtn" type="button">修改</button><button class="btn small danger" id="deleteHazardBtn" type="button">刪除</button>`)}</article>`:'';
+ el.innerHTML=r?`<article class="contact-row saved-record hazard-contact-card"><div class="hazard-record-title"><b>危險物／危害資訊</b><p>${escapeHtml(r.items||'待補')}</p></div>${contactCardHtml(person,`<button class="btn small ghost" id="editHazardBtn" type="button">修改</button><button class="btn small danger" id="deleteHazardBtn" type="button">刪除</button>`,photoPreviewCacheKey('hazards','hazard'))}</article>`:'';
  $('editHazardBtn')?.addEventListener('click',()=>{$('hazardEditFields').hidden=false;$('hazardItems').focus();});
- $('deleteHazardBtn')?.addEventListener('click',async()=>{if(!confirm('確認刪除這筆危險物品資訊？'))return;try{assertCaseEditor();await updateCaseSection('hazardRevision',()=>({hazardRecord:null,hazardItems:'',hazardContact:'',hazardPhone:'',hazardAppearance:'',hazardState:'',hazardChecked:false}));['hazardItems','hazardContact','hazardPhone','hazardAppearance'].forEach(id=>$(id).value='');renderHazardRecord();try{await removeCasePhoto(r.contactInfo?.photoPath||r.photoPath);}catch{toast('危險物品紀錄已刪；舊照片清理失敗，請交由管理員檢查');return;}toast('已刪除危險物品資訊');}catch(e){toast(`刪除失敗：${e.message}`);}});
- $('hazardEditFields').hidden=!!r&&person?.photoStatus!=='pending';$('hazardPhoto')&&($('hazardPhoto').value='');if($('hazardPhotoPreview'))$('hazardPhotoPreview').innerHTML='';if(person?.photoStatus==='pending')fieldEntryStatus('hazardSaveStatus','文字已同步儲存；照片待重新上傳');loadPrivatePhotos(el);
+ $('deleteHazardBtn')?.addEventListener('click',async()=>{if(!confirm('確認刪除這筆危險物品資訊？'))return;try{assertCaseEditor();await updateCaseSection('hazardRevision',()=>({hazardRecord:null,hazardItems:'',hazardContact:'',hazardPhone:'',hazardAppearance:'',hazardState:'',hazardChecked:false}));clearLocalPhotoPreview('hazards','hazard');['hazardItems','hazardContact','hazardPhone','hazardAppearance'].forEach(id=>$(id).value='');renderHazardRecord();try{await removeCasePhoto(r.contactInfo?.photoPath||r.photoPath);}catch{toast('危險物品紀錄已刪；舊照片清理失敗，請交由管理員檢查');return;}toast('已刪除危險物品資訊');}catch(e){toast(`刪除失敗：${e.message}`);}});
+ $('hazardEditFields').hidden=!!r&&person?.photoStatus!=='pending';$('hazardPhoto')&&($('hazardPhoto').value='');if($('hazardPhotoPreview'))$('hazardPhotoPreview').innerHTML='';if(person?.photoStatus==='pending')fieldEntryStatus('hazardSaveStatus','文字已同步儲存；照片待重新上傳');applyLocalPhotoPreviews(el);loadPrivatePhotos(el);
 }
-async function saveHazardRecord(){const savedCaseId=currentCaseId;const button=$('hazardSaveBtn'),file=$('hazardPhoto')?.files[0];button.disabled=true;fieldEntryStatus('hazardSaveStatus','儲存中');try{assertCaseEditor();const data={items:$('hazardItems').value.trim(),contact:$('hazardContact').value.trim(),phone:$('hazardPhone').value.trim(),appearance:$('hazardAppearance').value.trim()};if(!Object.values(data).some(Boolean))throw Error('請先填寫危險物品資訊');const contactInfo={name:data.contact,phone:data.phone,detail:data.appearance};await updateCaseSection('hazardRevision',c=>({hazardRecord:{...(c.hazardRecord||{}),...data,...(file?{photoStatus:'pending'}:{}),contactInfo:{...(c.hazardRecord?.contactInfo||{}),...contactInfo,...(file?{photoStatus:'pending'}:{})}},hazardItems:data.items,hazardContact:data.contact,hazardPhone:data.phone,hazardAppearance:data.appearance,hazardState:'has',hazardChecked:true}));
- if(file){try{if(currentCaseId!==savedCaseId)return;const path=await uploadCasePhoto('hazards','hazard',file);if(currentCaseId!==savedCaseId)return;await updateCaseSection('hazardRevision',c=>({hazardRecord:{...(c.hazardRecord||{}),photoPath:path,photoStatus:'ready',contactInfo:{...(c.hazardRecord?.contactInfo||{}),photoPath:path,photoStatus:'ready'}}}));toast('危險物品與照片已同步儲存');}catch(e){if(currentCaseId!==savedCaseId)return;await updateCaseSection('hazardRevision',c=>({hazardRecord:{...(c.hazardRecord||{}),photoStatus:'pending',contactInfo:{...(c.hazardRecord?.contactInfo||{}),photoStatus:'pending'}}}));toast(`文字已儲存；照片未完成：${e.message}`,6500);renderHazardRecord();$('hazardEditFields').hidden=false;fieldEntryStatus('hazardSaveStatus','文字已同步儲存；照片待重新上傳');return;}}else toast('危險物品已同步儲存');setRadioValue('hazardState','has');renderHazardRecord();
+async function saveHazardRecord(){const savedCaseId=currentCaseId;const button=$('hazardSaveBtn'),file=$('hazardPhoto')?.files[0];button.disabled=true;fieldEntryStatus('hazardSaveStatus','儲存中');try{assertCaseEditor();const data={items:$('hazardItems').value.trim(),contact:$('hazardContact').value.trim(),phone:$('hazardPhone').value.trim(),appearance:$('hazardAppearance').value.trim()};if(!Object.values(data).some(Boolean))throw Error('請先填寫危險物品資訊');const contactInfo={name:data.contact,phone:data.phone,detail:data.appearance};if(file){try{await cacheLocalPhotoPreview('hazards','hazard',file,savedCaseId);}catch{}}await updateCaseSection('hazardRevision',c=>({hazardRecord:{...(c.hazardRecord||{}),...data,...(file?{photoStatus:'pending'}:{}),contactInfo:{...(c.hazardRecord?.contactInfo||{}),...contactInfo,...(file?{photoStatus:'pending'}:{})}},hazardItems:data.items,hazardContact:data.contact,hazardPhone:data.phone,hazardAppearance:data.appearance,hazardState:'has',hazardChecked:true}));
+ if(file){try{if(currentCaseId!==savedCaseId)return;const path=await uploadCasePhoto('hazards','hazard',file);if(currentCaseId!==savedCaseId)return;await updateCaseSection('hazardRevision',c=>({hazardRecord:{...(c.hazardRecord||{}),photoPath:path,photoStatus:'ready',contactInfo:{...(c.hazardRecord?.contactInfo||{}),photoPath:path,photoStatus:'ready'}}}));clearLocalPhotoPreview('hazards','hazard',savedCaseId);toast('危險物品與照片已同步儲存');}catch(e){if(currentCaseId!==savedCaseId)return;await updateCaseSection('hazardRevision',c=>({hazardRecord:{...(c.hazardRecord||{}),photoStatus:'pending',contactInfo:{...(c.hazardRecord?.contactInfo||{}),photoStatus:'pending'}}}));toast(`文字已儲存；照片未完成：${e.message}`,6500);renderHazardRecord();$('hazardEditFields').hidden=false;fieldEntryStatus('hazardSaveStatus','文字已同步儲存；照片待重新上傳');return;}}else toast('危險物品已同步儲存');setRadioValue('hazardState','has');renderHazardRecord();
  }catch(e){fieldEntryStatus('hazardSaveStatus',`儲存失敗：${e.message}`);}finally{button.disabled=false;}}
 const externalSupportOptions={'台電':['斷電','其他'],'瓦斯單位':['斷瓦斯','其他'],'警察':['交通管制','其他'],'台水':['斷水','其他'],'毒災應變隊':['其他'],'其他單位':['其他']};
 function addExternalSupportRow(record={}){const wrap=$('externalSupportRows');if(!wrap)return;const div=document.createElement('div');div.className='external-support-row';div.innerHTML=`<select aria-label="外單位">${Object.keys(externalSupportOptions).map(v=>`<option ${v===record.unit?'selected':''}>${v}</option>`).join('')}</select><select aria-label="支援事項"></select><input aria-label="其他支援事項" placeholder="其他需求補充" value="${escapeHtml(record.detail||'')}" hidden /><button type="button" class="btn small ghost">移除</button>`;
@@ -2704,7 +2745,7 @@ async function restoreMapRecords(records=[]){
   }
   if(!firebaseEnabled){ saveLocalCase(); renderLiveParts(); }
 }
-function mapFace30(lat,lng){const b=getBuildingBox(),p=latLngToLocalPoint(b,lat,lng);return Math.abs(p.x)/(b.widthM||40)>Math.abs(p.y)/(b.heightM||28)?(p.x>0?'第二面':'第四面'):(p.y<0?'第一面':'第三面');}
+function mapFace30(lat,lng){const b=getBuildingBox(),p=latLngToLocalPoint(b,lat,lng);return Math.abs(p.x)/(b.widthM||40)>Math.abs(p.y)/(b.heightM||28)?(p.x<0?'第二面':'第四面'):(p.y<0?'第一面':'第三面');}
 async function moveLinkedVehicles30(id,patch,label){
  const state=intakeSnapshot28(),anchor=state.vehicles.find(v=>v.id===id);if(!anchor)return;
  const group=FCIntake29.connectedVehicles(state,id),dlat=Number(patch.lat)-Number(anchor.lat),dlng=Number(patch.lng)-Number(anchor.lng),commandId=uid('chain');
@@ -2987,7 +3028,8 @@ async function saveFieldCrew(){
   const now=Date.now(),task=$('fieldCrewTask')?.value==='其他'?$('fieldCrewTaskOther')?.value.trim()||'':$('fieldCrewTask')?.value||'',face=$('fieldCrewFace')?.value||'',count=parsed.count;
   if($('fieldCrewTask')?.value==='其他'&&!task){fieldEntryStatus('fieldCrewSaveStatus','儲存失敗：請輸入其他任務');return;}
   const status=existing&&task===existing.task?existing.status||'未指定':window.FCAssignmentV32.statusForTask(task)||existing?.status||'未指定';
-  const patch=assignmentTransitionV32(existing||{unit,brigade},{count,countUnknown:count===null,task,face,status,updatedAt:now},uid('task'),'personnel-form',id);
+  const faceChanged=!!face&&face!==String(existing?.face||''),taskChanged=task!==String(existing?.task||''),shouldAutoPlace=!!face&&(!existing||faceChanged||(taskChanged&&!existing?.positionManual)),role=/內攻|進入|搜索/.test(task)&&!/(待命|休息|撤出)/.test(status)?'interior':'standby',peerIndex=live.crews.filter(c=>c.id!==id&&c.face===face&&!c.positionManual).length,autoPos=shouldAutoPlace&&window.FCTactics31?.point?window.FCTactics31.point(getBuildingBox(),face,role,peerIndex):null;
+  const patch=assignmentTransitionV32(existing||{unit,brigade},{count,countUnknown:count===null,task,face,status,updatedAt:now,...(autoPos?{lat:autoPos.lat,lng:autoPos.lng,positionManual:false,staged:role==='standby'}:{})},uid('task'),'personnel-form',id);
   button.disabled=true;fieldEntryStatus('fieldCrewSaveStatus','儲存中');
   try{
     if(firebaseEnabled){
@@ -2997,12 +3039,12 @@ async function saveFieldCrew(){
         const snap=await tx.get(ref);
         if((!snap.exists&&expected)||(snap.exists&&(!expected||expected.id!==id||Number(snap.data().updatedAt||0)!==Number(expected.updatedAt||0))))throw Error('版本衝突待處理：他人已修改這筆資料');
         if(snap.exists)tx.update(ref,patch);
-        else {const pos=stagingPosition(live.crews.length,1);tx.set(ref,{brigade,unit,leader:'',...patch,createdAt:now,authorUid:profile?.id||fbUser?.uid,staged:true,layout31:true,lat:pos.lat,lng:pos.lng});}
+        else {const pos=autoPos||stagingPosition(live.crews.length,1);tx.set(ref,{brigade,unit,leader:'',...patch,createdAt:now,authorUid:profile?.id||fbUser?.uid,staged:autoPos?role==='standby':true,layout31:true,lat:pos.lat,lng:pos.lng,positionManual:false});}
         tx.update(parent,{resourceRevision:firebase.firestore.FieldValue.increment(1)});
       });
     }else{
       if(existing){if(Number(existing.updatedAt||0)!==Number(expected?.updatedAt||0))throw Error('版本衝突待處理');Object.assign(existing,patch);}
-      else {const pos=stagingPosition(live.crews.length,1);live.crews.push({id,brigade,unit,leader:'',...patch,createdAt:now,staged:true,layout31:true,lat:pos.lat,lng:pos.lng});}
+      else {const pos=autoPos||stagingPosition(live.crews.length,1);live.crews.push({id,brigade,unit,leader:'',...patch,createdAt:now,staged:autoPos?role==='standby':true,layout31:true,lat:pos.lat,lng:pos.lng,positionManual:false});}
       currentCase.resourceRevision=(currentCase.resourceRevision||0)+1;saveLocalCase();renderLiveParts();
     }
     fieldCrewExpected={id,updatedAt:now};fieldCrewDirty=false;fieldEntryStatus('fieldCrewSaveStatus',firebaseEnabled?'已同步儲存':'已存本機（示範模式，未同步）');toast(`${unit}已儲存${count===null?'，人數待補':`，${count} 人`}`);
@@ -3172,9 +3214,9 @@ function buildingBoxSidePoints(box){
   const w=(Number(box.widthM)||40)/2,h=(Number(box.heightM)||28)/2;
   const defs=[
     {id:'face1',name:'第一面',x:0,y:-h},
-    {id:'face2',name:'第二面',x:w,y:0},
+    {id:'face2',name:'第二面',x:-w,y:0},
     {id:'face3',name:'第三面',x:0,y:h},
-    {id:'face4',name:'第四面',x:-w,y:0}
+    {id:'face4',name:'第四面',x:w,y:0}
   ];
   return defs.map(d=>({...d,...localPointToLatLng(box,d.x,d.y)}));
 }
@@ -4477,6 +4519,7 @@ function renderBuildingOps(){
   document.querySelectorAll('[data-edit-resident]').forEach(btn=>btn.onclick=()=>openResidentEditorV3(Number(btn.dataset.residentFloor),btn.dataset.editResident));
   document.querySelectorAll('[data-delete-resident]').forEach(btn=>btn.onclick=()=>deleteResidentV3(Number(btn.dataset.residentFloor),btn.dataset.deleteResident));
   document.querySelectorAll('[data-view-resident]').forEach(card=>{const open=event=>{if(event.target.closest('button'))return;openResidentDetailV32(Number(card.dataset.residentFloor),card.dataset.viewResident);};card.onclick=open;card.onkeydown=e=>{if(e.target===card&&(e.key==='Enter'||e.key===' ')){e.preventDefault();open(e);}};});
+  applyLocalPhotoPreviews($('verticalSection'));
   loadPrivatePhotos($('verticalSection'));
   renderBuildingResidentDetailsV31();
   renderFloorPlan();
@@ -4497,13 +4540,13 @@ function residentTotalLabelV3(row={}){
   return window.FCV34V3?.residentPopulationLabel(row.maleCount,row.femaleCount)||'人數未完整';
 }
 function residentCardHtmlV3(floor,row={}){
-  const id=escapeHtml(row.id||''),counts=`男 ${row.maleCount??'未知'}｜女 ${row.femaleCount??'未知'}｜${residentTotalLabelV3(row)}`;
-  return `<article class="resident-card-v3" tabindex="0" role="group" aria-label="查看住戶完整資料" data-view-resident="${id}" data-resident-floor="${floor}"><div><strong>${escapeHtml(window.FCOperationalV32.shortUnit(row))}</strong><p>${escapeHtml(counts)}</p><p>${escapeHtml(row.status||'待確認')}</p>${row.photoStatus==='pending'?'<p class="photo-pending">照片待重新上傳</p>':row.photoStatus==='local-demo'?'<p>合成照片｜本機示範</p>':''}<div class="resident-actions-v3"><button type="button" class="btn small ghost" data-edit-resident="${id}" data-resident-floor="${floor}">修改</button><button type="button" class="btn small danger" data-delete-resident="${id}" data-resident-floor="${floor}">刪除</button></div></div><div class="private-photo" data-photo-path="${escapeHtml(row.photoPath||'')}"></div></article>`;
+  const id=escapeHtml(row.id||''),counts=`男 ${row.maleCount??'未知'}｜女 ${row.femaleCount??'未知'}｜${residentTotalLabelV3(row)}`,previewKey=photoPreviewCacheKey('residents',`${floor}-${row.id||''}`),hasLocal=localPhotoPreviewCache.has(previewKey),photoPath=hasLocal?'':(row.photoPath||'');
+  return `<article class="resident-card-v3" tabindex="0" role="group" aria-label="查看住戶完整資料" data-view-resident="${id}" data-resident-floor="${floor}"><div><strong>${escapeHtml(window.FCOperationalV32.shortUnit(row))}</strong><p>${escapeHtml(counts)}</p><p>${escapeHtml(row.status||'待確認')}</p>${row.photoStatus==='pending'&&!hasLocal?'<p class="photo-pending">照片待重新上傳</p>':row.photoStatus==='pending'&&hasLocal?'<p class="photo-pending">照片同步中</p>':row.photoStatus==='local-demo'?'<p>合成照片｜本機示範</p>':''}<div class="resident-actions-v3"><button type="button" class="btn small ghost" data-edit-resident="${id}" data-resident-floor="${floor}">修改</button><button type="button" class="btn small danger" data-delete-resident="${id}" data-resident-floor="${floor}">刪除</button></div></div><div class="private-photo" data-photo-path="${escapeHtml(photoPath)}" data-local-photo-key="${escapeHtml(previewKey)}"></div></article>`;
 }
 function openResidentDetailV32(floor,id){
   const row=(getBuildingOps().floorActions.find(x=>Number(x.floor)===floor)?.residents||[]).find(r=>r.id===id);if(!row)return;
   const fields=[['完整地址',row.address],['樓層',floorLabel(floor)],['戶號',row.unitNo],['男性',row.maleCount??'未知'],['女性',row.femaleCount??'未知'],['人口',residentTotalLabelV3(row)],['狀態',row.status||'待確認'],['最後更新',row.updatedAt?fmtTime(row.updatedAt):'未記錄']];
-  openActionSheet('住戶詳細資料',`<div class="resident-detail-v32"><dl>${fields.map(([k,v])=>`<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v??'未填')}</dd>`).join('')}</dl>${contactCardHtml({name:row.contact,phone:row.phone,detail:row.note,photoPath:row.photoPath,photoStatus:row.photoStatus})}</div><button id="residentDetailCloseV32" class="btn ghost">關閉</button>`);$('residentDetailCloseV32').onclick=closeActionSheet;loadPrivatePhotos($('appActionBody'));
+  const previewKey=photoPreviewCacheKey('residents',`${floor}-${row.id||''}`);openActionSheet('住戶詳細資料',`<div class="resident-detail-v32"><dl>${fields.map(([k,v])=>`<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v??'未填')}</dd>`).join('')}</dl>${contactCardHtml({name:row.contact,phone:row.phone,detail:row.note,photoPath:row.photoPath,photoStatus:row.photoStatus},'',previewKey)}</div><button id="residentDetailCloseV32" class="btn ghost">關閉</button>`);$('residentDetailCloseV32').onclick=closeActionSheet;applyLocalPhotoPreviews($('appActionBody'));loadPrivatePhotos($('appActionBody'));
 }
 function residentCountOptionsV3(value){
   const current=value==null?'':String(value),values=['',...Array.from({length:16},(_,i)=>String(i))];if(current&&!values.includes(current))values.push(current);
@@ -4529,10 +4572,10 @@ function openResidentEditorV3(floor,id=''){
 }
 async function saveResidentV3(floor,id,existing={}){const savedCaseId=currentCaseId;
   const button=$('saveResidentV3'),file=$('residentPhotoV3')?.files[0],key=id||uid('resident');button.disabled=true;fieldEntryStatus('residentSaveStatusV3','儲存中');
-  try{assertCaseEditor();const draft=residentDraftFromSheetV3(existing);if(file)draft.photoStatus='pending';if(!draft.unitNo&&!draft.contact&&!draft.phone&&draft.maleCount===null&&draft.femaleCount===null&&!draft.note)throw Error('請至少填寫一項住戶資料');
+  try{assertCaseEditor();const draft=residentDraftFromSheetV3(existing);if(file){draft.photoStatus='pending';try{await cacheLocalPhotoPreview('residents',`${floor}-${key}`,file,savedCaseId);}catch{}}if(!draft.unitNo&&!draft.contact&&!draft.phone&&draft.maleCount===null&&draft.femaleCount===null&&!draft.note)throw Error('請至少填寫一項住戶資料');
     await updateCaseSection('buildingOpsRevision',c=>{const ops=cloneBuildingOps(c.buildingOps),actions=Array.isArray(ops.floorActions)?ops.floorActions:[],index=actions.findIndex(x=>Number(x.floor)===Number(floor)),entry=index>=0?{...actions[index]}:{floor:Number(floor),action:'未標示',note:'',residents:[]},rows=Array.isArray(entry.residents)?[...entry.residents]:[],ri=rows.findIndex(r=>r.id===key);const row={...(ri>=0?rows[ri]:{}),...draft,id:key};if(ri>=0)rows[ri]=row;else rows.push(row);entry.residents=rows;if(index>=0)actions[index]=entry;else actions.push(entry);ops.floorActions=actions;return {buildingOps:ops};});
     closeActionSheet();renderBuildingOps();
-    if(file){try{if(currentCaseId!==savedCaseId)return;const path=await uploadCasePhoto('contacts',`resident-${floor}-${key}`,file);if(currentCaseId!==savedCaseId)return;await updateCaseSection('buildingOpsRevision',c=>{const ops=cloneBuildingOps(c.buildingOps);for(const entry of ops.floorActions||[])if(Number(entry.floor)===Number(floor))entry.residents=(entry.residents||[]).map(r=>r.id===key?{...r,photoPath:path,photoStatus:'ready'}:r);return {buildingOps:ops};});toast('住戶與照片已同步儲存');}catch(error){if(currentCaseId!==savedCaseId)return;await updateCaseSection('buildingOpsRevision',c=>{const ops=cloneBuildingOps(c.buildingOps);for(const entry of ops.floorActions||[])if(Number(entry.floor)===Number(floor))entry.residents=(entry.residents||[]).map(r=>r.id===key?{...r,photoStatus:'pending'}:r);return {buildingOps:ops};});toast(`住戶文字已儲存；照片待重新上傳：${error.message}`,6500);}}
+    if(file){try{if(currentCaseId!==savedCaseId)return;const path=await uploadCasePhoto('contacts',`resident-${floor}-${key}`,file);if(currentCaseId!==savedCaseId)return;await updateCaseSection('buildingOpsRevision',c=>{const ops=cloneBuildingOps(c.buildingOps);for(const entry of ops.floorActions||[])if(Number(entry.floor)===Number(floor))entry.residents=(entry.residents||[]).map(r=>r.id===key?{...r,photoPath:path,photoStatus:'ready'}:r);return {buildingOps:ops};});clearLocalPhotoPreview('residents',`${floor}-${key}`,savedCaseId);toast('住戶與照片已同步儲存');}catch(error){if(currentCaseId!==savedCaseId)return;await updateCaseSection('buildingOpsRevision',c=>{const ops=cloneBuildingOps(c.buildingOps);for(const entry of ops.floorActions||[])if(Number(entry.floor)===Number(floor))entry.residents=(entry.residents||[]).map(r=>r.id===key?{...r,photoStatus:'pending'}:r);return {buildingOps:ops};});toast(`住戶文字已儲存；照片待重新上傳：${error.message}`,6500);}}
     else toast('住戶已同步儲存');renderBuildingOps();
   }catch(error){fieldEntryStatus('residentSaveStatusV3',`儲存失敗：${error.message}`);button.disabled=false;}
 }
@@ -4546,7 +4589,7 @@ function renderBuildingResidentDetailsV31(){
 }
 async function deleteResidentV3(floor,id){
   const entry=getBuildingOps().floorActions.find(x=>Number(x.floor)===Number(floor)),row=(entry?.residents||[]).find(r=>r.id===id);if(!row||!confirm(`確認刪除 ${floorLabel(floor)}「${row.unitNo||'未命名住戶'}」？`))return;
-  try{assertCaseEditor();await updateCaseSection('buildingOpsRevision',c=>{const ops=cloneBuildingOps(c.buildingOps);for(const item of ops.floorActions||[])if(Number(item.floor)===Number(floor))item.residents=(item.residents||[]).filter(r=>r.id!==id);return {buildingOps:ops};});try{await removeCasePhoto(row.photoPath);}catch{toast('住戶紀錄已刪除；照片清理失敗，請交由管理員檢查');}renderBuildingOps();toast('住戶紀錄已刪除');}catch(error){toast(`刪除失敗：${error.message}`);}
+  try{assertCaseEditor();await updateCaseSection('buildingOpsRevision',c=>{const ops=cloneBuildingOps(c.buildingOps);for(const item of ops.floorActions||[])if(Number(item.floor)===Number(floor))item.residents=(item.residents||[]).filter(r=>r.id!==id);return {buildingOps:ops};});clearLocalPhotoPreview('residents',`${floor}-${id}`);try{await removeCasePhoto(row.photoPath);}catch{toast('住戶紀錄已刪除；照片清理失敗，請交由管理員檢查');}renderBuildingOps();toast('住戶紀錄已刪除');}catch(error){toast(`刪除失敗：${error.message}`);}
 }
 function cloneBuildingOps(value=getBuildingOps()){ return JSON.parse(JSON.stringify(value || defaultBuildingOps())); }
 function recordFloorHistory(){
