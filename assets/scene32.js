@@ -35,7 +35,7 @@ function build(c,state,options={}){
   const f=v.face||'第一面',isHead=(heads[f]||[]).some(h=>h.id===v.id);let p=xy(b,v),heading=v.heading31;
   if(!v.positionManual){
    if(v.zoneType==='ambulance'||(/救護/.test(v.type)&&zoneMap.ambulance)){const af=zoneMap.ambulance?.face||f;p=pos(af,'ambulance',ambulances[af]||0);ambulances[af]=(ambulances[af]||0)+1;}
-   else {const n=isHead?0:Number.isInteger(v.queueOrder)?v.queueOrder:(counts[f]||((heads[f]||[]).length?1:0));counts[f]=Math.max(counts[f]||0,n+1);p=pos(f,'vehicle',n);heading=(270+faces.indexOf(f)*90+b.rotationDeg+360)%360;
+   else {const n=isHead?0:Number.isInteger(v.queueOrder)?v.queueOrder:(counts[f]||((heads[f]||[]).length?1:0));counts[f]=Math.max(counts[f]||0,n+1);p=pos(f,'vehicle',n);heading=(270-faces.indexOf(f)*90+b.rotationDeg+360)%360;
     const road=c.deploymentRoads32?.[f];if(road?.points?.length>=2){const route=road.points.map(pt=>xy(b,pt)),rp=roadPoint(route,n*12);if(rp){p=rp;heading=rp.heading;}else notes.push(v.name+'超出已指定道路長度，請延長道路');}
    }
   }
@@ -48,7 +48,7 @@ function build(c,state,options={}){
   const f=p.face||'第一面',inside=!/待命|休息|撤出/.test(p.status||'')&&(p.interior||/內攻|進入/.test(p.task||''));let at=xy(b,p);
   if(!p.positionManual){if(inside){const n=interiors[f]||0;interiors[f]=n+1;at=pos(f,'interior',n);}
    else if(p.status==='待命'||!p.task||p.task==='待部署')at=standbyPoint(standby++);
-   else {const n=outside[f]||0;outside[f]=n+1;at=pos(f,'standby',n);}}
+   else {const n=outside[f]||0;outside[f]=n+1;at=pos(f,'crew',n);}}
   make('crews',p,at,crewName(p),{type:'crew',inside,detail:[p.countUnknown?'人數待補':p.count+'人',p.status,p.floor,p.task,c.ritSet&&c.ritUnit===p.unit?'RIT':''].filter(Boolean).join('｜')});
  }
  if(c.ritSet&&c.ritUnit&&!nodes.some(n=>n.coll==='crews'&&n.item.unit===c.ritUnit))notes.push(c.ritUnit+'已指定RIT，人員位置待登錄');
@@ -61,7 +61,7 @@ function build(c,state,options={}){
  for(const h of s.hazards||[])make('hazards',h,xy(b,h),zoneLabel(h.type),{type:'zone',zoneType:zoneIcon(h.type),detail:'手動標示'});
  if(standby&&!zoneMap.standby?.hidden&&!sourceZoneIds.has('standby32')){const z=zoneMap.standby||{},at=Number.isFinite(z.lat)&&Number.isFinite(z.lng)?xy(b,z):standbyPoint(0);if(!Number.isFinite(z.lat))at.y+=7;make('zones',{...z,id:'standby32'},at,z.label||'待命區',{type:'zone',zoneType:'rehab',detail:z.note||''});}
  const corners=[[-b.widthM/2,-b.heightM/2],[b.widthM/2,-b.heightM/2],[b.widthM/2,b.heightM/2],[-b.widthM/2,b.heightM/2]].map(p=>local(...p));
- const entrances=[local(0,-b.heightM/2),local(b.widthM/2,0),local(0,b.heightM/2),local(-b.widthM/2,0)];
+ const entrances=[local(0,-b.heightM/2),local(-b.widthM/2,0),local(0,b.heightM/2),local(b.widthM/2,0)];
  const hoses=(s.hoses||[]).map(h=>{let source=map.get(h.sourceId||h.vehicleId);if(!source&&(h.sourceName||h.vehicleName))source=nodes.find(v=>v.label===(h.sourceName||h.vehicleName));
   if(!source&&h.targetType==='buildingFace'){const hs=heads[h.targetName]||[];if(hs.length===1)source=map.get(hs[0].id);}
   if(!source){notes.push((h.port||'水線')+'供水來源待確認');return {...h,missing:true};}return {...h,source};});
@@ -71,7 +71,7 @@ function build(c,state,options={}){
   const start={x:a.x+direction.x*2.8+normal.x*spread,y:a.y+direction.y*2.8+normal.y*spread};
   let end=map.get(h.targetId),path;
   if(h.targetType==='buildingFace'){
-   const fi=Math.max(0,faces.indexOf(h.targetName)),entry=entrances[fi],same=peers.filter(x=>x.targetType==='buildingFace'&&x.targetName===h.targetName),j=same.indexOf(h),offset=(j-(same.length-1)/2)*2.5,tangent=rotate({x:1,y:0},fi*90+b.rotationDeg),gate={x:entry.x+tangent.x*offset,y:entry.y+tangent.y*offset};
+   const fi=Math.max(0,faces.indexOf(h.targetName)),entry=entrances[fi],same=peers.filter(x=>x.targetType==='buildingFace'&&x.targetName===h.targetName),j=same.indexOf(h),offset=(j-(same.length-1)/2)*2.5,tangent=rotate({x:1,y:0},-fi*90+b.rotationDeg),gate={x:entry.x+tangent.x*offset,y:entry.y+tangent.y*offset};
    const bend={x:(start.x+gate.x)/2+normal.x*spread*2,y:(start.y+gate.y)/2+normal.y*spread*2};
    path=[start,bend,gate];const crew=nodes.filter(p=>p.type==='crew'&&p.inside&&p.item.unit===(h.owner||h.unit)&&p.item.face===h.targetName);if(crew.length===1)path.push({x:crew[0].x,y:crew[0].y});
   }else if(end)path=[start,{x:(start.x+end.x)/2+normal.x*spread*2,y:(start.y+end.y)/2+normal.y*spread*2},{x:end.x,y:end.y}];
@@ -92,7 +92,7 @@ function svg(scene){
  for(const road of scene.roads)out+=`<polyline points="${pairs(road)}" fill="none" stroke="#e3eaf0" stroke-width="46"/><polyline points="${pairs(road)}" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="10 8"/>`;
  out+=`<polygon points="${pairs(scene.corners)}" fill="#f4f0e8" stroke="#6d6557" stroke-width="3" stroke-dasharray="9 5"/>`;
  const top=p(scene.corners[2]);const center=p({x:0,y:0});out+=`<text class="halo" x="${center.x}" y="${Math.min(...scene.corners.map(q=>p(q).y))+22}">火場建物</text>`;
- scene.entrances.forEach((q,i)=>{const a=p(q),dir=rotate({x:0,y:-1},i*90+scene.box.rotationDeg);out+=`<text class="halo" x="${a.x+dir.x*24}" y="${a.y-dir.y*24+5}">${faces[i]}</text>`;});
+ scene.entrances.forEach((q,i)=>{const a=p(q),dir=rotate({x:0,y:-1},-i*90+scene.box.rotationDeg);out+=`<text class="halo" x="${a.x+dir.x*24}" y="${a.y-dir.y*24+5}">${faces[i]}</text>`;});
  const labelBoxes=[];const reserve=(x,y,w=95,h=23)=>{let yy=y;for(let n=0;n<12;n++){if(!labelBoxes.some(b=>Math.abs(x-b.x)<(w+b.w)/2&&Math.abs(yy-b.y)<(h+b.h)/2))break;yy-=25;}labelBoxes.push({x,y:yy,w,h});return yy;};
  for(const h of scene.lines){out+=`<g data-fc32-coll="hoses" data-fc32-id="${esc(h.id)}"><polyline class="hit" points="${pairs(h.path)}"/><polyline class="line" points="${pairs(h.path)}"/></g>`;const a=p(h.path[1]),first=p(h.path[0]),x=(first.x+a.x)/2,y=reserve(x,(first.y+a.y)/2-12,h.supply?45:130);out+=`<text class="halo linelabel" x="${x}" y="${y}">${esc(h.label)}</text>`;}
  for(const n of scene.nodes){const a=p(n),name=esc(n.label);if(n.type==='zone'){const y=reserve(a.x,a.y+34,110),icon=esc(n.zoneType||'hazard');out+=`<g class="node tactical-zone" data-fc32-coll="${n.coll}" data-fc32-id="${esc(n.id)}"><circle cx="${a.x}" cy="${a.y}" r="18" fill="#fff" stroke="#b06a13" stroke-width="3"/><use href="#scene-${icon}" x="${a.x-11}" y="${a.y-11}" width="22" height="22" fill="#b33a28" stroke="#b33a28" stroke-width="1.5"/><text class="halo" x="${a.x}" y="${y}">${name}</text><title>${esc(n.detail||n.label)}</title></g>`;continue;}

@@ -28,7 +28,7 @@ test('第二面另設頭車形成独立車隊，後續回報不搬移第一面',
  const a=compile(S.local('正面淡水111出水，後續各車依序為淡水16',roster).items);
  const b=compile(S.local('第二面由竹圍11出水，後續各車依序為竹圍61',roster).items,a.after);
  assert.deepEqual(b.issues,[]);assert.ok(b.after.vehicles.filter(v=>v.unit==='淡水').every(v=>v.face==='第一面'));
- const second=b.after.vehicles.filter(v=>v.unit==='竹圍');assert.ok(second.every(v=>v.face==='第二面'));assert.equal(second[0].lng,second[1].lng);assert.ok(second[1].lat>second[0].lat);
+ const second=b.after.vehicles.filter(v=>v.unit==='竹圍');assert.ok(second.every(v=>v.face==='第二面'));assert.equal(second[0].lng,second[1].lng);assert.ok(second[1].lat<second[0].lat);
 });
 test('樓層只作位置資訊：在建物內，點選與水線路徑可讀同一筆人員',()=>{
  const c=app();vm.runInContext(`currentCase.buildingBox={lat:25,lng:121,widthM:40,heightM:28};intake28={caseId:'room',commandId:'t',text:''};captureBase29(intake28);intake28.items=FCIntake29.local('淡水七人從正面進入三樓；淡水111正面出兩線',FCIntake.roster(UNIT_TREE)).items;const p31=buildPlan29();Object.assign(live,p31.after);`,c);

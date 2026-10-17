@@ -94,8 +94,9 @@ function point(box,face,role,index=0){
  else if(role==='ambulanceZone'){x=width+8;y=-depth-50;}
  else if(role==='command'){x=-width-24;y=-depth-38;}
  else if(role==='standby'){x=-width-24+(index%3)*9;y=-depth-53-Math.floor(index/3)*9;}
+ else if(role==='crew'){x=-width*.55+(index%3)*width*.55;y=-depth-6-Math.floor(index/3)*7;}
  else {x=-width*.55+(index%3)*width*.55;y=-depth*.10+Math.floor(index/3)*Math.min(5,depth*.28);y=Math.min(depth*.55,y);}
- const r=(f*90+Number(box.rotationDeg||0))*Math.PI/180,rx=x*Math.cos(r)-y*Math.sin(r),ry=x*Math.sin(r)+y*Math.cos(r);
+ const r=(-f*90+Number(box.rotationDeg||0))*Math.PI/180,rx=x*Math.cos(r)-y*Math.sin(r),ry=x*Math.sin(r)+y*Math.cos(r);
  return {lat:Number(box.lat)+ry/111320,lng:Number(box.lng)+rx/(111320*Math.max(.2,Math.cos(Number(box.lat)*Math.PI/180))),anchorBuilding:true,staged:role==='standby'};
 }
 function apply(items,before,state,c,options){
@@ -143,19 +144,20 @@ function apply(items,before,state,c,options){
   }}
  }
  const commandFace=c.tacticalZones?.command?.face||'第一面';
- let standby=0;const inside={},vehicleIndex={},ambulanceIndex={};
+ let standby=0;const inside={},outside={},vehicleIndex={},ambulanceIndex={};
  for(const v of state.vehicles){
   if(!v.layout31||v.positionManual)continue;
   const f=v.face||'第一面';
   if(/救護/.test(v.type)&&c.tacticalZones?.ambulance){v.face=c.tacticalZones.ambulance.face;v.zoneType='ambulance';v.task='救護車集結';}
   const vf=v.face||f;
   if(v.zoneType==='ambulance')Object.assign(v,locate(vf,'ambulance',ambulanceIndex[vf]||0)),ambulanceIndex[vf]=(ambulanceIndex[vf]||0)+1;
-  else {const n=Number.isInteger(v.queueOrder)?v.queueOrder:vehicleIndex[vf]||0;Object.assign(v,locate(vf,'vehicle',n),{heading31:(270+faces.indexOf(vf)*90+Number(c.buildingBox?.rotationDeg||0)+360)%360});vehicleIndex[vf]=Math.max(vehicleIndex[vf]||0,n+1);}
+  else {const n=Number.isInteger(v.queueOrder)?v.queueOrder:vehicleIndex[vf]||0;Object.assign(v,locate(vf,'vehicle',n),{heading31:(270-faces.indexOf(vf)*90+Number(c.buildingBox?.rotationDeg||0)+360)%360});vehicleIndex[vf]=Math.max(vehicleIndex[vf]||0,n+1);}
  }
  for(const p of state.crews){
   if(!p.layout31||p.positionManual)continue;
   if(p.interior){const f=p.face||'第一面';Object.assign(p,locate(f,'interior',inside[f]||0),{staged:false});inside[f]=(inside[f]||0)+1;}
-  else if(p.status==='待命')Object.assign(p,locate(commandFace,'standby',standby++),{staged:true});
+  else if(p.status==='待命'||!p.task||p.task==='待部署')Object.assign(p,locate(commandFace,'standby',standby++),{staged:true});
+  else {const f=p.face||'第一面';Object.assign(p,locate(f,'crew',outside[f]||0),{staged:false});outside[f]=(outside[f]||0)+1;}
  }
  if(items.some(i=>['vehicle','crew','hose'].includes(i.kind)||i.zoneType))c.drawingRuleVersion=version;
 }
