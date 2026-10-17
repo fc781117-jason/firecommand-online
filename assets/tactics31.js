@@ -95,7 +95,7 @@ function point(box,face,role,index=0){
  else if(role==='command'){x=-width-24;y=-depth-38;}
  else if(role==='standby'){x=-width-24+(index%3)*9;y=-depth-53-Math.floor(index/3)*9;}
  else {x=-width*.55+(index%3)*width*.55;y=-depth*.10+Math.floor(index/3)*Math.min(5,depth*.28);y=Math.min(depth*.55,y);}
- const r=(f*90+Number(box.rotationDeg||0))*Math.PI/180,rx=x*Math.cos(r)-y*Math.sin(r),ry=x*Math.sin(r)+y*Math.cos(r);
+ const r=(-f*90+Number(box.rotationDeg||0))*Math.PI/180,rx=x*Math.cos(r)-y*Math.sin(r),ry=x*Math.sin(r)+y*Math.cos(r);
  return {lat:Number(box.lat)+ry/111320,lng:Number(box.lng)+rx/(111320*Math.max(.2,Math.cos(Number(box.lat)*Math.PI/180))),anchorBuilding:true,staged:role==='standby'};
 }
 function apply(items,before,state,c,options){
