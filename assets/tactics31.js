@@ -150,7 +150,7 @@ function apply(items,before,state,c,options){
   if(/救護/.test(v.type)&&c.tacticalZones?.ambulance){v.face=c.tacticalZones.ambulance.face;v.zoneType='ambulance';v.task='救護車集結';}
   const vf=v.face||f;
   if(v.zoneType==='ambulance')Object.assign(v,locate(vf,'ambulance',ambulanceIndex[vf]||0)),ambulanceIndex[vf]=(ambulanceIndex[vf]||0)+1;
-  else {const n=Number.isInteger(v.queueOrder)?v.queueOrder:vehicleIndex[vf]||0;Object.assign(v,locate(vf,'vehicle',n),{heading31:(270+faces.indexOf(vf)*90+Number(c.buildingBox?.rotationDeg||0)+360)%360});vehicleIndex[vf]=Math.max(vehicleIndex[vf]||0,n+1);}
+  else {const n=Number.isInteger(v.queueOrder)?v.queueOrder:vehicleIndex[vf]||0;Object.assign(v,locate(vf,'vehicle',n),{heading31:(270-faces.indexOf(vf)*90+Number(c.buildingBox?.rotationDeg||0)+360)%360});vehicleIndex[vf]=Math.max(vehicleIndex[vf]||0,n+1);}
  }
  for(const p of state.crews){
   if(!p.layout31||p.positionManual)continue;
