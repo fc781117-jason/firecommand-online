@@ -94,6 +94,7 @@ function point(box,face,role,index=0){
  else if(role==='ambulanceZone'){x=width+8;y=-depth-50;}
  else if(role==='command'){x=-width-24;y=-depth-38;}
  else if(role==='standby'){x=-width-24+(index%3)*9;y=-depth-53-Math.floor(index/3)*9;}
+ else if(role==='crew'){x=-width*.55+(index%3)*width*.55;y=-depth-6-Math.floor(index/3)*7;}
  else {x=-width*.55+(index%3)*width*.55;y=-depth*.10+Math.floor(index/3)*Math.min(5,depth*.28);y=Math.min(depth*.55,y);}
  const r=(-f*90+Number(box.rotationDeg||0))*Math.PI/180,rx=x*Math.cos(r)-y*Math.sin(r),ry=x*Math.sin(r)+y*Math.cos(r);
  return {lat:Number(box.lat)+ry/111320,lng:Number(box.lng)+rx/(111320*Math.max(.2,Math.cos(Number(box.lat)*Math.PI/180))),anchorBuilding:true,staged:role==='standby'};
@@ -143,7 +144,7 @@ function apply(items,before,state,c,options){
   }}
  }
  const commandFace=c.tacticalZones?.command?.face||'第一面';
- let standby=0;const inside={},vehicleIndex={},ambulanceIndex={};
+ let standby=0;const inside={},outside={},vehicleIndex={},ambulanceIndex={};
  for(const v of state.vehicles){
   if(!v.layout31||v.positionManual)continue;
   const f=v.face||'第一面';
@@ -155,7 +156,8 @@ function apply(items,before,state,c,options){
  for(const p of state.crews){
   if(!p.layout31||p.positionManual)continue;
   if(p.interior){const f=p.face||'第一面';Object.assign(p,locate(f,'interior',inside[f]||0),{staged:false});inside[f]=(inside[f]||0)+1;}
-  else if(p.status==='待命')Object.assign(p,locate(commandFace,'standby',standby++),{staged:true});
+  else if(p.status==='待命'||!p.task||p.task==='待部署')Object.assign(p,locate(commandFace,'standby',standby++),{staged:true});
+  else {const f=p.face||'第一面';Object.assign(p,locate(f,'crew',outside[f]||0),{staged:false});outside[f]=(outside[f]||0)+1;}
  }
  if(items.some(i=>['vehicle','crew','hose'].includes(i.kind)||i.zoneType))c.drawingRuleVersion=version;
 }
