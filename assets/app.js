@@ -2222,10 +2222,12 @@ function showLocalPhotoPreview(file,slot){
 }
 function normalizeCasePhoto(file){
  return new Promise((resolve,reject)=>{
-  if(!file||!String(file.type||'').startsWith('image/')){reject(new Error('請選擇圖片檔案'));return;}
-  if(file.size>12*1024*1024){reject(new Error('原始照片請控制在 12 MB 以下'));return;}
-  if(['image/jpeg','image/png','image/webp'].includes(file.type)&&file.size<5*1024*1024){resolve(file);return;}
-  let url='';try{url=URL.createObjectURL(file);}catch{reject(new Error('無法讀取照片'));return;}
+  const type=String(file?.type||'').toLowerCase(),name=String(file?.name||'').toLowerCase(),supported=['image/jpeg','image/png','image/webp'].includes(type),iphonePhoto=/image\/hei[cf]/.test(type)||/\.(heic|heif)$/.test(name);
+  if(!file||(!type.startsWith('image/')&&!iphonePhoto)){reject(new Error('請選擇圖片檔案'));return;}
+  if(supported){if(file.size>=5*1024*1024){reject(new Error('請使用 5 MB 以下的 JPG、PNG 或 WebP'));return;}resolve(file);return;}
+  if(!iphonePhoto){reject(new Error('請使用 JPG、PNG、WebP 或 iPhone HEIC／HEIF 照片'));return;}
+  if(file.size>12*1024*1024){reject(new Error('原始 iPhone 照片請控制在 12 MB 以下'));return;}
+  let url='';try{url=URL.createObjectURL(file);}catch{reject(new Error('無法讀取 iPhone 照片'));return;}
   const img=new Image();
   img.onload=()=>{try{
     const maxEdge=2200,scale=Math.min(1,maxEdge/Math.max(img.naturalWidth||img.width||1,img.naturalHeight||img.height||1)),w=Math.max(1,Math.round((img.naturalWidth||img.width)*scale)),h=Math.max(1,Math.round((img.naturalHeight||img.height)*scale)),canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;const ctx=canvas.getContext('2d');ctx.drawImage(img,0,0,w,h);
