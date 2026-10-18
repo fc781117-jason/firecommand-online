@@ -1,0 +1,54 @@
+{
+  "schema_version": "1.0",
+  "app": "FireCommand",
+  "repository": "fc781117-jason/firecommand-online",
+  "deployment_provider": "vercel",
+  "deployment_method": "github_vercel_git_integration",
+  "risk_class": "CRITICAL",
+  "preview_branch": "test/vercel-preview-check",
+  "production_branch": "main",
+  "production_domain": "https://firecommand-online.vercel.app",
+  "commands": {
+    "test": null,
+    "build": null
+  },
+  "gates": {
+    "tests_required": false,
+    "build_required": false,
+    "vercel_commit_status_required": true,
+    "preview_acceptance_required": true,
+    "single_production_approval": true,
+    "production_smoke_check_required": true
+  },
+  "vercel_mcp": {
+    "required": false,
+    "known_issue": "list_teams_may_return_empty_despite_valid_oauth_scope",
+    "blocking": false,
+    "fallback": "github_commit_status_and_vercel_git_integration"
+  },
+  "rollback": {
+    "required_on_failed_production_smoke": true,
+    "use_last_known_good_commit": true
+  },
+  "secrets": {
+    "commit_allowed": false,
+    "patterns": [
+      ".env*",
+      "*.p12",
+      "*.pfx",
+      "*.key",
+      "service-account*.json",
+      "secrets/**"
+    ]
+  },
+  "smoke_paths": [
+    "/",
+    "/login-help.html"
+  ],
+  "protected_capabilities": [
+    "firebase_auth",
+    "firestore_live_incidents",
+    "production_security_rules"
+  ],
+  "data_isolation": "practice_and_test_data_must_not_mix_with_live_incidents"
+}
